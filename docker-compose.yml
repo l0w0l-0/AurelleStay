@@ -53,6 +53,13 @@ services:
       Payment__AccountName: ${PAY_ACCOUNT_NAME:-}
       Payment__BankName: ${PAY_BANK_NAME:-}
       Payment__AccountNo: ${PAY_ACCOUNT_NO:-}
+      # อีเมล (Part 51): ไม่ตั้ง SMTP_HOST = เก็บอีเมลไว้ในหน้า "สถานะระบบ" แทนการส่งจริง
+      Email__Host: ${SMTP_HOST:-}
+      Email__Port: ${SMTP_PORT:-587}
+      Email__User: ${SMTP_USER:-}
+      Email__Password: ${SMTP_PASSWORD:-}
+      Email__From: ${SMTP_FROM:-}
+      App__PublicUrl: ${PUBLIC_URL:-http://localhost:8088}
     ports:
       - "${WEB_PORT:-8088}:8080"
     volumes:

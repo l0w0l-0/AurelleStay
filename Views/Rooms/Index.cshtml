@@ -10,6 +10,7 @@
 }
 
 <div class="cx-wrap cx-page">
+    <partial name="_Flash" />
     <div class="cx-pagehead">
         <h1>ห้องพัก</h1>
         <a asp-controller="Rooms" asp-action="Availability" class="cx-btn cx-btn--ghost"><svg class="cx-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>ปฏิทินห้องว่าง</a>
@@ -77,6 +78,29 @@
     @if (!Model.Rooms.Any())
     {
         <div class="cx-alert cx-alert--info">ไม่พบห้องที่ตรงกับเงื่อนไข ลองเปลี่ยนวันที่ เพิ่มงบประมาณ หรือกดล้างตัวกรอง</div>
+        @if (s.CheckIn != null && s.CheckOut != null && (User.IsInRole(RoleNames.Customer) || User.Identity?.IsAuthenticated != true))
+        {
+            var back = Context.Request.Path + Context.Request.QueryString;
+            <div class="cx-box rl-wait">
+                <p><b>ห้องเต็มช่วง @s.CheckIn.Value.ToString("dd/MM/yyyy") – @s.CheckOut.Value.ToString("dd/MM/yyyy")?</b> ลงชื่อรอไว้ ระบบจะแจ้งเตือนทันทีที่มีห้องว่าง (มีผู้ยกเลิก)</p>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <form method="post" action="/Rooms/Waitlist">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="typeId" value="@s.TypeId" />
+                        <input type="hidden" name="checkIn" value="@s.CheckIn.Value.ToString("yyyy-MM-dd")" />
+                        <input type="hidden" name="checkOut" value="@s.CheckOut.Value.ToString("yyyy-MM-dd")" />
+                        <input type="hidden" name="guests" value="@(s.Guests ?? 1)" />
+                        <input type="hidden" name="back" value="@back" />
+                        <button type="submit" class="cx-btn">แจ้งเตือนเมื่อมีห้องว่าง</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="cx-btn" asp-controller="Account" asp-action="Login" asp-route-returnUrl="@back">เข้าสู่ระบบเพื่อลงชื่อรอ</a>
+                }
+            </div>
+        }
     }
     else
     {

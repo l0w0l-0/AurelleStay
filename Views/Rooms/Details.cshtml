@@ -18,6 +18,7 @@
 }
 
 <div class="cx-wrap cx-page rd-page">
+    <partial name="_Flash" />
     <p class="rd-back"><a asp-controller="Rooms" asp-action="Index">« ห้องพักทั้งหมด</a> · <a asp-controller="Rooms" asp-action="Availability">ปฏิทินห้องว่าง</a></p>
 
     <section class="rd-hero">
@@ -142,6 +143,29 @@
             @if (anyUp) { <span class="rd-k rd-k--up">ราคาสูงกว่าปกติ</span> }
             @if (anyDown) { <span class="rd-k rd-k--down">ราคาพิเศษ</span> }
         </p>
+        @if ((isCustomer || !signedIn) && !Model.Maintenance)
+        {
+            var back = Context.Request.Path + Context.Request.QueryString;
+            <details class="rd-wait">
+                <summary>วันที่ต้องการเต็มแล้ว? <b>ลงชื่อรอห้องว่าง</b> — ระบบแจ้งเตือนทันทีเมื่อมีห้องประเภทนี้ว่าง</summary>
+                @if (!signedIn)
+                {
+                    <p class="rd-wait__note"><a asp-controller="Account" asp-action="Login" asp-route-returnUrl="@back">เข้าสู่ระบบ</a> เพื่อลงชื่อรอห้องว่าง</p>
+                }
+                else
+                {
+                    <form method="post" action="/Rooms/Waitlist" class="rd-wait__form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="typeId" value="@r.TypeId" />
+                        <input type="hidden" name="back" value="@back" />
+                        <label>วันเข้าพัก <input type="date" name="checkIn" required min="@Model.Today.ToString("yyyy-MM-dd")" value="@Model.CheckIn.ToString("yyyy-MM-dd")" /></label>
+                        <label>วันออก <input type="date" name="checkOut" required min="@tomorrow.ToString("yyyy-MM-dd")" value="@Model.CheckOut.ToString("yyyy-MM-dd")" /></label>
+                        <label>ผู้เข้าพัก <input type="number" name="guests" min="1" max="@r.MaxGuests" value="@Math.Clamp(Model.Guests, 1, Math.Max(1, r.MaxGuests))" /></label>
+                        <button type="submit" class="cx-btn">ลงชื่อรอ</button>
+                    </form>
+                }
+            </details>
+        }
     </section>
 
     <section class="rd-section">

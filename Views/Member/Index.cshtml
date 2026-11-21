@@ -153,4 +153,33 @@
             <a data-no-instant asp-controller="Notifications" asp-action="Index" class="mb-link">ดูทั้งหมด →</a>
         </section>
     </div>
+
+    @if (Model.Waiting.Any())
+    {
+        <section class="mb-card mb-wait" aria-labelledby="mb-wait-h">
+            <h2 id="mb-wait-h">รอห้องว่าง</h2>
+            <ul class="mb-list">
+                @foreach (var w in Model.Waiting)
+                {
+                    <li>
+                        <span><b>@w.What</b><span>@D(w.CheckIn) – @D(w.CheckOut) · @w.Guests คน</span></span>
+                        @if (w.Status == "NOTIFIED")
+                        {
+                            <a class="cx-btn cx-btn--small" href="/Booking/Create?checkIn=@w.CheckIn.ToString("yyyy-MM-dd")&checkOut=@w.CheckOut.ToString("yyyy-MM-dd")&guests=@w.Guests">มีห้องว่างแล้ว — จองเลย</a>
+                        }
+                        else
+                        {
+                            <span class="mb-wait__act">
+                                <span class="cx-badge cx-badge--PENDING">กำลังรอ</span>
+                                <form method="post" asp-controller="Member" asp-action="CancelWait" asp-route-id="@w.WaitId" class="d-inline" onsubmit="return confirm('ยกเลิกการรอห้องว่างรายการนี้?')">
+                                    <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิก</button>
+                                </form>
+                            </span>
+                        }
+                    </li>
+                }
+            </ul>
+            <p class="mb-muted">ระบบตรวจทุก 10 นาที และแจ้งเตือนทันทีเมื่อมีห้องว่างครบช่วงที่ต้องการ (ในเว็บและทางอีเมล)</p>
+        </section>
+    }
 </div>

@@ -101,6 +101,7 @@ public class AccountingController : AppController
         Notify.Add(_db, r.Booking.UserId, $"อนุมัติคืนเงินแล้ว · การจอง #{r.BookingId}",
             noShow ? $"คืนเงิน {r.Amount:N2} บาท" : $"คืนเงิน {r.Amount:N2} บาท การจองนี้ถูกยกเลิกแล้ว", Notify.BookingLink(r.BookingId));
         await _db.SaveChangesAsync();
+        if (!noShow) await Waitlist.CheckAsync(_db, DateOnly.FromDateTime(AppClock.Today));   // Part 51
         Flash($"อนุมัติคืนเงิน {r.Amount:N2} บาท ของการจอง #{r.BookingId} แล้ว" + (noShow ? "" : " (การจองถูกยกเลิก)"));
         return RedirectToAction(nameof(Refunds));
     }

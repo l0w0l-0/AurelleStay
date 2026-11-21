@@ -792,7 +792,7 @@ public class AdminAuditController : AdminAreaController
     // ---------------------------------------------------------------- Part 50: สถานะระบบ + สำรองข้อมูล
     /// <summary>สถานะระบบ: ฐานข้อมูล ขนาด จำนวนข้อมูลแต่ละตาราง เวลาเซิร์ฟเวอร์ พื้นที่ดิสก์ งานเบื้องหลัง</summary>
     [HttpGet]
-    public async Task<IActionResult> SystemStatus([FromServices] IWebHostEnvironment env)
+    public async Task<IActionResult> SystemStatus([FromServices] IWebHostEnvironment env, [FromServices] IConfiguration cfg)
     {
         var vm = new SystemStatusViewModel
         {
@@ -842,9 +842,39 @@ public class AdminAuditController : AdminAreaController
             vm.SlipFiles = files.Length; vm.SlipBytes = files.Sum(f => f.Length);
         }
         vm.DemoUsers = await DemoData.CountAsync(Db);
+        var mail = MailSettings.Load(cfg);
+        vm.MailEnabled = mail.Enabled; vm.MailServer = mail.Enabled ? $"{mail.Host}:{mail.Port}" : null; vm.MailFrom = mail.From;
+        if (vm.DbOk)
+        {
+            vm.OutboxCounts = await Db.EmailOutbox.GroupBy(m => m.Status).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N);
+            vm.Outbox = await Db.EmailOutbox.AsNoTracking().OrderByDescending(m => m.EmailId).Take(15).ToListAsync();
+            vm.Waiting = await Db.Waitlist.CountAsync(w => w.Status == "WAITING");
+        }
         vm.LastBackup = await Db.AuditLogs.AsNoTracking().Where(a => a.Action == "AdminAudit.Backup" && a.Success)
             .OrderByDescending(a => a.CreatedAt).Select(a => (DateTime?)a.CreatedAt).FirstOrDefaultAsync();
         return View(vm);
+    }
+
+    /// <summary>Part 51: ส่งอีเมลทดสอบถึงตัวเอง แล้วสั่งตัวส่งทำงานทันที (ไม่ต้องรอรอบ 15 วินาที)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> TestEmail([FromServices] IConfiguration cfg)
+    {
+        var uid = CurrentUserId ?? 0;
+        var me = await Db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == uid);
+        if (me == null) return Forbid();
+        Mailer.Queue(Db, me.Email, "ทดสอบการส่งอีเมล — AurelleStay", $"ถ้าคุณได้รับอีเมลนี้ แปลว่าระบบส่งอีเมลของโรงแรมทำงานปกติ\nส่งเมื่อ {AppClock.Now:dd/MM/yyyy HH:mm}", "/AdminAudit/SystemStatus", uid);
+        await Db.SaveChangesAsync();
+        await OutboxSender.RunOnceAsync(Db, MailSettings.Load(cfg));
+        var last = await Db.EmailOutbox.AsNoTracking().OrderByDescending(m => m.EmailId).FirstAsync(m => m.UserId == uid);
+        if (last.Status == "FAILED") TempData["StatusError"] = true;
+        TempData["Status"] = last.Status switch
+        {
+            "SENT" => $"ส่งอีเมลทดสอบถึง {me.Email} แล้ว",
+            "FAILED" => "ส่งอีเมลไม่สำเร็จ: " + last.LastError,
+            _ => "ยังไม่ได้ตั้งค่า SMTP (หรือเป็นอีเมลภายใน .local) — อีเมลถูกเก็บไว้ในกล่องจดหมายด้านล่าง"
+        };
+        await AuditTrail.WriteAsync(HttpContext, "AdminAudit.TestEmail", null, last.Status != "FAILED", Mailer.StatusLabel(last.Status));
+        return RedirectToAction(nameof(SystemStatus));
     }
 
     /// <summary>

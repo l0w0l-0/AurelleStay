@@ -542,3 +542,48 @@ public class RateSeason
     /// <summary>Part 47: รหัสเทศกาลที่ระบบสร้างให้อัตโนมัติ เช่น songkran-2027 (null = ผู้จัดการตั้งเอง)</summary>
     public string? AutoKey { get; set; }
 }
+
+/// <summary>Part 51: อีเมลที่ระบบส่ง (กล่องจดหมายขาออก) — ส่งผ่าน SMTP ถ้าตั้งค่าไว้ ไม่ตั้ง = เก็บไว้ให้ผู้จัดการดูในหน้าสถานะระบบ</summary>
+public class EmailOutbox
+{
+    public long EmailId { get; set; }
+    public int? UserId { get; set; }
+    public string ToEmail { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public string Body { get; set; } = "";
+    public string? Link { get; set; }
+    public string Status { get; set; } = "PENDING";   // PENDING | SENT | FAILED | SAVED
+    public int Attempts { get; set; }
+    public string? LastError { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? SentAt { get; set; }
+}
+
+/// <summary>Part 51: คำขอรีเซ็ตรหัสผ่าน (เก็บเฉพาะค่าแฮชของโทเคน ใช้ได้ครั้งเดียว หมดอายุ 30 นาที)</summary>
+public class PasswordReset
+{
+    public long ResetId { get; set; }
+    public int UserId { get; set; }
+    public string TokenHash { get; set; } = "";
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? UsedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? Ip { get; set; }
+    public virtual User User { get; set; } = null!;
+}
+
+/// <summary>Part 51: รายชื่อรอห้องว่าง — แจ้งเตือนเมื่อมีห้อง (ประเภทที่เลือก หรือห้องใดก็ได้) ว่างครบช่วงวันที่</summary>
+public class WaitlistEntry
+{
+    public int WaitId { get; set; }
+    public int UserId { get; set; }
+    public int? TypeId { get; set; }
+    public DateOnly CheckIn { get; set; }
+    public DateOnly CheckOut { get; set; }
+    public byte Guests { get; set; } = 1;
+    public string Status { get; set; } = "WAITING";   // WAITING | NOTIFIED | CANCELLED
+    public DateTime CreatedAt { get; set; }
+    public DateTime? NotifiedAt { get; set; }
+    public virtual User User { get; set; } = null!;
+    public virtual RoomType? Type { get; set; }
+}

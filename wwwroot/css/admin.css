@@ -736,3 +736,10 @@ tr.is-off td { opacity: .62; }
 .sys-bar span { display: block; height: 100%; background: linear-gradient(90deg, #5f3d8e, #c9a14a); }
 .sys-backup { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
 .sys-backup form { margin: 0; }
+
+/* Part 51: กล่องจดหมายอีเมลในหน้าสถานะระบบ */
+.sys-mail > summary { cursor: pointer; }
+.sys-mail__body { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(93, 61, 142, .06); font-size: .88rem; }
+.sys-mail__body p { margin: 0 0 6px; word-break: break-word; }
+.sys-mailhead { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.sys-mailhead > div { flex: 1 1 420px; }

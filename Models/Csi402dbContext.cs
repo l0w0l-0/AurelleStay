@@ -32,6 +32,12 @@ public partial class Csi402dbContext : DbContext
 
     public virtual DbSet<Notification> Notifications { get; set; }
 
+    public virtual DbSet<EmailOutbox> EmailOutbox { get; set; }
+
+    public virtual DbSet<PasswordReset> PasswordResets { get; set; }
+
+    public virtual DbSet<WaitlistEntry> Waitlist { get; set; }
+
     public virtual DbSet<ContactMessage> ContactMessages { get; set; }
 
     public virtual DbSet<PromoRecipient> PromoRecipients { get; set; }
@@ -657,6 +663,59 @@ public partial class Csi402dbContext : DbContext
             entity.HasOne(d => d.User).WithMany()
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_login_history_user");
+        });
+
+        // Part 51: อีเมลขาออก / รีเซ็ตรหัสผ่าน / รายชื่อรอห้องว่าง
+        modelBuilder.Entity<EmailOutbox>(entity =>
+        {
+            entity.HasKey(e => e.EmailId);
+            entity.ToTable("email_outbox");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "ix_outbox_status");
+            entity.Property(e => e.EmailId).HasColumnName("email_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ToEmail).HasMaxLength(120).HasColumnName("to_email");
+            entity.Property(e => e.Subject).HasMaxLength(200).HasColumnName("subject");
+            entity.Property(e => e.Body).HasColumnType("text").HasColumnName("body");
+            entity.Property(e => e.Link).HasMaxLength(300).HasColumnName("link");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.Attempts).HasColumnName("attempts");
+            entity.Property(e => e.LastError).HasMaxLength(300).HasColumnName("last_error");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.SentAt).HasColumnType("datetime").HasColumnName("sent_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.SetNull).HasConstraintName("email_outbox_ibfk_1");
+        });
+
+        modelBuilder.Entity<PasswordReset>(entity =>
+        {
+            entity.HasKey(e => e.ResetId);
+            entity.ToTable("password_resets");
+            entity.HasIndex(e => e.TokenHash, "ux_reset_token").IsUnique();
+            entity.Property(e => e.ResetId).HasColumnName("reset_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TokenHash).HasMaxLength(64).HasColumnName("token_hash");
+            entity.Property(e => e.ExpiresAt).HasColumnType("datetime").HasColumnName("expires_at");
+            entity.Property(e => e.UsedAt).HasColumnType("datetime").HasColumnName("used_at");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.Ip).HasMaxLength(45).HasColumnName("ip");
+            entity.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("password_resets_ibfk_1");
+        });
+
+        modelBuilder.Entity<WaitlistEntry>(entity =>
+        {
+            entity.HasKey(e => e.WaitId);
+            entity.ToTable("room_waitlist");
+            entity.HasIndex(e => new { e.Status, e.CheckIn }, "ix_wait_status");
+            entity.Property(e => e.WaitId).HasColumnName("wait_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TypeId).HasColumnName("type_id");
+            entity.Property(e => e.CheckIn).HasColumnName("check_in");
+            entity.Property(e => e.CheckOut).HasColumnName("check_out");
+            entity.Property(e => e.Guests).HasColumnName("guests");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.NotifiedAt).HasColumnType("datetime").HasColumnName("notified_at");
+            entity.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("room_waitlist_ibfk_1");
+            entity.HasOne(d => d.Type).WithMany().HasForeignKey(d => d.TypeId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("room_waitlist_ibfk_2");
         });
 
         OnModelCreatingPartial(modelBuilder);

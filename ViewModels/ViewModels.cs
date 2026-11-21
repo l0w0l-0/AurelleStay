@@ -360,6 +360,7 @@ public class MemberDashboardViewModel
     public bool HasBirthDate { get; set; }
     public bool HasAnniversary { get; set; }
     public List<(string Code, string Name, decimal Percent, string Condition)> MyCodes { get; set; } = new();
+    public List<WaitlistItemViewModel> Waiting { get; set; } = new();   // Part 51: รายชื่อรอห้องว่าง
 }
 
 public class PayPageViewModel
@@ -443,6 +444,13 @@ public class SystemStatusViewModel
     public long SlipBytes { get; set; }
     public DateTime? LastBackup { get; set; }
     public int DemoUsers { get; set; }
+    // Part 51: อีเมล
+    public bool MailEnabled { get; set; }
+    public string? MailServer { get; set; }
+    public string? MailFrom { get; set; }
+    public Dictionary<string, int> OutboxCounts { get; set; } = new();
+    public List<pameka_7033_l005.Models.EmailOutbox> Outbox { get; set; } = new();
+    public int Waiting { get; set; }
 }
 
 public class BookingDetailViewModel
@@ -1019,4 +1027,42 @@ public class MyReviewsViewModel
 {
     public List<MyReviewItem> Written { get; set; } = new();
     public List<MyBookingItemViewModel> ToReview { get; set; } = new();
+}
+
+/// <summary>Part 51: ลืมรหัสผ่าน — กรอกอีเมลเพื่อรับลิงก์ตั้งรหัสใหม่</summary>
+public class ForgotPasswordViewModel
+{
+    [Required(ErrorMessage = "กรุณากรอกอีเมล")]
+    [EmailAddress(ErrorMessage = "รูปแบบอีเมลไม่ถูกต้อง")]
+    [StringLength(100)]
+    public string Email { get; set; } = "";
+    public bool Sent { get; set; }
+    public string? Error { get; set; }
+}
+
+/// <summary>Part 51: ตั้งรหัสผ่านใหม่จากลิงก์ในอีเมล</summary>
+public class ResetPasswordViewModel
+{
+    public string Token { get; set; } = "";
+    public string? Email { get; set; }
+
+    [Required(ErrorMessage = "กรุณากรอกรหัสผ่านใหม่")]
+    [StringLength(100, ErrorMessage = "รหัสผ่านยาวไม่เกิน 100 ตัวอักษร"), PasswordPolicy]
+    public string NewPassword { get; set; } = "";
+
+    [Required(ErrorMessage = "กรุณายืนยันรหัสผ่านใหม่")]
+    [Compare(nameof(NewPassword), ErrorMessage = "ยืนยันรหัสผ่านใหม่ไม่ตรงกัน")]
+    public string ConfirmPassword { get; set; } = "";
+}
+
+/// <summary>Part 51: รายการรอห้องว่างของลูกค้า (หน้าสมาชิก)</summary>
+public class WaitlistItemViewModel
+{
+    public int WaitId { get; set; }
+    public string What { get; set; } = "";
+    public DateOnly CheckIn { get; set; }
+    public DateOnly CheckOut { get; set; }
+    public int Guests { get; set; }
+    public string Status { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
 }

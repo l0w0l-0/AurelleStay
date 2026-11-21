@@ -53,6 +53,49 @@
         </div>
     </section>
 
+    <section class="staff-card" aria-labelledby="mail-h">
+        <div class="sys-mailhead">
+            <div>
+                <h2 id="mail-h">อีเมลของระบบ</h2>
+                <p class="cx-hint">
+                    @if (Model.MailEnabled) { <text>ส่งผ่าน SMTP <b>@Model.MailServer</b> จาก <b>@Model.MailFrom</b></text> }
+                    else { <text><b>ยังไม่ได้ตั้งค่า SMTP</b> — อีเมลถูกเก็บไว้ในกล่องจดหมายด้านล่าง (ตั้งค่าใน .env: SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_FROM)</text> }
+                    · การแจ้งเตือนทุกรายการ (ยืนยันการจอง ผลตรวจสลิป คืนเงิน ห้องว่าง ฯลฯ) และลิงก์ลืมรหัสผ่านถูกส่งเป็นอีเมล
+                    <br />ส่งแล้ว @(Model.OutboxCounts.GetValueOrDefault("SENT")) · เก็บไว้ @(Model.OutboxCounts.GetValueOrDefault("SAVED")) · ส่งไม่สำเร็จ @(Model.OutboxCounts.GetValueOrDefault("FAILED")) · รอส่ง @(Model.OutboxCounts.GetValueOrDefault("PENDING")) · ลูกค้ารอห้องว่าง @Model.Waiting รายการ
+                </p>
+            </div>
+            <form asp-action="TestEmail" method="post"><button type="submit" class="cx-btn cx-btn--ghost">ส่งอีเมลทดสอบถึงฉัน</button></form>
+        </div>
+        @if (Model.Outbox.Any())
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th scope="col">เวลา</th><th scope="col">ถึง</th><th scope="col">หัวข้อ</th><th scope="col">สถานะ</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in Model.Outbox)
+                        {
+                            <tr>
+                                <td>@m.CreatedAt.ToString("dd/MM HH:mm")</td>
+                                <td>@m.ToEmail</td>
+                                <td>
+                                    <details class="sys-mail">
+                                        <summary>@m.Subject</summary>
+                                        <div class="sys-mail__body">
+                                            @foreach (var line in m.Body.Split('\n')) { <p>@line</p> }
+                                            @if (!string.IsNullOrEmpty(m.Link) && m.Status != "SENT") { <p><a href="@m.Link">@m.Link</a></p> }
+                                            @if (m.LastError != null) { <p class="text-danger">@m.LastError</p> }
+                                        </div>
+                                    </details>
+                                </td>
+                                <td><span class="cx-badge cx-badge--@(m.Status == "SENT" ? "PAID" : m.Status == "FAILED" ? "REJECTED" : "PENDING")">@pameka_7033_l005.Helpers.Mailer.StatusLabel(m.Status)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
     <section class="staff-card" aria-labelledby="tb-h">
         <h2 id="tb-h">ตารางในฐานข้อมูล</h2>
         <div class="staff-table-wrap">

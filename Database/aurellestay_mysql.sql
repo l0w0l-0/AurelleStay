@@ -265,6 +265,58 @@ CREATE TABLE IF NOT EXISTS `notifications` (
     KEY `ix_notify_user` (`user_id`, `is_read`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Part 51: อีเมลขาออก (ส่งผ่าน SMTP / เก็บไว้ให้ผู้จัดการดูถ้ายังไม่ตั้งค่า) · คำขอรีเซ็ตรหัสผ่าน (เก็บเฉพาะแฮชของโทเคน) · รายชื่อรอห้องว่าง
+CREATE TABLE IF NOT EXISTS `email_outbox` (
+    `email_id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` int NULL,
+    `to_email` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `subject` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `body` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `link` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+    `attempts` int NOT NULL DEFAULT 0,
+    `last_error` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `sent_at` datetime NULL,
+    PRIMARY KEY (`email_id`),
+    KEY `ix_outbox_status` (`status`, `created_at`),
+    KEY `ix_outbox_user` (`user_id`),
+    CONSTRAINT `email_outbox_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `password_resets` (
+    `reset_id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` int NOT NULL,
+    `token_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `expires_at` datetime NOT NULL,
+    `used_at` datetime NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    PRIMARY KEY (`reset_id`),
+    UNIQUE KEY `ux_reset_token` (`token_hash`),
+    KEY `ix_reset_user` (`user_id`, `created_at`),
+    CONSTRAINT `password_resets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `room_waitlist` (
+    `wait_id` int NOT NULL AUTO_INCREMENT,
+    `user_id` int NOT NULL,
+    `type_id` int NULL,
+    `check_in` date NOT NULL,
+    `check_out` date NOT NULL,
+    `guests` tinyint unsigned NOT NULL DEFAULT 1,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'WAITING',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `notified_at` datetime NULL,
+    PRIMARY KEY (`wait_id`),
+    KEY `ix_wait_status` (`status`, `check_in`),
+    KEY `ix_wait_user` (`user_id`),
+    KEY `ix_wait_type` (`type_id`),
+    CONSTRAINT `room_waitlist_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `room_waitlist_ibfk_2` FOREIGN KEY (`type_id`) REFERENCES `room_types` (`type_id`) ON DELETE CASCADE,
+    CONSTRAINT `chk_wait_dates` CHECK (`check_out` > `check_in`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ข้อความติดต่อโรงแรมจากหน้า "ติดต่อเรา" (Part 30) รวมคำขอรีเซ็ตรหัสผ่าน — ผู้ส่งที่มีบัญชีผูก user_id (ลบบัญชีแล้วข้อความยังอยู่)
 CREATE TABLE IF NOT EXISTS `contact_messages` (
     `message_id` bigint NOT NULL AUTO_INCREMENT,

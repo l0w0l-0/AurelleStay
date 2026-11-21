@@ -917,6 +917,9 @@ public sealed class BookingExpiryService : BackgroundService
                         _campaignsCheckedOn = today;
                         if (addedP > 0) _log.LogInformation("สร้างแคมเปญโปรโมชั่นเทศกาล {Count} รายการ", addedP);
                     }
+                    // Part 51: รายชื่อรอห้องว่าง — แจ้งเตือนเมื่อมีห้องว่าง (ทุกรอบ)
+                    var w = await Waitlist.CheckAsync(db, today);
+                    if (w > 0) _log.LogInformation("แจ้งเตือนรายชื่อรอห้องว่าง {Count} รายการ", w);
                 }
                 catch (Exception ex) when (!stop.IsCancellationRequested)
                 {
@@ -1392,5 +1395,75 @@ public static class DemoData
         await db.Users.Where(u => ids.Contains(u.UserId)).ExecuteDeleteAsync();
         await tx.CommitAsync();
         return $"ลบลูกค้าตัวอย่าง {ids.Count} คน และการจอง {bids.Count} รายการแล้ว";
+    }
+}
+
+// ======================================================================
+// Part 51: รายชื่อรอห้องว่าง (Waitlist)
+// ======================================================================
+public static class Waitlist
+{
+    public const string TableSql = @"CREATE TABLE IF NOT EXISTS `room_waitlist` (
+    `wait_id` int NOT NULL AUTO_INCREMENT,
+    `user_id` int NOT NULL,
+    `type_id` int NULL,
+    `check_in` date NOT NULL,
+    `check_out` date NOT NULL,
+    `guests` tinyint unsigned NOT NULL DEFAULT 1,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'WAITING',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `notified_at` datetime NULL,
+    PRIMARY KEY (`wait_id`),
+    KEY `ix_wait_status` (`status`, `check_in`),
+    KEY `ix_wait_user` (`user_id`),
+    KEY `ix_wait_type` (`type_id`),
+    CONSTRAINT `room_waitlist_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `room_waitlist_ibfk_2` FOREIGN KEY (`type_id`) REFERENCES `room_types` (`type_id`) ON DELETE CASCADE,
+    CONSTRAINT `chk_wait_dates` CHECK (`check_out` > `check_in`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public const int MaxActivePerUser = 5;
+
+    /// <summary>ลงชื่อรอ: ตรวจวันที่ จำนวนรายการ และไม่ซ้ำช่วงเดิม · ถ้าห้องว่างอยู่แล้วจะไม่ให้ลง (ให้จองได้เลย)</summary>
+    public static async Task<(bool Ok, string Message)> JoinAsync(Csi402dbContext db, int userId, int? typeId, DateOnly? checkIn, DateOnly? checkOut, int guests, DateOnly today)
+    {
+        var err = BookingRules.ValidateDates(checkIn, checkOut, today);
+        if (err != null) return (false, err);
+        if ((checkOut!.Value.DayNumber - checkIn!.Value.DayNumber) > 30) return (false, "ช่วงวันที่รอได้ไม่เกิน 30 คืน");
+        guests = Math.Clamp(guests, 1, 20);
+        if (typeId != null && !await db.RoomTypes.AnyAsync(t => t.TypeId == typeId)) return (false, "ไม่พบประเภทห้องนี้");
+        if (await AvailableCountAsync(db, typeId, checkIn.Value, checkOut.Value, guests) > 0)
+            return (false, "ตอนนี้มีห้องว่างในช่วงนี้อยู่แล้ว จองได้ทันที");
+        var active = await db.Waitlist.CountAsync(w => w.UserId == userId && w.Status == "WAITING");
+        if (active >= MaxActivePerUser) return (false, $"ลงชื่อรอได้พร้อมกันไม่เกิน {MaxActivePerUser} รายการ");
+        if (await db.Waitlist.AnyAsync(w => w.UserId == userId && w.Status == "WAITING" && w.TypeId == typeId && w.CheckIn == checkIn && w.CheckOut == checkOut))
+            return (false, "คุณลงชื่อรอช่วงนี้ไว้แล้ว");
+        db.Waitlist.Add(new WaitlistEntry { UserId = userId, TypeId = typeId, CheckIn = checkIn.Value, CheckOut = checkOut.Value, Guests = (byte)guests, Status = "WAITING", CreatedAt = AppClock.Now });
+        await db.SaveChangesAsync();
+        return (true, "ลงชื่อรอแล้ว ระบบจะแจ้งเตือนทันทีที่มีห้องว่างในช่วงนี้ (ดูได้ที่หน้าสมาชิก)");
+    }
+
+    public static Task<int> AvailableCountAsync(Csi402dbContext db, int? typeId, DateOnly checkIn, DateOnly checkOut, int guests) =>
+        BookingQueries.Available(db, checkIn, checkOut).Where(r => (typeId == null || r.TypeId == typeId) && r.Type.MaxGuests >= guests).CountAsync();
+
+    /// <summary>ตรวจรายชื่อรอทั้งหมด: มีห้องว่างครบช่วงแล้ว → แจ้งเตือน (ในเว็บ + อีเมล) · เลยวันเข้าพัก → ปิดรายการ</summary>
+    public static async Task<int> CheckAsync(Csi402dbContext db, DateOnly today, int? userId = null)
+    {
+        var mine = db.Waitlist.Where(w => userId == null || w.UserId == userId);
+        var expired = await mine.Where(w => w.Status == "WAITING" && w.CheckIn < today).ToListAsync();
+        foreach (var w in expired) w.Status = "CANCELLED";
+        var list = await mine.Include(w => w.Type).Where(w => w.Status == "WAITING" && w.CheckIn >= today).OrderBy(w => w.CreatedAt).Take(500).ToListAsync();
+        var n = 0;
+        foreach (var w in list)
+        {
+            if (await AvailableCountAsync(db, w.TypeId, w.CheckIn, w.CheckOut, w.Guests) == 0) continue;
+            w.Status = "NOTIFIED"; w.NotifiedAt = AppClock.Now; n++;
+            var what = w.Type?.TypeName ?? "ห้องพัก";
+            var link = $"/Booking/Create?checkIn={w.CheckIn:yyyy-MM-dd}&checkOut={w.CheckOut:yyyy-MM-dd}&guests={w.Guests}";
+            Notify.Add(db, w.UserId, $"มีห้องว่างแล้ว: {what}",
+                $"ช่วง {w.CheckIn:dd/MM/yyyy} – {w.CheckOut:dd/MM/yyyy} ที่คุณลงชื่อรอไว้ มีห้องว่างแล้ว รีบจองก่อนห้องเต็มอีกครั้ง", link);
+        }
+        if (expired.Count > 0 || n > 0) await db.SaveChangesAsync();
+        return n;
     }
 }

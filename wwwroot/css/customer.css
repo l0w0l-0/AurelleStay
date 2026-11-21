@@ -1842,3 +1842,18 @@ img.is-zoomable:focus-visible { outline: 3px solid var(--brass, #b08a35); outlin
 .bd-pre__act { grid-column: 1 / -1; }
 .bd-request { white-space: pre-line; }
 @media (max-width: 640px) { .bd-pre__form { grid-template-columns: 1fr; } }
+
+/* ===================== Part 51: ลืมรหัสผ่าน · รอห้องว่าง ===================== */
+.auth-title { margin: 0 0 14px; font-size: 1.35rem; color: var(--pine); }
+.rd-wait { margin-top: 14px; border: 1px dashed var(--line); border-radius: 14px; padding: 12px 16px; background: var(--card-2); }
+.rd-wait > summary { cursor: pointer; color: var(--ink-2); }
+.rd-wait > summary b { color: var(--pine); }
+.rd-wait__form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-top: 12px; }
+.rd-wait__form label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--ink-2); }
+.rd-wait__form input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); min-width: 0; }
+.rd-wait__form input[type=number] { width: 80px; }
+.rd-wait__note { margin: 10px 0 0; }
+.rl-wait { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.rl-wait p { margin: 0; flex: 1 1 320px; }
+.mb-wait { margin-top: 18px; }
+.mb-wait__act { display: inline-flex; gap: 8px; align-items: center; }

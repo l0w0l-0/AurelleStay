@@ -177,6 +177,17 @@ public class RoomsController : Controller
 
     /// <summary>รายละเอียดห้อง: ข้อมูลห้อง คะแนนรีวิวของผู้ที่เคยพักห้องนี้ ปฏิทินว่าง 2 เดือน และฟอร์มเลือกวันจอง</summary>
     [HttpGet]
+    /// <summary>Part 51: ลงชื่อรอห้องว่าง (เฉพาะลูกค้า) — typeId ว่าง = ห้องใดก็ได้ · กลับไปหน้าที่ส่งมา</summary>
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = RoleNames.Customer)]
+    public async Task<IActionResult> Waitlist(int? typeId, DateOnly? checkIn, DateOnly? checkOut, int guests = 1, string? back = null)
+    {
+        if (!int.TryParse(User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier), out var uid)) return Forbid();
+        var (ok, msg) = await pameka_7033_l005.Helpers.Waitlist.JoinAsync(_db, uid, typeId, checkIn, checkOut, guests, DateOnly.FromDateTime(AppClock.Today));
+        TempData["Status"] = msg; if (!ok) TempData["StatusError"] = true;
+        if (ok) await AuditTrail.WriteAsync(HttpContext, "Rooms.Waitlist", typeId, true, $"ลงชื่อรอห้องว่าง {checkIn:yyyy-MM-dd} – {checkOut:yyyy-MM-dd}");
+        return Url.IsLocalUrl(back) ? Redirect(back!) : RedirectToAction("Index", "Member");
+    }
+
     public async Task<IActionResult> Details(int id, DateOnly? checkIn, DateOnly? checkOut, int? guests)
     {
         var room = await _db.Rooms.AsNoTracking().Where(r => r.RoomId == id).Select(BookingQueries.ToCard).FirstOrDefaultAsync();
@@ -396,6 +407,7 @@ public class BookingController : AppController
 
         booking.Status = "CANCELLED";
         await _db.SaveChangesAsync();
+        await pameka_7033_l005.Helpers.Waitlist.CheckAsync(_db, DateOnly.FromDateTime(AppClock.Today));   // Part 51: ห้องว่างแล้ว → แจ้งคนที่รอทันที
         Flash("ยกเลิกการจองแล้ว");
         return RedirectToAction(nameof(MyBookings));
     }
@@ -538,6 +550,7 @@ public class MemberController : AppController
     {
         var uid = CurrentUserId ?? 0;
         await BookingExpiry.RunAsync(_db, pameka_7033_l005.Helpers.AppClock.Now, uid);
+        await pameka_7033_l005.Helpers.Waitlist.CheckAsync(_db, DateOnly.FromDateTime(AppClock.Today), uid);   // Part 51: ห้องที่รอว่างแล้วหรือยัง
         var me = await _db.Users.AsNoTracking().Where(u => u.UserId == uid)
             .Select(u => new { u.FirstName, u.CreatedAt, u.BirthDate, u.AnniversaryDate }).FirstOrDefaultAsync();
         if (me == null) return RedirectToAction("Index", "Home");
@@ -591,7 +604,23 @@ public class MemberController : AppController
             };
             vm.Perks.Add((p.PromoName, p.DiscountPercent, ThaiLabels.PromoCondition(p, used), ready, hint));
         }
+        vm.Waiting = await _db.Waitlist.AsNoTracking().Where(w => w.UserId == uid && (w.Status == "WAITING" || (w.Status == "NOTIFIED" && w.CheckIn >= today)))
+            .OrderBy(w => w.CheckIn).Take(10)
+            .Select(w => new WaitlistItemViewModel { WaitId = w.WaitId, What = w.Type != null ? w.Type.TypeName : "ห้องใดก็ได้", CheckIn = w.CheckIn,
+                CheckOut = w.CheckOut, Guests = w.Guests, Status = w.Status, CreatedAt = w.CreatedAt }).ToListAsync();
         return View(vm);
+    }
+
+    /// <summary>Part 51: ยกเลิกการลงชื่อรอห้องว่าง (เฉพาะรายการของตัวเอง)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelWait(int id)
+    {
+        var uid = CurrentUserId ?? 0;
+        var w = await _db.Waitlist.FirstOrDefaultAsync(x => x.WaitId == id && x.UserId == uid);
+        if (w == null) return NotFound();
+        if (w.Status != "CANCELLED") { w.Status = "CANCELLED"; await _db.SaveChangesAsync(); }
+        Flash("ยกเลิกการรอห้องว่างแล้ว");
+        return RedirectToAction(nameof(Index));
     }
 
     // ---------------- Part 44: ข้อความของฉัน — ข้อความที่ส่งถึงโรงแรมพร้อมคำตอบ (เฉพาะของตัวเอง)

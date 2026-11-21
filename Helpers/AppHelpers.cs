@@ -48,6 +48,7 @@ public static class AppSetup
 
         // ยกเลิกการจองค้างชำระอัตโนมัติ + ตรวจสุขภาพระบบที่ /health (ตอบ Healthy/Unhealthy เท่านั้น ไม่เปิดเผยรายละเอียด)
         services.AddHostedService<BookingExpiryService>();
+        services.AddHostedService<OutboxSender>();
         services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
         // เก็บคีย์เข้ารหัสคุกกี้ลงดิสก์: รีสตาร์ท/deploy ใหม่แล้วผู้ใช้ไม่หลุดล็อกอิน และฟอร์มที่เปิดค้างไว้ยังส่งได้
@@ -630,6 +631,23 @@ public static class DbSetup
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง promo_recipients");
         }
 
+        // Part 51: อีเมลขาออก / รีเซ็ตรหัสผ่าน / รายชื่อรอห้องว่าง (สร้างใหม่อย่างเดียว ไม่แตะข้อมูลเดิม)
+        if (!have.Contains("email_outbox.email_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(Mailer.OutboxTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง email_outbox");
+        }
+        if (!have.Contains("password_resets.reset_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(Mailer.ResetsTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง password_resets");
+        }
+        if (!have.Contains("room_waitlist.wait_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(Waitlist.TableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง room_waitlist");
+        }
+
         if (!have.Contains("audit_logs.audit_id"))
         {
             await db.Database.ExecuteSqlRawAsync(AuditTrail.CreateTableSql);
@@ -793,6 +811,8 @@ public static class AuditTrail
         ["AdminPromotions.GenerateCampaigns"] = ("สร้างแคมเปญโปรเทศกาล", ""),
         ["AdminAudit.Backup"] = ("ดาวน์โหลดไฟล์สำรองฐานข้อมูล", ""), ["AdminAudit.SeedDemo"] = ("สร้างข้อมูลลูกค้าตัวอย่าง", ""),
         ["AdminAudit.RemoveDemo"] = ("ลบข้อมูลลูกค้าตัวอย่าง", ""), ["BookingDetails.PreArrival"] = ("แจ้งเช็คอินล่วงหน้า", "การจอง"),
+        ["Account.ForgotPassword"] = ("ขอลิงก์ตั้งรหัสผ่านใหม่", "ผู้ใช้"), ["Account.ResetPassword"] = ("ตั้งรหัสผ่านใหม่ผ่านอีเมล", "ผู้ใช้"),
+        ["Rooms.Waitlist"] = ("ลงชื่อรอห้องว่าง", "ประเภทห้อง"), ["AdminAudit.TestEmail"] = ("ส่งอีเมลทดสอบ", ""),
         ["Booking.RequestRefund"] = ("ขอคืนเงิน", "การจอง"), ["Reviews.Create"] = ("เขียนรีวิว", "การจอง"),
         ["Accounting.Confirm"] = ("ยืนยันการชำระเงิน", "การชำระ"), ["Accounting.Reject"] = ("ปฏิเสธหลักฐานการชำระเงิน", "การชำระ"),
         ["Accounting.ApproveRefund"] = ("อนุมัติคืนเงิน", "การชำระ"), ["Accounting.RejectRefund"] = ("ปฏิเสธคำขอคืนเงิน", "การชำระ"),
@@ -972,13 +992,18 @@ public static class Notify
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public static void Add(Csi402dbContext db, int userId, string title, string? body, string? link)
-        => db.Notifications.Add(new Notification
+    {
+        db.Notifications.Add(new Notification
         {
             UserId = userId,
             Title = title.Length > 150 ? title[..150] : title,
             Body = body is { Length: > 500 } ? body[..500] : body,
             Link = link, CreatedAt = pameka_7033_l005.Helpers.AppClock.Now
         });
+        // Part 51: แจ้งเตือนทุกรายการถูกส่งเป็นอีเมลด้วย (อีเมลของผู้รับอ่านตอนบันทึก — ผู้ใช้ที่ถูกลบจะไม่ได้รับ)
+        var email = db.Users.Where(u => u.UserId == userId).Select(u => u.Email).FirstOrDefault();
+        if (!string.IsNullOrEmpty(email)) Mailer.Queue(db, email, title, body ?? "", link, userId);
+    }
 
     public static string BookingLink(int bookingId) => $"/Booking/Details/{bookingId}";
 }
@@ -1028,3 +1053,194 @@ public static class CsvSafe
     }
 }
 
+
+// ======================================================================
+// Part 51: อีเมล (กล่องจดหมายขาออก + ส่งผ่าน SMTP) และรีเซ็ตรหัสผ่าน
+// ======================================================================
+/// <summary>
+/// ตั้งค่า SMTP ผ่าน Email:Host / Port / User / Password / From / FromName / EnableSsl (Docker: SMTP_HOST, SMTP_PORT, ...)
+/// ไม่ตั้ง Host = ไม่ส่งจริง อีเมลถูกเก็บไว้ในกล่องจดหมาย (สถานะ SAVED) ให้ผู้จัดการเปิดดูได้ในหน้าสถานะระบบ
+/// </summary>
+public sealed record MailSettings(string? Host, int Port, string? User, string? Password, string From, string FromName, bool EnableSsl, string PublicUrl)
+{
+    public bool Enabled => !string.IsNullOrWhiteSpace(Host);
+    public static MailSettings Load(IConfiguration cfg)
+    {
+        var host = cfg["Email:Host"]?.Trim();
+        var user = cfg["Email:User"]?.Trim();
+        var from = cfg["Email:From"]?.Trim();
+        return new MailSettings(string.IsNullOrEmpty(host) ? null : host, cfg.GetValue("Email:Port", 587),
+            string.IsNullOrEmpty(user) ? null : user, cfg["Email:Password"],
+            string.IsNullOrEmpty(from) ? (user ?? "no-reply@aurellestay.local") : from,
+            cfg["Email:FromName"] is { Length: > 0 } fn ? fn : "AurelleStay",
+            cfg.GetValue("Email:EnableSsl", true),
+            (cfg["App:PublicUrl"] is { Length: > 0 } pu ? pu : "http://localhost:8088").TrimEnd('/'));
+    }
+}
+
+public static class Mailer
+{
+    public const string OutboxTableSql = @"CREATE TABLE IF NOT EXISTS `email_outbox` (
+    `email_id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` int NULL,
+    `to_email` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `subject` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `body` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `link` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+    `attempts` int NOT NULL DEFAULT 0,
+    `last_error` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `sent_at` datetime NULL,
+    PRIMARY KEY (`email_id`),
+    KEY `ix_outbox_status` (`status`, `created_at`),
+    KEY `ix_outbox_user` (`user_id`),
+    CONSTRAINT `email_outbox_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public const string ResetsTableSql = @"CREATE TABLE IF NOT EXISTS `password_resets` (
+    `reset_id` bigint NOT NULL AUTO_INCREMENT,
+    `user_id` int NOT NULL,
+    `token_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `expires_at` datetime NOT NULL,
+    `used_at` datetime NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    PRIMARY KEY (`reset_id`),
+    UNIQUE KEY `ux_reset_token` (`token_hash`),
+    KEY `ix_reset_user` (`user_id`, `created_at`),
+    CONSTRAINT `password_resets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /// <summary>เพิ่มอีเมลเข้ากล่องขาออก (บันทึกพร้อม SaveChanges ของผู้เรียก) ตัวส่งเบื้องหลังจะส่งภายในไม่กี่วินาที</summary>
+    public static void Queue(Csi402dbContext db, string toEmail, string subject, string body, string? link = null, int? userId = null)
+    {
+        if (string.IsNullOrWhiteSpace(toEmail)) return;
+        db.EmailOutbox.Add(new EmailOutbox
+        {
+            UserId = userId, ToEmail = toEmail.Trim(), Subject = Clip(subject, 200), Body = Clip(body, 4000),
+            Link = link is { Length: > 300 } ? link[..300] : link, Status = "PENDING", CreatedAt = AppClock.Now
+        });
+    }
+
+    private static string Clip(string s, int n) => s.Length > n ? s[..n] : s;
+
+    /// <summary>หน้าตาอีเมล (HTML เรียบง่าย อ่านได้ทุกโปรแกรมอีเมล) — เนื้อหาถูก encode ทั้งหมด</summary>
+    public static string Html(EmailOutbox m, string publicUrl)
+    {
+        static string E(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
+        var link = m.Link is { Length: > 0 } l ? (l.StartsWith("http") ? l : publicUrl + l) : null;
+        var paras = string.Join("", (m.Body ?? "").Split('\n').Select(p => $"<p style=\"margin:0 0 12px\">{E(p)}</p>"));
+        return $@"<!doctype html><html lang=""th""><body style=""margin:0;background:#f4f1f8;font-family:Tahoma,Arial,sans-serif;color:#2b2240"">
+<div style=""max-width:560px;margin:0 auto;padding:24px"">
+<div style=""font-family:Georgia,serif;font-size:26px;color:#3d1a5c"">Aurelle<span style=""color:#b8913a;font-style:italic"">Stay</span></div>
+<div style=""background:#fff;border-radius:14px;padding:24px;margin-top:14px;border:1px solid #e6dcf0"">
+<h2 style=""margin:0 0 14px;font-size:19px;color:#3d1a5c"">{E(m.Subject)}</h2>{paras}
+{(link == null ? "" : $@"<p style=""margin:18px 0 4px""><a href=""{E(link)}"" style=""display:inline-block;background:#3d1a5c;color:#fff;text-decoration:none;padding:11px 20px;border-radius:999px"">เปิดดูในเว็บไซต์</a></p>")}
+</div><p style=""font-size:12px;color:#7a6f8a;margin-top:14px"">อีเมลนี้ส่งอัตโนมัติจากระบบ AurelleStay กรุณาอย่าตอบกลับ</p></div></body></html>";
+    }
+
+    public static string StatusLabel(string s) => s switch
+    {
+        "SENT" => "ส่งแล้ว", "FAILED" => "ส่งไม่สำเร็จ", "SAVED" => "เก็บไว้ (ยังไม่ตั้งค่า SMTP)", _ => "รอส่ง"
+    };
+}
+
+/// <summary>ตัวส่งอีเมลเบื้องหลัง: อ่านกล่องขาออกทุก 15 วินาที ส่งผ่าน SMTP (ลองซ้ำสูงสุด 3 ครั้ง)</summary>
+public sealed class OutboxSender : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopes;
+    private readonly ILogger<OutboxSender> _log;
+    private readonly MailSettings _mail;
+    public OutboxSender(IServiceScopeFactory scopes, IConfiguration cfg, ILogger<OutboxSender> log)
+    { _scopes = scopes; _log = log; _mail = MailSettings.Load(cfg); }
+
+    public static async Task<int> RunOnceAsync(Csi402dbContext db, MailSettings mail, ILogger? log = null)
+    {
+        var batch = await db.EmailOutbox.Where(m => m.Status == "PENDING" || (m.Status == "FAILED" && m.Attempts < 3))
+            .OrderBy(m => m.EmailId).Take(20).ToListAsync();
+        if (batch.Count == 0) return 0;
+        foreach (var m in batch)
+        {
+            // ที่อยู่ภายในระบบ (.local) และกรณีไม่ได้ตั้ง SMTP: เก็บไว้ให้ดูในเว็บ ไม่ส่งออก
+            if (!mail.Enabled || m.ToEmail.EndsWith(".local", StringComparison.OrdinalIgnoreCase) || m.ToEmail.EndsWith("@t.example", StringComparison.OrdinalIgnoreCase))
+            {
+                m.Status = "SAVED"; continue;
+            }
+            m.Attempts++;
+            try
+            {
+                using var msg = new System.Net.Mail.MailMessage(new System.Net.Mail.MailAddress(mail.From, mail.FromName, System.Text.Encoding.UTF8),
+                    new System.Net.Mail.MailAddress(m.ToEmail))
+                {
+                    Subject = m.Subject, SubjectEncoding = System.Text.Encoding.UTF8,
+                    Body = Mailer.Html(m, mail.PublicUrl), BodyEncoding = System.Text.Encoding.UTF8, IsBodyHtml = true
+                };
+                using var smtp = new System.Net.Mail.SmtpClient(mail.Host!, mail.Port) { EnableSsl = mail.EnableSsl, Timeout = 20000 };
+                if (mail.User != null) smtp.Credentials = new System.Net.NetworkCredential(mail.User, mail.Password);
+                await smtp.SendMailAsync(msg);
+                m.Status = "SENT"; m.SentAt = AppClock.Now; m.LastError = null;
+            }
+            catch (Exception ex)
+            {
+                m.Status = "FAILED";
+                var err = ex.GetBaseException().Message;
+                m.LastError = err.Length > 300 ? err[..300] : err;
+                log?.LogWarning("ส่งอีเมล #{Id} ไม่สำเร็จ: {Err}", m.EmailId, m.LastError);
+            }
+        }
+        await db.SaveChangesAsync();
+        return batch.Count;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stop)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        try
+        {
+            do
+            {
+                try
+                {
+                    using var scope = _scopes.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<Csi402dbContext>();
+                    await RunOnceAsync(db, _mail, _log);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _log.LogWarning(ex, "ตัวส่งอีเมลทำงานไม่สำเร็จรอบนี้ จะลองใหม่รอบถัดไป");
+                }
+            } while (await timer.WaitForNextTickAsync(stop));
+        }
+        catch (OperationCanceledException) { }
+    }
+}
+
+public static class PasswordResets
+{
+    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(30);
+
+    public static string HashToken(string token) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
+
+    /// <summary>สร้างโทเคน (ส่งในลิงก์) และเก็บเฉพาะค่าแฮช · ยกเลิกโทเคนเก่าที่ยังไม่ได้ใช้ของผู้ใช้คนนี้</summary>
+    public static async Task<string> CreateAsync(Csi402dbContext db, int userId, string? ip)
+    {
+        var now = AppClock.Now;
+        await db.PasswordResets.Where(r => r.UserId == userId && r.UsedAt == null && r.ExpiresAt > now)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, now));
+        var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        db.PasswordResets.Add(new PasswordReset { UserId = userId, TokenHash = HashToken(token), ExpiresAt = now + Lifetime, CreatedAt = now, Ip = ip });
+        return token;
+    }
+
+    /// <summary>โทเคนที่ยังใช้ได้ (ไม่หมดอายุ ไม่เคยใช้) หรือ null</summary>
+    public static Task<PasswordReset?> FindValidAsync(Csi402dbContext db, string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 100) return Task.FromResult<PasswordReset?>(null);
+        var hash = HashToken(token.Trim());
+        var now = AppClock.Now;
+        return db.PasswordResets.Include(r => r.User).FirstOrDefaultAsync(r => r.TokenHash == hash && r.UsedAt == null && r.ExpiresAt > now);
+    }
+}
