@@ -463,6 +463,8 @@ public class Notification
     public string? Link { get; set; }
     public bool IsRead { get; set; }
     public DateTime CreatedAt { get; set; }
+    /// <summary>Part 52: เวลาที่ส่งเป็นอีเมลแล้ว (NULL = ยังไม่ส่ง)</summary>
+    public DateTime? EmailedAt { get; set; }
 }
 
 /// <summary>ข้อความติดต่อโรงแรมจากหน้า "ติดต่อเรา" (contact_messages) — รวมคำขอรีเซ็ตรหัสผ่าน</summary>

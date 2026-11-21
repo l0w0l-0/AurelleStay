@@ -56,6 +56,11 @@ public static class AppSetup
 
         // ยกเลิกการจองค้างชำระอัตโนมัติ + ตรวจสุขภาพระบบที่ /health (ตอบ Healthy/Unhealthy เท่านั้น ไม่เปิดเผยรายละเอียด)
         services.AddHostedService<BookingExpiryService>();
+        // Part 52: อีเมล (ปิดอยู่จนกว่าจะตั้ง Email:Host + Email:From)
+        services.AddSingleton(EmailSettings.Load(config));
+        services.AddSingleton<EmailSender>();
+        services.AddSingleton<EmailQueue>();
+        services.AddHostedService<EmailWorker>();
         services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
         // เก็บคีย์เข้ารหัสคุกกี้ลงดิสก์: รีสตาร์ท/deploy ใหม่แล้วผู้ใช้ไม่หลุดล็อกอิน และฟอร์มที่เปิดค้างไว้ยังส่งได้
@@ -486,6 +491,7 @@ public static class DbSetup
         // Part 50: เช็คอินออนไลน์ล่วงหน้า — เวลาที่จะมาถึง + คำขอพิเศษ
         ("bookings", "arrival_time", "varchar(5) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("bookings", "guest_request", "varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        ("notifications", "emailed_at", "datetime NULL"),   // Part 52: ส่งเป็นอีเมลแล้วเมื่อไร
         ("promotions", "auto_key", "varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, ADD UNIQUE KEY `ux_promo_auto` (`auto_key`)"),
     };
 
@@ -664,7 +670,8 @@ public static class DbSetup
         foreach (var (table, name, cols) in Indexes.Where(i => !haveIdx.Contains($"{i.Table}.{i.Name}")))
         {
             // ชื่อมาจากรายการคงที่ในโค้ด (ไม่ใช่ข้อมูลผู้ใช้)
-            await db.Database.ExecuteSqlRawAsync($"ALTER TABLE `{table}` ADD INDEX `{name}` ({cols})");
+            var ddl = "ALTER TABLE `" + table + "` ADD INDEX `" + name + "` (" + cols + ")";
+            await db.Database.ExecuteSqlRawAsync(ddl);
             log.LogWarning("อัปเกรดฐานข้อมูล: เพิ่มดัชนี {Table}.{Index} (เพิ่มความเร็ว)", table, name);
         }
 
@@ -850,6 +857,8 @@ public static class AuditTrail
     {
         ["Account.Login"] = ("เข้าสู่ระบบไม่สำเร็จ", ""), ["Account.Register"] = ("สมัครสมาชิก", "ผู้ใช้"),
         ["Account.EditUser"] = ("แก้ไขข้อมูลผู้ใช้", "ผู้ใช้"), ["Account.DeleteUser"] = ("ลบผู้ใช้", "ผู้ใช้"), ["Account.ClearLoginHistory"] = ("ล้างประวัติเข้าสู่ระบบ", "ผู้ใช้"),
+        ["Account.ForgotPassword"] = ("ขอลิงก์รีเซ็ตรหัสผ่าน", "ผู้ใช้"), ["Account.ResetPassword"] = ("ตั้งรหัสผ่านใหม่ผ่านอีเมล", "ผู้ใช้"),
+        ["AdminAudit.TestEmail"] = ("ทดสอบส่งอีเมล", ""),
         ["Settings.SaveProfile"] = ("แก้ไขข้อมูลส่วนตัว", ""), ["Settings.ChangePassword"] = ("เปลี่ยนรหัสผ่าน", ""),
         ["Settings.SignOutOthers"] = ("ออกจากระบบอุปกรณ์อื่นทั้งหมด", ""),
         ["Settings.ExportData"] = ("ดาวน์โหลดข้อมูลของตัวเอง", ""), ["Settings.DeleteAccount"] = ("ลบบัญชีของตัวเอง", ""),
@@ -1032,6 +1041,7 @@ public static class Notify
     `link` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
     `is_read` tinyint(1) NOT NULL DEFAULT 0,
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `emailed_at` datetime NULL,
     PRIMARY KEY (`notification_id`),
     CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
     KEY `ix_notify_user` (`user_id`, `is_read`, `created_at`)

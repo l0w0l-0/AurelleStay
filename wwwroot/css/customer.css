@@ -1872,3 +1872,8 @@ body *::-webkit-scrollbar-thumb:hover { background: #b08a35 padding-box; }
     body * { scrollbar-width: thin; scrollbar-color: rgba(95, 61, 142, .5) transparent; }
     .admin-menu { scrollbar-color: rgba(201, 162, 76, .55) transparent; }
 }
+
+/* Part 52: หน้าลืมรหัสผ่าน / ตั้งรหัสผ่านใหม่ (การ์ดเดียว กลางจอ) */
+.auth-container--single { width: min(480px, 100%); min-height: 0; display: block; grid-template-columns: none; }
+.auth-container--single .auth-card { border-radius: var(--r-md, 8px); }
+.auth-title { font-family: var(--f-logo, inherit); font-size: 1.6rem; font-weight: 600; color: var(--pine); margin: 0 0 10px; }

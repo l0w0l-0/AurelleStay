@@ -1249,6 +1249,7 @@ public static class DemoData
 {
     public const string Domain = "@demo.aurellestay.local";
     public const string Password = "Demo@2026";
+    public static bool IsDemoEmail(string? email) => email?.EndsWith(Domain, StringComparison.OrdinalIgnoreCase) == true;
 
     private static readonly string[] First = { "สมชาย", "สมหญิง", "วิภาวดี", "ธนากร", "ปิยะพงษ์", "กมลชนก", "ณัฐวุฒิ", "สุภาวดี", "อรรถพล", "พิมพ์ชนก",
         "ชยพล", "ศิริพร", "ภูริทัต", "จิราพร", "ธีรวัฒน์", "นันทนา", "วรเมธ", "ปวีณา", "กิตติพัฒน์", "มณีรัตน์",

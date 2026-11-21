@@ -68,6 +68,16 @@ AurelleStay เป็นเว็บไซต์จองห้องพัก�
 - (สาธิต) เมนู **สถานะระบบ / สำรองข้อมูล** → **สร้างข้อมูลตัวอย่าง** ได้ลูกค้า 30 คนพร้อมการจอง การชำระเงิน และรีวิว (`guest01`–`guest30@demo.aurellestay.local` รหัส `Demo@2026`) ลบออกได้ด้วยปุ่มเดียว
 - เปิดจากมือถือ/เครื่องอื่นในวง LAN ได้ที่ `http://IP-ของเครื่อง:8088`
 
+**อีเมล (ไม่บังคับ):** ใส่ใน `.env` แล้วรันใหม่ → ลูกค้ากด "ลืมรหัสผ่าน" รีเซ็ตเองได้ + การแจ้งเตือนส่งเป็นอีเมล + ตอบกลับข้อความติดต่อทางอีเมล
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=อีเมล-gmail-ของโรงแรม
+SMTP_PASSWORD=App Password 16 ตัว   (สร้างที่ https://myaccount.google.com/apppasswords ต้องเปิด 2-Step Verification ก่อน)
+PUBLIC_URL=http://localhost:8088     (หรือ IP/โดเมนที่ลูกค้าเปิดเว็บ ใช้ทำลิงก์ในอีเมล)
+```
+ทดสอบได้ที่เมนู **สถานะระบบ** → **ส่งอีเมลทดสอบถึงฉัน** · ไม่ตั้งค่า = ระบบทำงานแบบเดิมครบทุกอย่าง
+
 คำสั่งอื่น: `.\docker.ps1 status | logs | backup | down | admin อีเมล` · `./run.sh status | logs | down`
 ตั้งค่ารับเงินพร้อมเพย์ใน `.env`: `PROMPTPAY_ID`, `PAY_ACCOUNT_NAME`, `PAY_BANK_NAME`, `PAY_ACCOUNT_NO` (ดูตัวอย่างใน `.env.example`)
 

@@ -46,6 +46,15 @@ services:
       # เปิดผ่าน http (เช่น http://IP-เครื่อง:8088 จากมือถือ) ต้องเป็น false ไม่งั้นเข้าสู่ระบบไม่ได้ · ถ้าวาง https ไว้ด้านหน้าให้ตั้ง true
       App__HttpsOnlyCookies: ${HTTPS_ONLY_COOKIES:-false}
       # ผู้จัดการคนแรก: สร้างให้อัตโนมัติถ้ายังไม่มีผู้จัดการเลย (run.bat / run.sh / docker.ps1 up สุ่มรหัสให้ใน .env)
+      # อีเมล (Part 52): ว่าง = ปิด · Gmail: SMTP_HOST=smtp.gmail.com SMTP_PORT=587 SMTP_USER=อีเมล SMTP_PASSWORD=App Password 16 ตัว
+      Email__Host: ${SMTP_HOST:-}
+      Email__Port: ${SMTP_PORT:-587}
+      Email__User: ${SMTP_USER:-}
+      Email__Password: ${SMTP_PASSWORD:-}
+      Email__From: ${SMTP_FROM:-}
+      Email__UseSsl: ${SMTP_SSL:-true}
+      # ที่อยู่เว็บสำหรับลิงก์ในอีเมล (เช่น http://192.168.1.10:8088 หรือโดเมนจริง)
+      App__PublicUrl: ${PUBLIC_URL:-http://localhost:8088}
       Setup__AdminEmail: ${ADMIN_EMAIL:-}
       Setup__AdminPassword: ${ADMIN_PASSWORD:-}
       Hotel__Name: ${HOTEL_NAME:-AurelleStay}

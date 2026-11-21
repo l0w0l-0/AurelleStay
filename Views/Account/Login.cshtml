@@ -1,5 +1,6 @@
 @model pameka_7033_l005.ViewModels.AuthPageViewModel
 @using pameka_7033_l005.Helpers
+@inject EmailSettings Mail
 @{
     ViewData["Title"] = "เข้าสู่ระบบ";
     Layout = "_loginLayout";
@@ -56,7 +57,14 @@
                 </div>
 
                 <button type="submit" class="btn-primary">ตกลง</button>
-                <p class="auth-help">ลืมรหัสผ่าน? <a href="@Url.Action("About", "Home", new { topic = "PASSWORD" })#contact">ส่งคำขอถึงโรงแรม</a> เพื่อรับรหัสผ่านใหม่</p>
+                @if (Mail.Enabled)
+                {
+                    <p class="auth-help">ลืมรหัสผ่าน? <a asp-action="ForgotPassword">รับลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล</a></p>
+                }
+                else
+                {
+                    <p class="auth-help">ลืมรหัสผ่าน? <a href="@Url.Action("About", "Home", new { topic = "PASSWORD" })#contact">ส่งคำขอถึงโรงแรม</a> เพื่อรับรหัสผ่านใหม่</p>
+                }
             </form>
 
 

@@ -922,6 +922,27 @@ public class AdminAuditController : AdminAreaController
         return RedirectToAction(nameof(SystemStatus));
     }
 
+    /// <summary>Part 52: ทดสอบส่งอีเมลถึงอีเมลของผู้จัดการที่กด (ส่งทันที เพื่อแสดงข้อผิดพลาดของ SMTP ถ้ามี)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> TestEmail([FromServices] EmailSender sender, [FromServices] EmailSettings mail)
+    {
+        var to = User.FindFirstValue(System.Security.Claims.ClaimTypes.Email);
+        if (!mail.Enabled || to == null) { Flash("ยังไม่ได้ตั้งค่าอีเมล (SMTP_HOST / SMTP_FROM ใน .env)", true); return RedirectToAction(nameof(SystemStatus)); }
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            await sender.SendAsync(new EmailMessage(to, "ทดสอบส่งอีเมล", "ระบบอีเมลใช้งานได้",
+                $"อีเมลนี้ส่งจากหน้า \"สถานะระบบ\" เพื่อทดสอบการตั้งค่า SMTP ({mail.Host}:{mail.Port})\nเวลา {AppClock.Now:dd/MM/yyyy HH:mm:ss}",
+                sender.Absolute("/Admin"), "เปิดหลังบ้าน"), cts.Token);
+            Flash($"ส่งอีเมลทดสอบไปที่ {to} แล้ว กรุณาตรวจกล่องจดหมาย (รวมถึงสแปม)");
+        }
+        catch (Exception ex)
+        {
+            Flash($"ส่งอีเมลไม่สำเร็จ: {ex.GetBaseException().Message} — ตรวจ SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD (Gmail ต้องใช้ App Password)", true);
+        }
+        return RedirectToAction(nameof(SystemStatus));
+    }
+
     /// <summary>Part 50: ลบเฉพาะข้อมูลลูกค้าตัวอย่าง (ไม่แตะข้อมูลจริง)</summary>
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveDemo()
@@ -1096,6 +1117,11 @@ public class AdminMessagesController : AdminAreaController
         if (status == "DONE" && wasNew && m.UserId is { } uid && note != null)
             Notify.Add(Db, uid, "โรงแรมตอบกลับข้อความของคุณ", note.Length > 480 ? note[..480] + "…" : note, null);
         await Db.SaveChangesAsync();
+        // Part 52: ผู้ส่งที่ไม่มีบัญชี → ตอบกลับทางอีเมล (ถ้าเปิดระบบอีเมล) · ผู้มีบัญชีได้อีเมลจากการแจ้งเตือนข้างบนอยู่แล้ว
+        var mail = HttpContext.RequestServices.GetRequiredService<EmailSettings>();
+        if (status == "DONE" && wasNew && m.UserId == null && note != null && mail.Enabled)
+            HttpContext.RequestServices.GetRequiredService<EmailQueue>().TryEnqueue(new EmailMessage(m.Email, "โรงแรมตอบกลับข้อความของคุณ",
+                "ตอบกลับข้อความของคุณ", $"เรียน คุณ{m.Name}\n\n{note}\n\n— ข้อความเดิมของคุณ —\n{(m.Message.Length > 600 ? m.Message[..600] + "…" : m.Message)}"));
         Flash(status == "DONE" ? $"ปิดเรื่องข้อความ #{m.MessageId} แล้ว" : $"เปิดเรื่องข้อความ #{m.MessageId} อีกครั้ง");
         return RedirectToAction(nameof(Index));
     }

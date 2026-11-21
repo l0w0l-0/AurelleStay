@@ -123,6 +123,33 @@ public class ProfileEditViewModel : PersonInfoViewModel, IValidatableObject
     }
 }
 
+/// <summary>Part 52: ขอลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล</summary>
+public class ForgotPasswordViewModel
+{
+    [Required(ErrorMessage = "กรุณากรอกอีเมล")]
+    [EmailAddress(ErrorMessage = "รูปแบบอีเมลไม่ถูกต้อง")]
+    [StringLength(150)]
+    public string Email { get; set; } = "";
+    public string? Done { get; set; }
+}
+
+/// <summary>Part 52: ตั้งรหัสผ่านใหม่จากลิงก์ในอีเมล</summary>
+public class ResetPasswordViewModel
+{
+    public string Token { get; set; } = "";
+
+    [Required(ErrorMessage = "กรุณากรอกรหัสผ่านใหม่")]
+    [StringLength(100, ErrorMessage = "รหัสผ่านยาวไม่เกิน 100 ตัวอักษร"), PasswordPolicy]
+    public string NewPassword { get; set; } = "";
+
+    [Required(ErrorMessage = "กรุณายืนยันรหัสผ่านใหม่")]
+    [Compare(nameof(NewPassword), ErrorMessage = "ยืนยันรหัสผ่านใหม่ไม่ตรงกัน")]
+    public string ConfirmPassword { get; set; } = "";
+
+    public bool Invalid { get; set; }
+    public string? Email { get; set; }
+}
+
 public class ChangePasswordViewModel
 {
     [Required(ErrorMessage = "กรุณากรอกรหัสผ่านปัจจุบัน")]

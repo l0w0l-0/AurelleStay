@@ -32,6 +32,28 @@
         <form asp-action="Backup" method="post"><button type="submit" class="cx-btn">ดาวน์โหลดไฟล์สำรองตอนนี้</button></form>
     </section>
 
+    @{ var mail = (pameka_7033_l005.Helpers.EmailSettings)Context.RequestServices.GetService(typeof(pameka_7033_l005.Helpers.EmailSettings))!; }
+    <section class="staff-card sys-backup" aria-labelledby="mail-h">
+        <div>
+            <h2 id="mail-h">อีเมล (SMTP)</h2>
+            @if (mail.Enabled)
+            {
+                <p class="cx-hint">เปิดใช้งาน: <b>@mail.Host:@mail.Port</b> ผู้ส่ง <b>@mail.From</b>
+                    · ลูกค้ารีเซ็ตรหัสผ่านเองได้ · การแจ้งเตือนส่งเป็นอีเมลด้วย · ตอบกลับข้อความติดต่อทางอีเมล
+                    @if (mail.PublicUrl == null) { <br /><span>ยังไม่ได้ตั้ง <code>PUBLIC_URL</code> — อีเมลแจ้งเตือนจะไม่มีปุ่มลิงก์กลับมาที่เว็บ</span> }</p>
+            }
+            else
+            {
+                <p class="cx-hint">ปิดอยู่ — ใส่ <code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, <code>SMTP_FROM</code> ใน .env แล้วเปิดระบบใหม่
+                    (Gmail: smtp.gmail.com พอร์ต 587 + App Password) · ระหว่างนี้ลูกค้าที่ลืมรหัสผ่านส่งคำขอผ่านฟอร์มติดต่อเหมือนเดิม</p>
+            }
+        </div>
+        @if (mail.Enabled)
+        {
+            <form asp-action="TestEmail" method="post"><button type="submit" class="cx-btn cx-btn--ghost">ส่งอีเมลทดสอบถึงฉัน</button></form>
+        }
+    </section>
+
     <section class="staff-card sys-backup" aria-labelledby="demo-h">
         <div>
             <h2 id="demo-h">ข้อมูลลูกค้าตัวอย่าง (สำหรับนำเสนอ)</h2>

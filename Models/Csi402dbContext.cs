@@ -311,6 +311,7 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.Link).HasMaxLength(200).HasColumnName("link");
             entity.Property(e => e.IsRead).HasColumnName("is_read");
             entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.EmailedAt).HasColumnType("datetime").HasColumnName("emailed_at");
             entity.HasOne<User>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("notifications_ibfk_1");
         });
 

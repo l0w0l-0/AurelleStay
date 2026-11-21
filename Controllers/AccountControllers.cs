@@ -66,9 +66,11 @@ public class AccountController : AppController
     //สร้าง
     private readonly Csi402dbContext _db;
     private readonly LoginThrottle _throttle;
+    private readonly IMemoryCache _cache;
     public AccountController(Csi402dbContext db, IMemoryCache cache)
     {
         _db = db;
+        _cache = cache;
         _throttle = new LoginThrottle(cache);
     }
 
@@ -152,6 +154,73 @@ public class AccountController : AppController
     [AllowAnonymous]
     [HttpGet]
     public IActionResult AccessDenied() => View();
+
+    // ---------------------------------------------------------------- Part 52: ลืมรหัสผ่าน (ส่งลิงก์ทางอีเมล)
+    private const string ForgotDone = "ถ้าอีเมลนี้มีบัญชีอยู่ในระบบ เราได้ส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว (ใช้ได้ 30 นาที) กรุณาตรวจกล่องจดหมาย รวมถึงโฟลเดอร์สแปม";
+
+    [AllowAnonymous, HttpGet]
+    public IActionResult ForgotPassword([FromServices] EmailSettings mail, string? email)
+    {
+        // ยังไม่ได้ตั้งค่าอีเมล: ใช้วิธีเดิม (ส่งคำขอถึงโรงแรม ผู้จัดการออกรหัสใหม่ให้)
+        if (!mail.Enabled) return Redirect(Url.Action("About", "Home", new { topic = "PASSWORD" }) + "#contact");
+        return View(new ForgotPasswordViewModel { Email = email ?? "", Done = TempData["ForgotDone"] as string });
+    }
+
+    [AllowAnonymous, HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword([FromServices] EmailSettings mail, [FromServices] EmailQueue queue,
+        [FromServices] EmailSender sender, ForgotPasswordViewModel f)
+    {
+        if (!mail.Enabled) return Redirect(Url.Action("About", "Home", new { topic = "PASSWORD" }) + "#contact");
+        if (!ModelState.IsValid) return View(f);
+        var email = f.Email.Trim().ToLowerInvariant();
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "-";
+        // กันสแปมกล่องจดหมายคนอื่น: ต่อ IP 5 ครั้ง / 15 นาที, ต่ออีเมล 3 ครั้ง / ชั่วโมง (เกินแล้วตอบเหมือนสำเร็จ แต่ไม่ส่ง)
+        var allowed = Bump($"fp-ip:{ip}", 5, TimeSpan.FromMinutes(15)) & Bump($"fp-mail:{email}", 3, TimeSpan.FromHours(1));
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email);
+        if (allowed && user != null && !DemoData.IsDemoEmail(email))
+        {
+            // ลิงก์ใช้ App:PublicUrl ถ้าตั้งไว้ (กันการปลอม Host header ให้ลิงก์ชี้ไปเว็บอื่น)
+            var token = PasswordReset.Create(HttpContext.RequestServices, user);
+            var path = Url.Action(nameof(ResetPassword), new { token })!;
+            var link = sender.Absolute(path) ?? $"{Request.Scheme}://{Request.Host}{Request.PathBase}{path}";
+            queue.TryEnqueue(new EmailMessage(user.Email, "ตั้งรหัสผ่านใหม่", "ตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ",
+                $"เรียน คุณ{user.FirstName}\n\nเราได้รับคำขอตั้งรหัสผ่านใหม่สำหรับบัญชี {user.Email}\nกดปุ่มด้านล่างภายใน 30 นาทีเพื่อตั้งรหัสผ่านใหม่ (ใช้ได้ครั้งเดียว)\n\nหากคุณไม่ได้ขอ ไม่ต้องทำอะไร รหัสผ่านเดิมยังใช้ได้ตามปกติ",
+                link, "ตั้งรหัสผ่านใหม่"));
+        }
+        await AuditTrail.WriteAsync(HttpContext, "Account.ForgotPassword", null, allowed,
+            !allowed ? "ขอถี่เกินกำหนด (ไม่ส่ง)" : user == null ? "ไม่พบบัญชี (ไม่ส่ง)" : "ส่งลิงก์แล้ว", user?.UserId, email, "-");
+        TempData["ForgotDone"] = ForgotDone;   // ตอบเหมือนกันทุกกรณี: ไม่บอกว่าอีเมลนี้มีบัญชีหรือไม่
+        return RedirectToAction(nameof(ForgotPassword));
+    }
+
+    private bool Bump(string key, int max, TimeSpan window)
+    {
+        var n = _cache.GetOrCreate(key, e => { e.AbsoluteExpirationRelativeToNow = window; return new int[1]; })!;
+        return Interlocked.Increment(ref n[0]) <= max;
+    }
+
+    [AllowAnonymous, HttpGet]
+    public async Task<IActionResult> ResetPassword(string? token)
+    {
+        var user = await PasswordReset.ValidateAsync(HttpContext.RequestServices, _db, token);
+        return View(new ResetPasswordViewModel { Token = token ?? "", Invalid = user == null, Email = user?.Email });
+    }
+
+    [AllowAnonymous, HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel f)
+    {
+        var user = await PasswordReset.ValidateAsync(HttpContext.RequestServices, _db, f.Token);
+        if (user == null) { f.Invalid = true; return View(f); }
+        f.Email = user.Email;
+        if (!ModelState.IsValid) return View(f);
+        user.SetPassword(f.NewPassword);   // เปลี่ยนตรา = โทเคนนี้ใช้ซ้ำไม่ได้ + ออกจากระบบทุกอุปกรณ์ที่ค้างอยู่
+        await _db.SaveChangesAsync();
+        _throttle.Reset(user.Email, HttpContext.Connection.RemoteIpAddress?.ToString());
+        await AuditTrail.WriteAsync(HttpContext, "Account.ResetPassword", user.UserId, true, "ตั้งรหัสผ่านใหม่ผ่านลิงก์อีเมล", user.UserId, user.Email, user.Role.RoleName);
+        TempData["Success"] = "ตั้งรหัสผ่านใหม่แล้ว เข้าสู่ระบบด้วยรหัสผ่านใหม่ได้เลย";
+        TempData["Email"] = user.Email;
+        return RedirectToAction(nameof(Login));
+    }
 
     /// <summary>
     /// Part 50: ตัวเลขสด (เรียกทุก 30 วินาทีจากหน้าเว็บ) — งานที่รอในเมนูของพนักงาน + การแจ้งเตือนที่ยังไม่อ่านของลูกค้า

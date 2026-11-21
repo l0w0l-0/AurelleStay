@@ -260,6 +260,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
     `link` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
     `is_read` tinyint(1) NOT NULL DEFAULT 0,
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `emailed_at` datetime NULL,
     PRIMARY KEY (`notification_id`),
     CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
     KEY `ix_notify_user` (`user_id`, `is_read`, `created_at`)
