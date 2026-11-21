@@ -1,0 +1,137 @@
+@model pameka_7033_l005.ViewModels.AuthPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "เข้าสู่ระบบ";
+    Layout = "_loginLayout";
+    var isRegister = Model.ActiveTab == "register";
+}
+
+<section class="auth-page">
+    <a asp-controller="Home" asp-action="Index" class="auth-back"><span aria-hidden="true">←</span> กลับหน้าแรก</a>
+
+    <div class="auth-container">
+        <div class="auth-ad auth-ad--photo">
+            <img src="~/images/rooms/standard-double.jpg" alt="" width="1200" height="800" />
+            <div class="cx-auth-art">
+                <p class="cx-eyebrow">Members &amp; Staff</p>
+                <h1>Aurelle<span>Stay</span></h1>
+                <p>สมาชิกใหม่รับส่วนลดทันที จองล่วงหน้า 30 วันลดมากขึ้น พนักงานเลือกบทบาทของตนเพื่อเข้าหลังบ้าน</p>
+                <ul class="auth-perks">
+                    <li>ส่วนลดสมาชิกอัตโนมัติทุกการจอง</li>
+                    <li>ติดตามสถานะการจองและการชำระเงิน</li>
+                    <li>แจ้งเตือนเมื่อการจองเปลี่ยนแปลง</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="auth-card">
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab @(isRegister ? "" : "active")" id="loginTab" onclick="showLogin()">
+                    เข้าสู่ระบบ
+                </button>
+                <button type="button" class="auth-tab @(isRegister ? "active" : "")" id="registerTab" onclick="showRegister()">
+                    สมัครสมาชิก
+                </button>
+            </div>
+
+
+            @if (!string.IsNullOrEmpty(Model.Message))
+            {
+                <div class="auth-alert @(Model.IsError ? "error" : "success")">@Model.Message</div>
+            }
+
+
+            <form id="loginForm" class="auth-form" asp-controller="Account" asp-action="Login" method="post"
+                  style="display: @(isRegister ? "none" : "flex");">
+                <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+
+                <div class="auth-input-group">
+                    <input type="email" asp-for="Login.Email" placeholder="อีเมล" autocomplete="username" />
+                    <span asp-validation-for="Login.Email" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <input type="password" asp-for="Login.Password" placeholder="รหัสผ่าน" autocomplete="current-password" />
+                    <span asp-validation-for="Login.Password" class="auth-error"></span>
+                </div>
+
+                <button type="submit" class="btn-primary">ตกลง</button>
+                <p class="auth-help">ลืมรหัสผ่าน? <a href="@Url.Action("About", "Home", new { topic = "PASSWORD" })#contact">ส่งคำขอถึงโรงแรม</a> เพื่อรับรหัสผ่านใหม่</p>
+            </form>
+
+
+            <form id="registerForm" class="auth-form register-form" asp-controller="Account" asp-action="Register" method="post"
+                  style="display: @(isRegister ? "flex" : "none");">
+
+                <div class="auth-input-group">
+                    <input type="text" asp-for="Register.FirstName" placeholder="ชื่อ" />
+                    <span asp-validation-for="Register.FirstName" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <input type="text" asp-for="Register.LastName" placeholder="นามสกุล" />
+                    <span asp-validation-for="Register.LastName" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <input type="tel" asp-for="Register.Phone" placeholder="เบอร์" />
+                    <span asp-validation-for="Register.Phone" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <input type="email" asp-for="Register.Email" placeholder="อีเมล" />
+                    <span asp-validation-for="Register.Email" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <input type="password" asp-for="Register.Password" placeholder="รหัสผ่าน (6 ตัวขึ้นไป)" />
+                    <span asp-validation-for="Register.Password" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <input type="password" asp-for="Register.ConfirmPassword" placeholder="ยืนยันรหัสผ่าน" />
+                    <span asp-validation-for="Register.ConfirmPassword" class="auth-error"></span>
+                </div>
+
+                <div class="auth-input-group">
+                    <label class="auth-consent">
+                        <input type="checkbox" name="Register.AcceptPolicy" value="true" @(Model.Register.AcceptPolicy ? "checked" : "") required />
+                        <span>ฉันยอมรับ<a asp-controller="Home" asp-action="Policy" target="_blank" rel="noopener">เงื่อนไขการจองและนโยบายความเป็นส่วนตัว</a></span>
+                    </label>
+                    <span asp-validation-for="Register.AcceptPolicy" class="auth-error"></span>
+                </div>
+
+                <button type="submit" class="btn-primary">ตกลง</button>
+            </form>
+
+        </div>
+
+    </div>
+
+    
+
+</section>
+
+
+@section Scripts {
+
+<script>
+
+    function showLogin() {
+        document.getElementById("loginForm").style.display = "flex";
+        document.getElementById("registerForm").style.display = "none";
+        document.getElementById("loginTab").classList.add("active");
+        document.getElementById("registerTab").classList.remove("active");
+    }
+
+    function showRegister() {
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("registerForm").style.display = "flex";
+        document.getElementById("loginTab").classList.remove("active");
+        document.getElementById("registerTab").classList.add("active");
+    }
+
+</script>
+
+}
+

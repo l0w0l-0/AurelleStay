@@ -1,0 +1,61 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Cfg
+@{
+    // ส่วน <head> ที่ทุก layout ใช้ร่วมกัน: meta สำหรับค้นหา/แชร์ลิงก์, ไอคอน, ฟอนต์, กันกดส่งฟอร์มซ้ำ
+    // แต่ละหน้ากำหนดเองได้: ViewData["Description"], ViewData["NoIndex"] = true (หน้าหลังบ้าน/หน้าส่วนตัวไม่ให้ค้นหาเจอ)
+    var hotel = pameka_7033_l005.Helpers.HotelInfo.From(Cfg);
+    var req = Context.Request;
+    var origin = $"{req.Scheme}://{req.Host}";
+    var description = ViewData["Description"] as string
+        ?? $"{hotel.Name} ที่พักสไตล์บูทีค จองห้องพักออนไลน์ ตรวจสอบห้องว่างตามวันจริง ชำระผ่าน QR พร้อมบริการเสริมอาหารและสปา";
+    var title = $"{ViewData["Title"]} - {hotel.Name}";
+    var noIndex = ViewData["NoIndex"] is true;
+}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="@description" />
+<meta name="theme-color" content="#2d1b47" />
+<meta name="color-scheme" content="light" />
+@if (noIndex)
+{
+    <meta name="robots" content="noindex, nofollow" />
+}
+else
+{
+    <link rel="canonical" href="@(origin + req.PathBase + req.Path)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="th_TH" />
+    <meta property="og:site_name" content="@hotel.Name" />
+    <meta property="og:title" content="@title" />
+    <meta property="og:description" content="@description" />
+    <meta property="og:url" content="@(origin + req.PathBase + req.Path)" />
+    <meta property="og:image" content="@(origin + Url.Content("~/images/rooms/standard-double.jpg"))" />
+}
+<link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="~/favicon.ico" sizes="32x32" />
+@* ฟอนต์ติดตั้งในโปรเจกต์ (wwwroot/fonts) — ไม่ต้องต่ออินเทอร์เน็ตไปที่ Google และไม่ส่งข้อมูลผู้เข้าชมออกนอกระบบ *@
+<link rel="preload" href="~/fonts/anuphan-thai-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="~/fonts/trirong-thai-600-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="~/fonts/fonts.css" asp-append-version="true" />
+<script>
+    // กันกดปุ่มส่งฟอร์ม (POST) ซ้ำระหว่างรอเซิร์ฟเวอร์ + แสดงสถานะกำลังทำงานที่ปุ่มที่กด
+    // ไม่แตะฟอร์มที่ผู้ใช้กด "ยกเลิก" ในกล่องยืนยัน, ฟอร์มค้นหา (GET) และฟอร์มที่ใส่ data-no-busy (เช่น ดาวน์โหลดไฟล์)
+    (function () {
+        function release(f) {
+            delete f.dataset.busy; f.removeAttribute('aria-busy');
+            f.querySelectorAll('[data-busy-off]').forEach(function (x) { x.disabled = false; x.removeAttribute('data-busy-off'); x.classList.remove('is-busy'); });
+        }
+        document.addEventListener('submit', function (e) {
+            var f = e.target;
+            if (e.defaultPrevented || (f.method || '').toLowerCase() !== 'post' || f.hasAttribute('data-no-busy')) return;
+            if (f.dataset.busy) { e.preventDefault(); return; }
+            f.dataset.busy = '1'; f.setAttribute('aria-busy', 'true');
+            var by = e.submitter;
+            setTimeout(function () {   // รอให้เบราว์เซอร์เก็บค่าปุ่มที่กดก่อน แล้วค่อยปิดปุ่ม
+                f.querySelectorAll('button:not([type=button]):not([disabled]), input[type=submit]:not([disabled])').forEach(function (x) { x.disabled = true; x.setAttribute('data-busy-off', ''); });
+                if (by) by.classList.add('is-busy');
+            }, 0);
+            setTimeout(function () { release(f); }, 15000);   // ถ้าไม่มีการเปลี่ยนหน้า (เช่น ได้ไฟล์กลับมา) ให้กดได้อีกครั้ง
+        });
+        window.addEventListener('pageshow', function () { document.querySelectorAll('form[data-busy]').forEach(release); });
+    })();
+</script>

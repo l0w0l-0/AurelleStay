@@ -1,0 +1,89 @@
+@model pameka_7033_l005.ViewModels.AdminMessagesPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ข้อความจากลูกค้า";
+    Layout = "_Adminlayout";
+    var tabs = new[] { ("NEW", $"ยังไม่ปิดเรื่อง ({Model.NewCount})"), ("DONE", "ปิดเรื่องแล้ว"), ("ALL", "ทั้งหมด") };
+}
+
+<div class="dashboard">
+    <h1>ข้อความจากลูกค้า</h1>
+    <partial name="_Flash" />
+
+    <nav class="fd-tabs" aria-label="กรองตามสถานะ">
+        @foreach (var (key, label) in tabs)
+        {
+            <a asp-action="Index" asp-route-status="@key" asp-route-q="@Model.Q" class="fd-tab@(Model.Status == key ? " active" : "")" aria-current="@(Model.Status == key ? "page" : null)">@label</a>
+        }
+    </nav>
+    <form method="get" class="staff-form" style="margin:14px 0">
+        <input type="hidden" name="status" value="@Model.Status" />
+        <input type="search" name="q" value="@Model.Q" placeholder="ค้นหา ชื่อ / อีเมล / เบอร์ / ข้อความ" aria-label="ค้นหาข้อความ" />
+        <button type="submit" class="cx-btn">ค้นหา</button>
+        <span>พบ @Model.TotalCount รายการ</span>
+    </form>
+
+    @if (!Model.Items.Any())
+    {
+        <div class="staff-card"><div class="cx-empty"><b>@(Model.Status == "NEW" ? "ไม่มีข้อความที่รอดำเนินการ" : "ไม่พบข้อความ")</b><span>ข้อความจากหน้า "ติดต่อเรา" จะแสดงที่นี่</span></div></div>
+    }
+    @foreach (var m in Model.Items)
+    {
+        var acct = Model.Accounts.TryGetValue(m.Email, out var aid) ? aid : (int?)null;
+        <article class="staff-card msg-card @(m.Status == "NEW" ? "is-new" : "")" aria-labelledby="msg-@m.MessageId">
+            <header class="msg-head">
+                <div>
+                    <h2 id="msg-@m.MessageId">@m.Name <small>#@m.MessageId</small></h2>
+                    <p class="msg-meta">
+                        <span class="msg-topic msg-topic--@m.Topic.ToLowerInvariant()">@ContactInbox.TopicLabel(m.Topic)</span>
+                        <a href="mailto:@m.Email">@m.Email</a>
+                        @if (m.Phone != null) { <span>· <a href="tel:@m.Phone">@m.Phone</a></span> }
+                        <span>· @m.CreatedAt.ToString("dd/MM/yyyy HH:mm")</span>
+                        @if (m.UserId != null) { <span class="msg-flag">เข้าสู่ระบบตอนส่ง</span> }
+                    </p>
+                </div>
+                <span class="cx-badge @(m.Status == "NEW" ? "cx-badge--PENDING" : "cx-badge--CONFIRMED")">@(m.Status == "NEW" ? "รอดำเนินการ" : "ปิดเรื่องแล้ว")</span>
+            </header>
+            <p class="msg-body">@m.Message</p>
+            @if (m.StaffNote != null || m.HandledBy != null)
+            {
+                <p class="msg-note"><b>บันทึกเจ้าหน้าที่:</b> @(m.StaffNote ?? "-") <small>@m.HandledBy @m.HandledAt?.ToString("dd/MM/yyyy HH:mm")</small></p>
+            }
+            <div class="msg-actions">
+                @if (acct != null)
+                {
+                    <a asp-controller="Account" asp-action="EditUser" asp-route-userId="@acct" class="cx-btn cx-btn--ghost cx-btn--small">ดูบัญชีผู้ใช้@(m.Topic == "PASSWORD" ? " / ออกรหัสใหม่" : "")</a>
+                }
+                else if (m.Topic == "PASSWORD")
+                {
+                    <span class="cx-hint">ไม่พบบัญชีที่ใช้อีเมลนี้</span>
+                }
+                @if (m.Status == "NEW")
+                {
+                    <form asp-action="Update" method="post" class="msg-form">
+                        <input type="hidden" name="id" value="@m.MessageId" />
+                        <input type="hidden" name="status" value="DONE" />
+                        <input type="text" name="note" maxlength="500" placeholder="@(m.UserId != null ? "ตอบกลับ (ลูกค้าจะเห็นในการแจ้งเตือน)" : "บันทึกการดำเนินการ (ถ้ามี)")" aria-label="บันทึกของข้อความ #@m.MessageId" />
+                        <button type="submit" class="cx-btn cx-btn--small">ปิดเรื่อง</button>
+                    </form>
+                }
+                else
+                {
+                    <form asp-action="Update" method="post" class="msg-form">
+                        <input type="hidden" name="id" value="@m.MessageId" />
+                        <input type="hidden" name="status" value="NEW" />
+                        <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">เปิดเรื่องอีกครั้ง</button>
+                    </form>
+                }
+            </div>
+        </article>
+    }
+    @if (Model.TotalPages > 1)
+    {
+        <nav class="staff-form" aria-label="เลือกหน้า">
+            @if (Model.Page > 1) { <a asp-action="Index" asp-route-status="@Model.Status" asp-route-q="@Model.Q" asp-route-page="@(Model.Page - 1)" class="cx-btn cx-btn--ghost cx-btn--small">« ก่อนหน้า</a> }
+            <span>หน้า @Model.Page / @Model.TotalPages</span>
+            @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-status="@Model.Status" asp-route-q="@Model.Q" asp-route-page="@(Model.Page + 1)" class="cx-btn cx-btn--ghost cx-btn--small">ถัดไป »</a> }
+        </nav>
+    }
+</div>

@@ -1,0 +1,334 @@
+@model pameka_7033_l005.ViewModels.DashboardViewModel
+@using pameka_7033_l005.Helpers
+@using pameka_7033_l005.ViewModels
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["Charts"] = true;   // Part 48: โหลด Chart.js เฉพาะหน้าที่มีกราฟ
+    Layout = "_Adminlayout";
+    var th = new System.Globalization.CultureInfo("th-TH");
+    var today = DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);
+    var revChange = DashboardViewModel.Change(Model.Revenue30, Model.RevenuePrev30);
+    var bkChange = DashboardViewModel.Change(Model.NewBookings30, Model.NewBookingsPrev30);
+    var occTonight = Model.Rooms == 0 ? 0 : (int)Math.Round(100.0 * Model.OccupiedTonight / Model.Rooms);
+    var attention = Model.PaymentsToVerify + Model.RefundsPending + Model.PendingBookings + Model.OpenTasks;
+
+    // ---- กราฟรายรับ 30 วัน (SVG) ----
+    const double CW = 640, CH = 210, PadL = 46, PadB = 26, PadT = 10;
+    var maxRev = Model.DailyRevenue.Count == 0 ? 0 : Model.DailyRevenue.Max(d => d.Amount);
+    var revTop = NiceMax((double)maxRev);
+    var plotW = CW - PadL - 6; var plotH = CH - PadB - PadT;
+    var slot = Model.DailyRevenue.Count == 0 ? 0 : plotW / Model.DailyRevenue.Count;
+    var peak = Model.DailyRevenue.OrderByDescending(d => d.Amount).FirstOrDefault();
+
+    // ---- คาดการณ์ 14 คืน ----
+    var fTop = Math.Max(4, (int)Math.Ceiling(Model.Rooms / 4.0) * 4);
+    var fSlot = Model.Forecast.Count == 0 ? 0 : plotW / Model.Forecast.Count;
+
+    // ---- สถานะห้อง (โดนัท) ----
+    var statusOrder = new[] { "OCCUPIED", "BOOKED", "AVAILABLE", "CLEANING", "MAINTENANCE" };
+    var statusColor = new Dictionary<string, string> { ["OCCUPIED"] = "#2d1b47", ["BOOKED"] = "#7a5c9e", ["AVAILABLE"] = "#c9a14a", ["CLEANING"] = "#7f98a8", ["MAINTENANCE"] = "#a2442d" };
+    var rs = Model.RoomsByStatus.OrderBy(x => { var i = Array.IndexOf(statusOrder, x.Status); return i < 0 ? 99 : i; }).ToList();
+    var totalRooms = Math.Max(1, rs.Sum(x => x.Count));
+    const double R = 54, Circ = 2 * Math.PI * R;
+    double acc = 0;
+
+    var ratingTotal = Model.RatingCounts.Sum();
+    var topMax = Model.TopTypes.Count == 0 ? 1 : Math.Max(1, Model.TopTypes.Max(t => t.Revenue));
+}
+@functions {
+    static double NiceMax(double v)
+    {
+        if (v <= 0) return 1000;
+        var mag = Math.Pow(10, Math.Floor(Math.Log10(v)));
+        foreach (var m in new[] { 1, 2, 4, 6, 8, 10 }) if (m * mag >= v) return m * mag;
+        return 10 * mag;
+    }
+    static string Money(decimal v) => v >= 1_000_000 ? $"฿{v / 1_000_000m:0.##}M" : $"฿{v:N0}";
+    static string Axis(double v) => v >= 1000 ? $"{v / 1000:0.#}k" : $"{v:0}";
+    static string F(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    static string Spark(IReadOnlyList<double> vals)
+    {
+        if (vals.Count < 2) return "";
+        var max = Math.Max(1e-9, vals.Max());
+        return string.Join(" ", vals.Select((v, i) => $"{F(i * 120.0 / (vals.Count - 1))},{F(34 - v / max * 30)}"));
+    }
+}
+
+<div class="dashboard db">
+    <div class="db-head">
+        <div>
+            <h1>ภาพรวมระบบ</h1>
+            <p class="dash-date">@pameka_7033_l005.Helpers.AppClock.Now.ToString("dddd ที่ d MMMM yyyy", th) · ข้อมูล ณ เวลา @pameka_7033_l005.Helpers.AppClock.Now.ToString("HH:mm") น.</p>
+        </div>
+        <div class="db-actions">
+            <a asp-controller="FrontDesk" asp-action="WalkIn" class="cx-btn cx-btn--sun cx-btn--small">+ จองห้องให้ลูกค้า</a>
+            <a asp-controller="FrontDesk" asp-action="Availability" class="cx-btn cx-btn--ghost cx-btn--small">ปฏิทินห้องว่าง</a>
+            <a asp-controller="AdminReports" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">รายงานเต็ม</a>
+        </div>
+    </div>
+
+    @if (attention > 0)
+    {
+        <div class="db-attn" role="status">
+            <b>ต้องติดตาม</b>
+            @if (Model.PaymentsToVerify > 0) { <span>สลิปรอฝ่ายบัญชีตรวจ <em>@Model.PaymentsToVerify</em></span> }
+            @if (Model.RefundsPending > 0) { <span>คำขอคืนเงิน <em>@Model.RefundsPending</em></span> }
+            @if (Model.PendingBookings > 0) { <a asp-controller="AdminBookings" asp-action="Index" asp-route-status="PENDING">การจองรอชำระ <em>@Model.PendingBookings</em></a> }
+            @if (Model.OpenHousekeeping > 0) { <span>งานทำความสะอาดค้าง <em>@Model.OpenHousekeeping</em></span> }
+            @if (Model.OpenDelivery > 0) { <span>งานส่งของค้าง <em>@Model.OpenDelivery</em></span> }
+        </div>
+    }
+
+    @* ---------- ตัวเลขหลัก ---------- *@
+    <div class="db-kpis">
+        <section class="db-kpi" aria-label="รายรับ 30 วัน">
+            <span class="db-kpi__label">รายรับ 30 วัน</span>
+            <strong>@Money(Model.Revenue30)</strong>
+            <span class="db-delta @(revChange is > 0 ? "up" : revChange is < 0 ? "down" : "")">
+                @(revChange is { } rc ? (rc > 0 ? "▲ " : rc < 0 ? "▼ " : "") + Math.Abs(rc).ToString("0.#") + "%" : "") <small>@(revChange == null ? "ยังไม่มีข้อมูลช่วงก่อนให้เทียบ" : "เทียบ 30 วันก่อน")</small>
+            </span>
+            <svg class="db-spark" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><polyline points="@Spark(Model.DailyRevenue.Select(d => (double)d.Amount).ToList())" /></svg>
+        </section>
+        <section class="db-kpi" aria-label="การจองใหม่ 30 วัน">
+            <span class="db-kpi__label">การจองใหม่ 30 วัน</span>
+            <strong>@Model.NewBookings30.ToString("N0")</strong>
+            <span class="db-delta @(bkChange is > 0 ? "up" : bkChange is < 0 ? "down" : "")">
+                @(bkChange is { } bc ? (bc > 0 ? "▲ " : bc < 0 ? "▼ " : "") + Math.Abs(bc).ToString("0.#") + "%" : "") <small>@(bkChange == null ? "ยังไม่มีข้อมูลช่วงก่อนให้เทียบ" : "เทียบ 30 วันก่อน")</small>
+            </span>
+            <svg class="db-spark" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><polyline points="@Spark(Model.DailyBookings.Select(d => (double)d.Count).ToList())" /></svg>
+        </section>
+        <section class="db-kpi db-kpi--ring" aria-label="อัตราเข้าพักคืนนี้">
+            <div>
+                <span class="db-kpi__label">ห้องที่ขายแล้วคืนนี้</span>
+                <strong>@occTonight%</strong>
+                <span class="db-delta"><small>@Model.OccupiedTonight จาก @Model.Rooms ห้อง (ยืนยันแล้ว)</small></span>
+            </div>
+            <svg class="db-ring" viewBox="0 0 44 44" aria-hidden="true">
+                <circle cx="22" cy="22" r="18" class="db-ring__bg" />
+                <circle cx="22" cy="22" r="18" class="db-ring__fg" stroke-dasharray="@F(2 * Math.PI * 18 * occTonight / 100) 200" />
+            </svg>
+        </section>
+        <section class="db-kpi" aria-label="ราคาห้องเฉลี่ย">
+            <span class="db-kpi__label">ราคาห้องเฉลี่ย/คืน (ADR)</span>
+            <strong>@Money(Model.Adr30)</strong>
+            <span class="db-delta"><small>อัตราเข้าพัก 30 วัน @Model.OccupancyPercent30.ToString("0.#")%</small></span>
+        </section>
+    </div>
+
+    <div class="db-grid">
+        @* ---------- กราฟรายรับ ---------- *@
+        <section class="db-card db-span-8" aria-labelledby="db-rev">
+            <div class="db-card__head">
+                <h2 id="db-rev">รายรับรายวัน (30 วันล่าสุด)</h2>
+                <span class="db-card__meta">รวม @Money(Model.Revenue30) · สะสมทั้งหมด @Money(Model.Revenue)</span>
+            </div>
+            <svg class="db-chart" viewBox="0 0 @F(CW) @F(CH)" role="img"
+                 aria-label="กราฟแท่งรายรับรายวัน 30 วัน รวม @Model.Revenue30.ToString("N0") บาท@(peak.Amount > 0 ? $" สูงสุดวันที่ {peak.Date:dd/MM} {peak.Amount:N0} บาท" : "")">
+                @for (var g = 0; g <= 4; g++)
+                {
+                    var y = PadT + plotH - plotH * g / 4.0;
+                    <line x1="@F(PadL)" x2="@F(CW - 6)" y1="@F(y)" y2="@F(y)" class="db-grid-line" />
+                    @:<text x="@F(PadL - 8)" y="@F(y + 4)" class="db-axis" text-anchor="end">@Axis(revTop * g / 4)</text>
+                }
+                @for (var i = 0; i < Model.DailyRevenue.Count; i++)
+                {
+                    var d = Model.DailyRevenue[i];
+                    var h = revTop == 0 ? 0 : plotH * (double)d.Amount / revTop;
+                    var x = PadL + i * slot + slot * .18;
+                    <rect x="@F(x)" y="@F(PadT + plotH - h)" width="@F(slot * .64)" height="@F(Math.Max(h, d.Amount > 0 ? 2 : 0))" rx="2"
+                          class="db-bar @(d.Date == today ? "is-today" : "")"><title>@d.Date.ToString("dd/MM/yyyy"): @d.Amount.ToString("N0") บาท</title></rect>
+                    @if (i % 5 == 0 || i == Model.DailyRevenue.Count - 1)
+                    {
+                        @:<text x="@F(PadL + i * slot + slot / 2)" y="@F(CH - 8)" class="db-axis" text-anchor="middle">@d.Date.ToString("d/M")</text>
+                    }
+                }
+            </svg>
+            <script type="application/json" data-chart>@Json.Serialize(new { kind = "bar", unit = "฿", labels = Model.DailyRevenue.Select(d => d.Date.ToString("d MMM", th)), series = new[] { new { name = "รายรับ", data = Model.DailyRevenue.Select(d => d.Amount), color = "#5f3d8e" } }, highlightLast = true })</script>
+        </section>
+
+        @* ---------- สถานะห้อง ---------- *@
+        <section class="db-card db-span-4" aria-labelledby="db-rooms">
+            <div class="db-card__head"><h2 id="db-rooms">สถานะห้องหน้างาน</h2><span class="db-card__meta">@Model.Rooms ห้อง</span></div>
+            <div class="db-donut">
+                <svg viewBox="0 0 140 140" role="img" aria-label="@string.Join(", ", rs.Select(x => $"{ThaiLabels.RoomStatus(x.Status)} {x.Count} ห้อง"))">
+                    <circle cx="70" cy="70" r="@F(R)" class="db-donut__bg" />
+                    @foreach (var x in rs)
+                    {
+                        var len = Circ * x.Count / totalRooms;
+                        <circle cx="70" cy="70" r="@F(R)" fill="none" stroke="@(statusColor.GetValueOrDefault(x.Status, "#999"))" stroke-width="16"
+                                stroke-dasharray="@F(Math.Max(len - 1.5, 0)) @F(Circ)" stroke-dashoffset="@F(-acc)" transform="rotate(-90 70 70)" />
+                        acc += len;
+                    }
+                    <text x="70" y="68" text-anchor="middle" class="db-donut__num">@(rs.FirstOrDefault(x => x.Status == "AVAILABLE").Count)</text>
+                    <text x="70" y="88" text-anchor="middle" class="db-donut__cap">ห้องว่าง</text>
+                </svg>
+                <script type="application/json" data-chart>@Json.Serialize(new { kind = "doughnut", unit = "ห้อง", center = rs.FirstOrDefault(x => x.Status == "AVAILABLE").Count, centerLabel = "ห้องว่าง", labels = rs.Select(x => ThaiLabels.RoomStatus(x.Status)), series = new[] { new { name = "ห้อง", data = rs.Select(x => (decimal)x.Count), colors = rs.Select(x => statusColor.GetValueOrDefault(x.Status, "#999")) } } })</script>
+                <ul class="db-legend">
+                    @foreach (var x in rs)
+                    {
+                        <li><i style="background:@(statusColor.GetValueOrDefault(x.Status, "#999"))"></i>@ThaiLabels.RoomStatus(x.Status)<b>@x.Count</b></li>
+                    }
+                </ul>
+            </div>
+        </section>
+
+        @* ---------- คาดการณ์ 14 คืน ---------- *@
+        <section class="db-card db-span-8" aria-labelledby="db-fc">
+            <div class="db-card__head">
+                <h2 id="db-fc">ห้องที่จองไว้ 14 คืนข้างหน้า</h2>
+                <span class="db-key"><span><i class="sw-sold"></i>ยืนยันแล้ว</span><span><i class="sw-pend"></i>รอชำระ</span></span>
+            </div>
+            <svg class="db-chart" viewBox="0 0 @F(CW) @F(CH)" role="img"
+                 aria-label="กราฟห้องที่จองไว้ 14 คืนข้างหน้า จากทั้งหมด @Model.Rooms ห้อง: @string.Join(", ", Model.Forecast.Select(f => $"{f.Date:dd/MM} {f.Sold + f.Pending} ห้อง"))">
+                @for (var g = 0; g <= 4; g++)
+                {
+                    var y = PadT + plotH - plotH * g / 4.0;
+                    <line x1="@F(PadL)" x2="@F(CW - 6)" y1="@F(y)" y2="@F(y)" class="db-grid-line" />
+                    @:<text x="@F(PadL - 8)" y="@F(y + 4)" class="db-axis" text-anchor="end">@(fTop * g / 4)</text>
+                }
+                @{ var capY = PadT + plotH - plotH * Model.Rooms / fTop; }
+                <line x1="@F(PadL)" x2="@F(CW - 6)" y1="@F(capY)" y2="@F(capY)" class="db-cap-line" />
+                <text x="@F(CW - 8)" y="@F(capY - 5)" class="db-axis db-axis--cap" text-anchor="end">ห้องทั้งหมด @Model.Rooms</text>
+                @for (var i = 0; i < Model.Forecast.Count; i++)
+                {
+                    var f = Model.Forecast[i];
+                    var hs = plotH * f.Sold / fTop; var hp = plotH * f.Pending / fTop;
+                    var x = PadL + i * fSlot + fSlot * .2; var w = fSlot * .6;
+                    <g><title>@f.Date.ToString("ddd d MMM", new System.Globalization.CultureInfo("th-TH")): ยืนยันแล้ว @f.Sold ห้อง, รอชำระ @f.Pending ห้อง</title>
+                        <rect x="@F(x)" y="@F(PadT + plotH - hs)" width="@F(w)" height="@F(hs)" class="db-bar" rx="2" />
+                        <rect x="@F(x)" y="@F(PadT + plotH - hs - hp)" width="@F(w)" height="@F(hp)" class="db-bar db-bar--pend" rx="2" />
+                    </g>
+                    @:<text x="@F(PadL + i * fSlot + fSlot / 2)" y="@F(CH - 8)" class="db-axis @(f.Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "is-we" : "") @(i % 2 == 1 ? "is-odd" : "")" text-anchor="middle">@f.Date.ToString("d/M")</text>
+                }
+            </svg>
+            <script type="application/json" data-chart>@Json.Serialize(new { kind = "stacked", unit = "ห้อง", cap = Model.Rooms, capLabel = "ห้องทั้งหมด", labels = Model.Forecast.Select(f => f.Date.ToString("ddd d", th)), series = new[] { new { name = "ยืนยันแล้ว", data = Model.Forecast.Select(f => (decimal)f.Sold), color = "#5f3d8e" }, new { name = "รอชำระ", data = Model.Forecast.Select(f => (decimal)f.Pending), color = "#e3c57e" } } })</script>
+        </section>
+
+        @* ---------- งานรอดำเนินการ ---------- *@
+        <section class="db-card db-span-4" aria-labelledby="db-q">
+            <div class="db-card__head"><h2 id="db-q">งานรอดำเนินการ</h2></div>
+            <ul class="db-queue">
+                <li class="@(Model.PaymentsToVerify > 0 ? "is-on" : "")"><span>สลิปรอตรวจสอบ<small>ฝ่ายบัญชี</small></span><b>@Model.PaymentsToVerify</b></li>
+                <li class="@(Model.RefundsPending > 0 ? "is-on" : "")"><span>คำขอคืนเงิน<small>ฝ่ายบัญชี</small></span><b>@Model.RefundsPending</b></li>
+                <li class="@(Model.PendingBookings > 0 ? "is-on" : "")">
+                    <a asp-controller="AdminBookings" asp-action="Index" asp-route-status="PENDING">การจองรอชำระเงิน<small>ดูรายการ →</small></a><b>@Model.PendingBookings</b>
+                </li>
+                <li class="@(Model.OpenHousekeeping > 0 ? "is-on" : "")"><span>งานทำความสะอาด<small>ฝ่ายทำความสะอาด</small></span><b>@Model.OpenHousekeeping</b></li>
+                <li class="@(Model.OpenDelivery > 0 ? "is-on" : "")"><span>งานส่งของ/อาหาร<small>ฝ่ายส่งของ</small></span><b>@Model.OpenDelivery</b></li>
+            </ul>
+        </section>
+
+        @* ---------- เข้าพัก / ออก วันนี้ ---------- *@
+        @foreach (var (title, id, rows, count, empty) in new[] {
+            ("ลูกค้าเข้าพักวันนี้", "db-in", Model.Arrivals, Model.ArrivalsToday, "ไม่มีลูกค้าที่รอเช็คอินวันนี้"),
+            ("ลูกค้าออกวันนี้", "db-out", Model.Departures, Model.DeparturesToday, "ไม่มีลูกค้าที่รอเช็คเอาท์วันนี้") })
+        {
+            <section class="db-card db-span-6" aria-labelledby="@id">
+                <div class="db-card__head"><h2 id="@id">@title</h2><span class="db-pill">@count</span></div>
+                @if (!rows.Any())
+                {
+                    <p class="db-empty">@empty</p>
+                }
+                else
+                {
+                    <ul class="db-list">
+                        @foreach (var r in rows)
+                        {
+                            <li>
+                                <span class="db-av" aria-hidden="true">@(r.Customer.Length > 0 ? r.Customer[..1] : "?")</span>
+                                <span class="db-list__main">
+                                    <a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@r.BookingId">@r.Customer</a>
+                                    <small>#@r.BookingId · ห้อง @r.Rooms@(r.Guests > 0 ? $" · {r.Guests} คน" : "") · @(r.CheckOut.DayNumber - r.CheckIn.DayNumber) คืน</small>
+                                </span>
+                                <span class="cx-badge cx-badge--@r.Status">@ThaiLabels.BookingStatus(r.Status)</span>
+                            </li>
+                        }
+                    </ul>
+                    @if (count > rows.Count) { <p class="db-more">และอีก @(count - rows.Count) รายการ</p> }
+                }
+            </section>
+        }
+
+        @* ---------- การจองล่าสุด ---------- *@
+        <section class="db-card db-span-8" aria-labelledby="db-recent">
+            <div class="db-card__head">
+                <h2 id="db-recent">การจองล่าสุด</h2>
+                <a asp-controller="AdminBookings" asp-action="Index" class="db-link">ดูทั้งหมด →</a>
+            </div>
+            @if (!Model.Recent.Any())
+            {
+                <p class="db-empty">ยังไม่มีการจอง</p>
+            }
+            else
+            {
+                <div class="staff-table-wrap" tabindex="0" role="region" aria-label="ตารางการจองล่าสุด">
+                    <table class="table db-table">
+                        <thead><tr><th>การจอง</th><th>ลูกค้า</th><th>ห้อง</th><th>เข้าพัก</th><th class="num">ยอด (บาท)</th><th>สถานะ</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in Model.Recent)
+                            {
+                                <tr>
+                                    <td><a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@r.BookingId">#@r.BookingId</a><small>@r.BookedAt.ToString("dd/MM HH:mm")</small></td>
+                                    <td>@r.Customer</td>
+                                    <td>@r.Rooms</td>
+                                    <td>@r.CheckIn.ToString("dd/MM/yy") – @r.CheckOut.ToString("dd/MM/yy")</td>
+                                    <td class="num">@r.Net.ToString("N0")</td>
+                                    <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.BookingStatus(r.Status)</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        @* ---------- ประเภทห้อง + รีวิว ---------- *@
+        <section class="db-card db-span-4" aria-labelledby="db-types">
+            <div class="db-card__head"><h2 id="db-types">รายได้ห้องตามประเภท</h2><span class="db-card__meta">30 คืนล่าสุด</span></div>
+            @if (!Model.TopTypes.Any())
+            {
+                <p class="db-empty">ยังไม่มีคืนที่ขายได้ในช่วงนี้</p>
+            }
+            else
+            {
+                <ul class="db-bars">
+                    @foreach (var t in Model.TopTypes)
+                    {
+                        <li>
+                            <span class="db-bars__row"><span>@t.Name</span><b>@Money(t.Revenue)</b></span>
+                            <span class="db-bars__track"><span style="width:@F((double)(t.Revenue / topMax) * 100)%"></span></span>
+                            <small>@t.Nights คืน</small>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <div class="db-rating">
+                <h3>ความพึงพอใจ</h3>
+                @if (ratingTotal == 0)
+                {
+                    <p class="db-empty">ยังไม่มีรีวิวจากลูกค้า</p>
+                }
+                else
+                {
+                    <div class="db-rating__top">
+                        <strong>@Model.AvgRating.ToString("0.0")</strong>
+                        <span><span class="db-stars" aria-hidden="true">@ThaiLabels.Stars((int)Math.Round(Model.AvgRating))</span><small>เฉลี่ยจาก @ratingTotal รีวิว</small></span>
+                    </div>
+                }
+                @if (ratingTotal > 0)
+                {
+                    <ul class="db-rating__dist" aria-label="จำนวนรีวิวแยกตามคะแนน">
+                        @for (var s = 5; s >= 1; s--)
+                        {
+                            <li><span>@s ดาว</span><span class="db-bars__track"><span style="width:@F(100.0 * Model.RatingCounts[s] / ratingTotal)%"></span></span><b>@Model.RatingCounts[s]</b></li>
+                        }
+                    </ul>
+                }
+                <a asp-controller="AdminReviews" asp-action="Index" class="db-link">จัดการรีวิว →</a>
+            </div>
+        </section>
+    </div>
+
+    <p class="db-foot">การจองทั้งหมด (ไม่รวมที่ยกเลิก) @Model.Bookings.ToString("N0") · ลูกค้า @Model.Customers.ToString("N0") คน · ห้องพัก @Model.Rooms ห้อง · รายรับนับเฉพาะที่ฝ่ายบัญชียืนยันแล้ว</p>
+</div>

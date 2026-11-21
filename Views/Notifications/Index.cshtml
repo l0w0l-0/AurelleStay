@@ -1,0 +1,36 @@
+@model List<pameka_7033_l005.Models.Notification>
+@{
+    ViewData["Title"] = "การแจ้งเตือน";
+    Layout = "_Homelayout";
+}
+
+<div class="cx-wrap cx-page">
+    @if (User.IsInRole(pameka_7033_l005.Helpers.RoleNames.Customer)) { <partial name="_MemberNav" /> }
+    <h1>การแจ้งเตือน</h1>
+    <p class="cx-hint">แจ้งเมื่อสถานะการจองหรือการชำระเงินของคุณเปลี่ยน (แสดง 50 รายการล่าสุด)</p>
+
+    @if (!Model.Any())
+    {
+        <div class="cx-empty cx-empty--page">
+            <b>ยังไม่มีการแจ้งเตือน</b>
+            <span>เมื่อฝ่ายบัญชีตรวจหลักฐานการชำระเงิน หรือการจองมีการเปลี่ยนแปลง จะแสดงที่นี่</span>
+            <a asp-controller="Booking" asp-action="MyBookings" class="cx-btn cx-btn--ghost cx-btn--small">ไปที่การจองของฉัน</a>
+        </div>
+    }
+    else
+    {
+        <ul class="nt-list">
+            @foreach (var n in Model)
+            {
+                <li class="nt-item @(n.IsRead ? "" : "nt-item--new")">
+                    <h2>
+                        @if (n.Link != null && n.Link.StartsWith("/")) { <a href="@n.Link">@n.Title</a> } else { @n.Title }
+                        @if (!n.IsRead) { <span class="nt-new">ใหม่</span> }
+                    </h2>
+                    @if (n.Body != null) { <p>@n.Body</p> }
+                    <time datetime="@n.CreatedAt.ToString("s")">@n.CreatedAt.ToString("dd/MM/yyyy HH:mm")</time>
+                </li>
+            }
+        </ul>
+    }
+</div>

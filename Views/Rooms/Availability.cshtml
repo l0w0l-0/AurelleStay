@@ -1,0 +1,95 @@
+@model pameka_7033_l005.ViewModels.AvailabilityPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ปฏิทินห้องว่าง";
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var isCustomer = User.IsInRole(RoleNames.Customer);
+    var isFrontDesk = User.IsInRole(RoleNames.FrontDesk) || User.IsInRole(RoleNames.Admin);   // ผู้จัดการจองให้ลูกค้าได้เหมือนฝ่ายบริการ
+    Layout = signedIn && !isCustomer ? "_Adminlayout" : "_Homelayout";
+    // กดช่องว่าง: ลูกค้า/ผู้เยี่ยมชม → จองเอง, ฝ่ายบริการ → จองให้ลูกค้า, ฝ่ายอื่นดูอย่างเดียว
+    var (bookCtl, bookAct) = isFrontDesk ? ("FrontDesk", "WalkIn") : (!signedIn || isCustomer) ? ("Booking", "Create") : ("", "");
+    var navCtl = ViewContext.RouteData.Values["controller"]?.ToString();
+    var th = new System.Globalization.CultureInfo("th-TH");
+    var dow = new[] { "อา", "จ", "อ", "พ", "พฤ", "ศ", "ส" };
+    var prev = Model.Month.AddMonths(-1); var next = Model.Month.AddMonths(1);
+}
+
+<div class="cx-wrap cx-page av-page">
+    <div class="cx-pagehead">
+        <div>
+            <h1>ปฏิทินห้องว่าง</h1>
+            <p class="av-sub">@(bookCtl == "" ? "ดูห้องที่ว่างและมีผู้จองแต่ละคืน" : "กดช่องสีเขียวเพื่อจองคืนนั้น (เปลี่ยนวันเช็คเอาท์ได้ในหน้าถัดไป)")</p>
+        </div>
+        @if (!signedIn || isCustomer) { <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--ghost">ค้นหาห้องตามวันที่</a> }
+    </div>
+
+    <div class="av-toolbar">
+        <div class="av-nav">
+            @if (Model.CanPrev) { <a asp-controller="@navCtl" asp-action="Availability" asp-route-year="@prev.Year" asp-route-month="@prev.Month" class="av-arrow" aria-label="เดือนก่อน">‹</a> }
+            else { <span class="av-arrow av-arrow--off">‹</span> }
+            <span class="av-month">@Model.Month.ToString("MMMM yyyy", th)</span>
+            @if (Model.CanNext) { <a asp-controller="@navCtl" asp-action="Availability" asp-route-year="@next.Year" asp-route-month="@next.Month" class="av-arrow" aria-label="เดือนถัดไป">›</a> }
+            else { <span class="av-arrow av-arrow--off">›</span> }
+        </div>
+        <div class="av-legend">
+            <span class="av-k av-free">ว่าง</span><span class="av-k av-busy">มีผู้จอง</span><span class="av-k av-off">ปิดปรับปรุง</span><span class="av-k av-todayk">วันนี้</span>
+        </div>
+    </div>
+
+    @if (!Model.Rows.Any())
+    {
+        <div class="cx-box"><p>ยังไม่มีห้องพักในระบบ</p></div>
+    }
+    else
+    {
+        <div class="av-wrap">
+            <table class="av-grid">
+                <thead>
+                    <tr>
+                        <th class="av-room">ห้อง</th>
+                        @for (var i = 0; i < Model.Days; i++)
+                        {
+                            var d = Model.Month.AddDays(i); var we = d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+                            <th class="av-day@(we ? " av-we" : "")@(d == Model.Today ? " av-dtoday" : "")"><small>@dow[(int)d.DayOfWeek]</small>@d.Day</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <th class="av-room"><a asp-controller="Rooms" asp-action="Details" asp-route-id="@r.RoomId"><b>@r.RoomNo</b></a><small>@r.TypeName · ฿@r.Price.ToString("N0")</small></th>
+                            @for (var i = 0; i < Model.Days; i++)
+                            {
+                                var d = Model.Month.AddDays(i); var past = d < Model.Today; var today = d == Model.Today ? " av-today" : "";
+                                if (r.Maintenance) { <td class="av-off@(today)" title="ห้อง @r.RoomNo ปิดปรับปรุง"></td> }
+                                else if (r.Busy[i]) { <td class="av-busy@(past ? " av-past" : "")@(today)" title="ห้อง @r.RoomNo มีผู้จอง @d.ToString("dd/MM/yyyy")"></td> }
+                                else if (past || bookCtl == "") { <td class="av-free@(past ? " av-past" : "")@(today)" title="ห้อง @r.RoomNo ว่าง @d.ToString("dd/MM/yyyy")"></td> }
+                                else
+                                {
+                                    <td class="av-free@(today)"><a asp-controller="@bookCtl" asp-action="@bookAct" asp-route-checkIn="@d.ToString("yyyy-MM-dd")" asp-route-checkOut="@d.AddDays(1).ToString("yyyy-MM-dd")" asp-route-roomIds="@r.RoomId" title="ว่าง — จองห้อง @r.RoomNo คืนวันที่ @d.ToString("dd/MM/yyyy")" aria-label="จองห้อง @r.RoomNo วันที่ @d.ToString("dd/MM/yyyy")"></a></td>
+                                }
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th class="av-room">ห้องว่าง</th>
+                        @for (var i = 0; i < Model.Days; i++) { <td class="av-count">@Model.FreeOn(i)</td> }
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        // เลื่อนตารางให้เห็นวันนี้ (ไม่เลื่อนทั้งหน้า)
+        (function () {
+            var wrap = document.querySelector('.av-wrap'), t = document.querySelector('.av-dtoday'), room = document.querySelector('.av-grid thead .av-room');
+            if (wrap && t && room) wrap.scrollLeft = Math.max(0, t.offsetLeft - room.offsetWidth - 8);
+        })();
+    </script>
+}

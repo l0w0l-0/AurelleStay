@@ -1,0 +1,78 @@
+/* =====================================================================
+   Part 35 — เอกสารพิมพ์ (ใบยืนยันการจอง / ใบเสร็จรับเงิน) ขนาด A4
+   หน้าจอ: แผ่นกระดาษกลางจอ + แถบเครื่องมือ · พิมพ์: เฉพาะแผ่นเอกสาร
+   ===================================================================== */
+:root {
+    --ink: #1d1726; --ink-2: #4a4357; --muted: #6b6478; --line: #e3dcea; --pine: #2d1b47;
+    --gold: #a8822f; --gold-grad: linear-gradient(135deg, #ecd394 0%, #c9a14a 48%, #a8822f 100%);
+    --f-head: "Trirong", Georgia, serif; --f-body: "Anuphan", system-ui, sans-serif; --f-logo: "Cormorant Garamond", "Trirong", Georgia, serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #ebe6f0; color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.6; }
+
+.doc-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 24px;
+    background: #1c1030; color: #efe8f6; box-shadow: 0 6px 20px -12px rgba(0, 0, 0, .6); }
+.doc-link { color: #d9bd78; text-decoration: none; }
+.doc-link:hover { text-decoration: underline; }
+.doc-switch { display: flex; gap: 4px; padding: 3px; border-radius: 99px; background: rgba(255, 255, 255, .08); margin-right: auto; }
+.doc-switch a { padding: 5px 14px; border-radius: 99px; color: #d6cde2; text-decoration: none; font-size: .9rem; }
+.doc-switch a[aria-current] { background: #fbf6ec; color: var(--pine); font-weight: 600; }
+.doc-print { padding: 8px 20px; border: 0; border-radius: 12px; background: var(--gold-grad); color: #2a1a05; font: inherit; font-weight: 600; cursor: pointer; }
+.doc-print:focus-visible, .doc-switch a:focus-visible, .doc-link:focus-visible { outline: 2px solid #ecd394; outline-offset: 2px; }
+
+.doc-sheet { position: relative; overflow: hidden; width: 210mm; min-height: 297mm; margin: 28px auto 48px; padding: 18mm 18mm 16mm;
+    background: #fff; border-radius: 6px; box-shadow: 0 30px 60px -30px rgba(45, 27, 71, .45); }
+.doc-sheet::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px; background: var(--gold-grad); }
+
+.doc-head { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.doc-logo { margin: 0 0 6px; font-family: var(--f-logo); font-size: 30px; font-weight: 600; letter-spacing: .01em; color: var(--pine); line-height: 1; }
+.doc-logo em { font-style: italic; font-weight: 500; color: var(--gold); }
+.doc-hotel { margin: 0; color: var(--muted); font-size: 12.5px; }
+.doc-title { text-align: right; }
+.doc-en { margin: 0; font-family: var(--f-logo); font-style: italic; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); font-size: 13px; }
+.doc-title h1 { margin: 2px 0 10px; font-family: var(--f-head); font-size: 24px; color: var(--pine); }
+.doc-title dl, .doc-pay dl { display: grid; grid-template-columns: auto auto; justify-content: end; gap: 2px 14px; margin: 0; font-size: 12.5px; }
+.doc-title dt, .doc-pay dt { color: var(--muted); }
+.doc-title dd, .doc-pay dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.doc-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 18px 0; }
+.doc-sheet h2 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+.doc-parties p { margin: 0; }
+
+.doc-items { width: 100%; border-collapse: collapse; margin: 6px 0 18px; font-variant-numeric: tabular-nums; }
+.doc-items th { padding: 9px 10px; background: #f6f1fa; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.doc-items td { padding: 9px 10px; border-bottom: 1px solid #f0ebf4; }
+.doc-items small { color: var(--muted); }
+.doc-items .num { text-align: right; white-space: nowrap; }
+
+.doc-bottom { display: grid; grid-template-columns: 1fr 260px; gap: 28px; align-items: start; }
+.doc-pay dl { justify-content: start; }
+.doc-total { display: grid; grid-template-columns: 1fr auto; gap: 6px 0; margin: 0; font-variant-numeric: tabular-nums; }
+.doc-total dt { color: var(--ink-2); }
+.doc-total dd { margin: 0; padding-left: 16px; text-align: right; }
+.doc-total .grand { margin-top: 6px; padding-top: 10px; border-top: 2px solid var(--pine); font-weight: 700; color: var(--pine); }
+.doc-total dd.grand { font-family: var(--f-head); font-size: 20px; }
+.doc-total dd.grand small { font-family: var(--f-body); font-size: 12px; font-weight: 400; }
+
+.doc-foot { position: absolute; left: 18mm; right: 18mm; bottom: 14mm; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; }
+.doc-foot p { margin: 0 0 2px; font-family: var(--f-head); color: var(--pine); }
+.doc-foot small { color: var(--muted); font-size: 11px; }
+
+.doc-stamp { position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg); padding: 6px 28px;
+    border: 3px solid rgba(138, 53, 35, .35); border-radius: 12px; color: rgba(138, 53, 35, .35); font-family: var(--f-head); font-size: 54px; font-weight: 700; pointer-events: none; }
+
+@media screen and (max-width: 860px) {
+    .doc-sheet { width: auto; min-height: 0; margin: 12px; padding: 24px 18px 120px; }
+    .doc-head, .doc-parties, .doc-bottom { grid-template-columns: 1fr; display: grid; }
+    .doc-title { text-align: left; } .doc-title dl { justify-content: start; }
+    .doc-foot { left: 18px; right: 18px; bottom: 18px; }
+    .doc-items { font-size: 12.5px; } .doc-items th, .doc-items td { padding: 8px 6px; }
+}
+
+@page { size: A4; margin: 0; }
+@media print {
+    body { background: #fff; }
+    .doc-bar { display: none; }
+    .doc-sheet { width: 210mm; height: 297mm; min-height: 0; margin: 0; border-radius: 0; box-shadow: none; }
+    .doc-sheet::before, .doc-items th, .doc-total .grand { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

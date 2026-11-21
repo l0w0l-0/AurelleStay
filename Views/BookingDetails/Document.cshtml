@@ -1,0 +1,129 @@
+@model pameka_7033_l005.ViewModels.BookingDetailViewModel
+@using pameka_7033_l005.Helpers
+@{
+    Layout = null;
+    var kind = (string)ViewData["Kind"]!;
+    var hotel = (HotelInfo)ViewData["Hotel"]!;
+    var receipt = kind == "receipt";
+    var nights = Model.CheckOut.DayNumber - Model.CheckIn.DayNumber;
+    var pay = Model.Payments.Where(p => p.Type == BookingWorkflow.PaymentType && p.Status is "PAID" or "REFUNDED").OrderBy(p => p.PaidAt).FirstOrDefault();
+    var refund = Model.Payments.Where(p => p.Type == BookingWorkflow.RefundType && p.Status == "REFUNDED").OrderBy(p => p.PaidAt).FirstOrDefault();
+    var title = receipt ? "ใบเสร็จรับเงิน" : "ใบยืนยันการจอง";
+    var titleEn = receipt ? "Receipt" : "Booking Confirmation";
+    var docNo = receipt ? $"RC-{pay.PaidAt:yyyyMMdd}-{pay.Id:000000}" : $"BK-{Model.BookingId:000000}";
+    var stamp = refund.Id != 0 ? "คืนเงินแล้ว" : Model.Status switch { "CANCELLED" => "ยกเลิกแล้ว", "NO_SHOW" => "ไม่มาเข้าพัก", _ => null };
+    string Day(DateOnly d) => new[] { "อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส." }[(int)d.DayOfWeek] + " " + d.ToString("dd/MM/yyyy");
+    var hasReceipt = Model.Payments.Any(p => p.Type == BookingWorkflow.PaymentType && p.Status is "PAID" or "REFUNDED");
+}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>@title @docNo - @hotel.Name</title>
+    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="~/fonts/fonts.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/document.css" asp-append-version="true" />
+</head>
+<body>
+    <nav class="doc-bar" aria-label="เครื่องมือเอกสาร">
+        <a href="/Booking/Details/@Model.BookingId" class="doc-link">« กลับรายละเอียดการจอง</a>
+        <span class="doc-switch">
+            <a href="?kind=confirmation" aria-current="@(receipt ? null : "page")">ใบยืนยันการจอง</a>
+            @if (hasReceipt) { <a href="?kind=receipt" aria-current="@(receipt ? "page" : null)">ใบเสร็จรับเงิน</a> }
+        </span>
+        <button type="button" class="doc-print" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button>
+    </nav>
+
+    <main class="doc-sheet">
+        @if (stamp != null) { <div class="doc-stamp" aria-hidden="true">@stamp</div> }
+        <header class="doc-head">
+            <div class="doc-brand">
+                <p class="doc-logo">Aurelle<em>Stay</em></p>
+                <p class="doc-hotel">
+                    @hotel.Name
+                    @if (hotel.Address != null) { <br />@hotel.Address }
+                    @if (hotel.Phone != null || hotel.Email != null) { <br />@string.Join(" · ", new[] { hotel.Phone != null ? "โทร " + hotel.Phone : null, hotel.Email }.Where(x => x != null)) }
+                </p>
+            </div>
+            <div class="doc-title">
+                <p class="doc-en">@titleEn</p>
+                <h1>@title</h1>
+                <dl>
+                    <dt>เลขที่</dt><dd>@docNo</dd>
+                    <dt>วันที่</dt><dd>@((receipt ? pay.PaidAt : (DateTime?)Model.BookedAt)?.ToString("dd/MM/yyyy"))</dd>
+                    <dt>การจอง</dt><dd>#@Model.BookingId</dd>
+                </dl>
+            </div>
+        </header>
+
+        <section class="doc-parties">
+            <div>
+                <h2>@(receipt ? "ได้รับเงินจาก" : "ผู้จอง")</h2>
+                <p><b>@Model.Customer</b><br />@Model.Email<br />@Model.Phone</p>
+            </div>
+            <div>
+                <h2>รายละเอียดการเข้าพัก</h2>
+                <p>
+                    เช็คอิน <b>@Day(Model.CheckIn)</b> ตั้งแต่ @hotel.CheckInTime น.<br />
+                    เช็คเอาท์ <b>@Day(Model.CheckOut)</b> ก่อน @hotel.CheckOutTime น.<br />
+                    @nights คืน · @Model.Rooms.Count ห้อง@(Model.Guests.HasValue ? $" · ผู้เข้าพัก {Model.Guests} คน" : "")
+                </p>
+            </div>
+        </section>
+
+        <table class="doc-items">
+            <thead><tr><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคาต่อหน่วย</th><th class="num">จำนวนเงิน (บาท)</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Rooms)
+                {
+                    <tr><td>ห้อง @r.RoomNo · @r.Type</td><td class="num">@r.Nights คืน</td><td class="num">@r.Price.ToString("N2")</td><td class="num">@((r.Price * r.Nights).ToString("N2"))</td></tr>
+                }
+                @foreach (var s in Model.Services)
+                {
+                    <tr><td>@s.Service <small>(ห้อง @s.RoomNo)</small></td><td class="num">@s.Qty</td><td class="num">@s.Unit.ToString("N2")</td><td class="num">@((s.Unit * s.Qty).ToString("N2"))</td></tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="doc-bottom">
+            <div class="doc-pay">
+                @if (receipt)
+                {
+                    <h2>การรับชำระ</h2>
+                    <dl>
+                        <dt>วิธีชำระ</dt><dd>@ThaiLabels.PaymentMethod(pay.Method)</dd>
+                        <dt>วันที่รับเงิน</dt><dd>@pay.PaidAt?.ToString("dd/MM/yyyy HH:mm") น.</dd>
+                        @if (!string.IsNullOrEmpty(pay.Reference)) { <dt>อ้างอิง</dt><dd>@pay.Reference</dd> }
+                        @if (pay.By != null) { <dt>ผู้รับเงิน</dt><dd>@pay.By</dd> }
+                        @if (refund.Id != 0) { <dt>คืนเงิน</dt><dd>@refund.Amount.ToString("N2") บาท เมื่อ @refund.PaidAt?.ToString("dd/MM/yyyy")</dd> }
+                    </dl>
+                }
+                else
+                {
+                    <h2>สถานะ</h2>
+                    <dl>
+                        <dt>การจอง</dt><dd>@ThaiLabels.BookingStatus(Model.Status)</dd>
+                        <dt>การชำระเงิน</dt><dd>@(Model.Flags.Refunded ? "คืนเงินแล้ว" : Model.Flags.Paid ? "ชำระแล้ว" : Model.Flags.PendingPayment ? "รอตรวจสอบหลักฐาน" : "ยังไม่ชำระ")</dd>
+                        @if (BookingWorkflow.CanPay(Model.Status, Model.Flags))
+                        {
+                            <dt>ชำระภายใน</dt><dd>@BookingExpiry.Deadline(Model.BookedAt, Model.CheckIn, Model.LastRejectedAt).ToString("dd/MM/yyyy HH:mm") น.</dd>
+                        }
+                    </dl>
+                }
+            </div>
+            <dl class="doc-total">
+                <dt>รวม</dt><dd>@Model.Subtotal.ToString("N2")</dd>
+                <dt>ส่วนลด@(Model.PromoName != null ? $" ({Model.PromoName})" : "")</dt><dd>− @Model.Discount.ToString("N2")</dd>
+                <dt class="grand">@(receipt ? "รับเงินสุทธิ" : "ยอดสุทธิ")</dt><dd class="grand">@Model.Net.ToString("N2") <small>บาท</small></dd>
+            </dl>
+        </div>
+
+        <footer class="doc-foot">
+            <p>ขอบคุณที่เลือกพักกับ @hotel.Name</p>
+            <small>เอกสารออกจากระบบโดยอัตโนมัติ เมื่อ @pameka_7033_l005.Helpers.AppClock.Now.ToString("dd/MM/yyyy HH:mm") น. · @(receipt ? "ใบเสร็จนี้ไม่ใช่ใบกำกับภาษี" : "แสดงเอกสารนี้หรือเลขการจองที่เคาน์เตอร์ต้อนรับเมื่อเช็คอิน")</small>
+        </footer>
+    </main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.zip
+Backups/
+App_Data/
+.env
+**/secrets.json
+Dockerfile
+docker-compose.yml

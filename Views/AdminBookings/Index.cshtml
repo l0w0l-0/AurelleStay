@@ -1,0 +1,70 @@
+@model pameka_7033_l005.ViewModels.AdminBookingsPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "การจองห้องพัก";
+    Layout = "_Adminlayout";
+    string[] statuses = { "PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW" };
+}
+
+<div class="dashboard">
+    <h1>การจองห้องพัก</h1>
+    <partial name="_Flash" />
+
+    <form method="get" class="staff-form" style="margin-bottom:14px">
+        <input type="text" name="q" value="@Model.Q" placeholder="ค้นหา เลขการจอง / ชื่อ / อีเมล / เบอร์" aria-label="ค้นหา เลขการจอง / ชื่อ / อีเมล / เบอร์" />
+        @if (Model.Status != null) { <input type="hidden" name="status" value="@Model.Status" /> }
+        <button type="submit" class="cx-btn">ค้นหา</button>
+        @if (!string.IsNullOrEmpty(Model.Q) || Model.Status != null) { <a asp-action="Index" class="cx-btn cx-btn--ghost">ล้าง</a> }
+        <span>พบ @Model.TotalCount รายการ</span>
+        <a data-no-instant asp-action="Export" asp-route-status="@Model.Status" asp-route-q="@Model.Q" class="cx-btn cx-btn--ghost ab-export">ส่งออก Excel (CSV)</a>
+    </form>
+
+    <nav class="ab-chips" aria-label="กรองตามสถานะ">
+        <a asp-action="Index" asp-route-q="@Model.Q" class="@(Model.Status == null ? "is-on" : "")">ทั้งหมด <b>@Model.StatusCounts.Values.Sum()</b></a>
+        @foreach (var s in statuses)
+        {
+            <a asp-action="Index" asp-route-status="@s" asp-route-q="@Model.Q" class="@(Model.Status == s ? "is-on" : "") ab-chip--@s">@ThaiLabels.BookingStatus(s) <b>@Model.StatusCounts.GetValueOrDefault(s)</b></a>
+        }
+    </nav>
+
+    <div class="staff-card">
+        @if (!Model.Rows.Any())
+        {
+            <div class="cx-empty">
+                <b>@(string.IsNullOrEmpty(Model.Q) && Model.Status == null ? "ยังไม่มีการจอง" : "ไม่พบการจองที่ตรงกับเงื่อนไข")</b>
+                <span>@(string.IsNullOrEmpty(Model.Q) && Model.Status == null ? "การจองจากหน้าเว็บและเคาน์เตอร์จะแสดงที่นี่" : "ลองค้นด้วยเลขการจอง ชื่อ อีเมล หรือเบอร์โทร หรือกด \"ล้าง\" เพื่อดูทั้งหมด")</span>
+            </div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>การจอง</th><th>ลูกค้า</th><th>ห้อง</th><th>เข้าพัก</th><th>ยอด (บาท)</th><th>สถานะ</th><th>การเงิน</th><th>จองเมื่อ</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td><a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@r.BookingId">#@r.BookingId</a></td>
+                            <td>@r.Customer</td>
+                            <td>@r.Rooms</td>
+                            <td>@r.CheckIn.ToString("dd/MM/yy") – @r.CheckOut.ToString("dd/MM/yy")</td>
+                            <td>@r.Net.ToString("N2")</td>
+                            <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.BookingStatus(r.Status)</span></td>
+                            <td>@(r.Status == "CANCELLED" && r.PaymentLabel == "ยังไม่ชำระ" ? "—" : r.PaymentLabel)</td>
+                            <td>@r.BookedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.TotalPages > 1)
+            {
+                <nav class="staff-form">
+                    @if (Model.Page > 1) { <a asp-action="Index" asp-route-q="@Model.Q" asp-route-status="@Model.Status" asp-route-page="@(Model.Page - 1)" class="cx-btn cx-btn--ghost cx-btn--small">« ก่อนหน้า</a> }
+                    <span>หน้า @Model.Page / @Model.TotalPages</span>
+                    @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-q="@Model.Q" asp-route-status="@Model.Status" asp-route-page="@(Model.Page + 1)" class="cx-btn cx-btn--ghost cx-btn--small">ถัดไป »</a> }
+                </nav>
+            }
+        }
+    </div>
+</div>

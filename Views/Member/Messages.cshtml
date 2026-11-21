@@ -1,0 +1,54 @@
+@model List<pameka_7033_l005.ViewModels.MyMessageViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ข้อความของฉัน";
+    ViewData["NoIndex"] = true;
+    Layout = "_Homelayout";
+}
+
+<div class="cx-wrap cx-page">
+    <partial name="_MemberNav" />
+    <div class="mm-head">
+        <div>
+            <h1>ข้อความของฉัน</h1>
+            <p class="cx-hint">ข้อความที่คุณส่งถึงโรงแรม และคำตอบจากเจ้าหน้าที่</p>
+        </div>
+        <a asp-controller="Home" asp-action="About" asp-fragment="contact" class="cx-btn">ส่งข้อความใหม่</a>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="cx-empty cx-empty--page">
+            <b>ยังไม่มีข้อความ</b>
+            <span>มีคำถามเรื่องการจอง การชำระเงิน หรือบริการ ส่งข้อความถึงโรงแรมได้ทุกเมื่อ</span>
+            <a asp-controller="Home" asp-action="About" asp-fragment="contact" class="cx-btn cx-btn--ghost cx-btn--small">ส่งข้อความถึงโรงแรม</a>
+        </div>
+    }
+    else
+    {
+        <ul class="mm-list">
+            @foreach (var m in Model)
+            {
+                <li class="mm-item">
+                    <header>
+                        <b>@ContactInbox.TopicLabel(m.Topic)</b>
+                        <span>
+                            <small>ส่งเมื่อ @m.CreatedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                            @if (m.Status == "DONE") { <span class="cx-badge cx-badge--CONFIRMED">ตอบแล้ว</span> }
+                            else { <span class="cx-badge cx-badge--PENDING">รอเจ้าหน้าที่</span> }
+                        </span>
+                    </header>
+                    <p>@m.Message</p>
+                    @if (m.Reply != null)
+                    {
+                        <p class="mm-reply"><small>คำตอบจากโรงแรม · @m.RepliedAt?.ToString("dd/MM/yyyy HH:mm")</small>@m.Reply</p>
+                    }
+                    else if (m.Status == "DONE")
+                    {
+                        <p class="mm-reply"><small>โรงแรมดำเนินการเรียบร้อยแล้ว</small>หากยังมีคำถาม ส่งข้อความใหม่ได้เลย</p>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>

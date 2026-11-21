@@ -1,0 +1,242 @@
+@using Microsoft.EntityFrameworkCore
+@inject Microsoft.Extensions.Configuration.IConfiguration Cfg
+@inject pameka_7033_l005.Models.Csi402dbContext Db
+@{
+    Layout = null;
+    var ui = pameka_7033_l005.Helpers.UiPrefs.From(Context.Request);
+    var hotel = pameka_7033_l005.Helpers.HotelInfo.From(Cfg);
+    var curController = ViewContext.RouteData.Values["controller"]?.ToString();
+    var curAction = ViewContext.RouteData.Values["action"]?.ToString();
+    // เมนูที่กำลังเปิดอยู่ → aria-current="page" (โปรแกรมอ่านหน้าจอบอกได้ และใช้ขีดเส้นใต้เมนูปัจจุบัน)
+    string? Cur(string c, string? a = null) =>
+        string.Equals(c, curController, StringComparison.OrdinalIgnoreCase) && (a == null || string.Equals(a, curAction, StringComparison.OrdinalIgnoreCase)) ? "page" : null;
+    var isCustomer = User.Identity?.IsAuthenticated == true && User.IsInRole("customer");
+    var unread = 0;
+    if (isCustomer)
+    {
+        var uid = int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var u) ? u : 0;
+        unread = await Db.Notifications.CountAsync(n => n.UserId == uid && !n.IsRead);
+    }
+    var bellLabel = unread > 0 ? $"การแจ้งเตือน ยังไม่อ่าน {unread} รายการ" : "การแจ้งเตือน";
+    // แถบชวนจองท้ายหน้า: เฉพาะหน้าที่คนกำลังเลือกดู (ไม่ใส่ในขั้นตอนจอง/ชำระเงิน/ตั้งค่า)
+    var showCta = curController is "Home" or "Rooms" or "Services" or "Reviews" or "Promotions" && !(curController == "Home" && curAction == "Policy");
+}
+
+<!DOCTYPE html>
+<html lang="th" data-font="@ui.Font" data-motion="@ui.Motion">
+
+<head>
+    <partial name="_Head" />
+    <title>@ViewData["Title"] - @hotel.Name</title>
+    <link rel="stylesheet" href="~/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/flatpickr/flatpickr.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/notyf/notyf.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/glightbox/glightbox.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/tom-select/tom-select.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer.css" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
+
+</head>
+
+<body class="cx-shell" data-live="@(User.IsInRole(pameka_7033_l005.Helpers.RoleNames.Customer) ? Url.Content("~/live") : null)">
+    <a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
+
+    <!-- Navigation -->
+    <header class="home-header">
+        <nav class="home-navbar" aria-label="เมนูหลัก">
+
+            <a class="home-logo" asp-controller="Home" asp-action="Index">
+                Aurelle<span>Stay</span>
+            </a>
+
+            @if (isCustomer)
+            {
+                <a data-no-instant asp-controller="Notifications" asp-action="Index" class="nav-bell nav-bell--m" aria-label="@bellLabel" title="การแจ้งเตือน">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+                    @if (unread > 0) { <span class="nav-bell__count">@(unread > 9 ? "9+" : unread.ToString())</span> }
+                </a>
+            }
+            <button type="button" class="home-burger" aria-controls="site-menu" aria-expanded="false" aria-label="เปิดเมนู">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            </button>
+
+            <div class="home-menu" id="site-menu">
+            <div class="home-nav-links">
+                <a asp-controller="Home" asp-action="Index" aria-current="@Cur("Home", "Index")">หน้าแรก</a>
+                <a asp-controller="Rooms" asp-action="Index" aria-current="@Cur("Rooms")">ห้องพัก</a>
+                <a asp-controller="Services" asp-action="Index" aria-current="@Cur("Services")">บริการ</a>
+                <a asp-controller="Reviews" asp-action="Index" aria-current="@Cur("Reviews")">รีวิว</a>
+                <a asp-controller="Home" asp-action="About" aria-current="@Cur("Home", "About")">ติดต่อเรา</a>
+            </div>
+
+            <div class="home-nav-actions">
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    @if (isCustomer)
+                    {
+                        <a asp-controller="Booking" asp-action="Create" class="nav-booking">
+                            จองห้องพัก
+                        </a>
+                        <a data-no-instant asp-controller="Notifications" asp-action="Index" class="nav-bell nav-bell--d" aria-label="@bellLabel" title="การแจ้งเตือน">
+                            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+                            @if (unread > 0) { <span class="nav-bell__count">@(unread > 9 ? "9+" : unread.ToString())</span> }
+                        </a>
+                    }
+                    else
+                    {
+                        var (pc, pa) = pameka_7033_l005.Helpers.RoleNames.HomeFor(User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value);
+                        <a asp-controller="@pc" asp-action="@pa" class="nav-booking">
+                            หลังบ้าน
+                        </a>
+                    }
+
+                    @if (isCustomer)
+                    {
+                        @* Part 44: เมนูบัญชีลูกค้า (ใช้ <details> ทำงานได้แม้ปิด JavaScript) *@
+                        <details class="nav-acct">
+                            <summary class="nav-profile" aria-label="เมนูบัญชีของฉัน">
+                                <span class="nav-avatar" aria-hidden="true">@(User.Identity.Name is { Length: > 0 } nm ? nm[..1] : "?")</span>@User.Identity.Name
+                                <svg class="nav-acct__chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                            </summary>
+                            <div class="nav-acct__menu">
+                                <a asp-controller="Member" asp-action="Index">ภาพรวมสมาชิก</a>
+                                <a asp-controller="Booking" asp-action="MyBookings">การจองของฉัน</a>
+                                <a asp-controller="Member" asp-action="Messages">ข้อความของฉัน</a>
+                                <a asp-controller="Member" asp-action="Reviews">รีวิวของฉัน</a>
+                                <a data-no-instant asp-controller="Notifications" asp-action="Index">การแจ้งเตือน@(unread > 0 ? $" ({unread})" : "")</a>
+                                <a asp-controller="Settings" asp-action="Index">ตั้งค่าบัญชี</a>
+                                <form asp-controller="Account" asp-action="Logout" method="post">
+                                    <button type="submit">ออกจากระบบ</button>
+                                </form>
+                            </div>
+                        </details>
+                    }
+                    else
+                    {
+                        <a asp-controller="Settings" asp-action="Index" class="nav-profile" title="ตั้งค่า">
+                            <span class="nav-avatar" aria-hidden="true">@(User.Identity.Name is { Length: > 0 } nm ? nm[..1] : "?")</span>@User.Identity.Name
+                        </a>
+
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="nav-logout-form">
+                            <button type="submit" class="nav-logout">
+                                ออกจากระบบ
+                            </button>
+                        </form>
+                    }
+                }
+                else
+                {
+                    <a asp-controller="Account" asp-action="Login" class="nav-login">
+                        เข้าสู่ระบบ
+                    </a>
+                }
+
+            </div>
+            </div>
+
+        </nav>
+    </header>
+
+
+    <!-- Main Content -->
+    <main class="cx-main" id="main" tabindex="-1">
+        @RenderBody()
+    </main>
+
+    @if (showCta)
+    {
+        <section class="cx-cta" aria-labelledby="cta-h">
+            <div class="cx-wrap">
+                <div>
+                    <p class="cx-eyebrow">Reserve your stay</p>
+                    <h2 id="cta-h">พร้อมสำหรับการพักผ่อนครั้งต่อไปหรือยัง</h2>
+                    <p>เช็คห้องว่างตามวันที่ต้องการ สมาชิกรับส่วนลดอัตโนมัติทุกการจอง</p>
+                </div>
+                <div class="cx-cta__btns">
+                    <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--sun">ดูห้องว่าง</a>
+                    <a asp-controller="Rooms" asp-action="Availability" class="cx-btn cx-btn--light">ปฏิทินห้องว่าง</a>
+                </div>
+            </div>
+        </section>
+    }
+
+    <footer class="cx-footer">
+        <div class="cx-footer__grid">
+            <div>
+                <b>@hotel.Name</b>
+                <p>ประสบการณ์การพักผ่อนที่สะดวกสบาย พร้อมบริการที่ใส่ใจในทุกรายละเอียด</p>
+                <p class="cx-footer__times">เช็คอิน @hotel.CheckInTime น. · เช็คเอาท์ @hotel.CheckOutTime น.</p>
+            </div>
+            <nav aria-label="ลิงก์ส่วนท้าย">
+                <h2>เมนู</h2>
+                <a asp-controller="Rooms" asp-action="Index">ห้องพัก</a>
+                <a asp-controller="Rooms" asp-action="Availability">ปฏิทินห้องว่าง</a>
+                <a asp-controller="Services" asp-action="Index">บริการเสริม</a>
+                <a asp-controller="Reviews" asp-action="Index">รีวิว</a>
+                <a asp-controller="Home" asp-action="Policy">เงื่อนไขการจองและความเป็นส่วนตัว</a>
+            </nav>
+            <div>
+                <h2>ติดต่อเรา</h2>
+                @if (hotel.HasContact)
+                {
+                    @if (hotel.Phone != null) { <a href="@hotel.TelHref">โทร @hotel.Phone</a> }
+                    @if (hotel.Email != null) { <a href="mailto:@hotel.Email">@hotel.Email</a> }
+                    @if (hotel.LineId != null) { <span>LINE @hotel.LineId</span> }
+                    @if (hotel.Address != null) { <span>@hotel.Address</span> }
+                }
+                else
+                {
+                    <span>สอบถามได้ที่เคาน์เตอร์ต้อนรับของโรงแรม</span>
+                }
+                <a href="@Url.Action("About", "Home")#contact">ช่องทางติดต่อทั้งหมด</a>
+            </div>
+        </div>
+        <p class="cx-footer__copy">© @pameka_7033_l005.Helpers.AppClock.Now.Year @hotel.Name · <a asp-controller="Home" asp-action="Policy" asp-fragment="privacy">นโยบายความเป็นส่วนตัว</a></p>
+    </footer>
+
+    <script>
+        // เมนูบนจอแคบ: ปุ่มสามขีดเปิด/ปิดแผงเมนู (Esc หรือคลิกนอกแผงเพื่อปิด)
+        (function () {
+            var btn = document.querySelector('.home-burger'), menu = document.getElementById('site-menu');
+            if (!btn || !menu) return;
+            function set(open) {
+                document.body.classList.toggle('menu-open', open);
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                btn.setAttribute('aria-label', open ? 'ปิดเมนู' : 'เปิดเมนู');
+            }
+            btn.addEventListener('click', function () { set(!document.body.classList.contains('menu-open')); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.body.classList.contains('menu-open')) { set(false); btn.focus(); } });
+            document.addEventListener('click', function (e) { if (document.body.classList.contains('menu-open') && !e.target.closest('.home-navbar')) set(false); });
+            window.matchMedia('(min-width: 761px)').addEventListener('change', function (m) { if (m.matches) set(false); });
+        })();
+    </script>
+    <script src="~/lib/flatpickr/flatpickr.min.js" asp-append-version="true"></script>
+    <script src="~/lib/flatpickr/l10n/th.js" asp-append-version="true"></script>
+    <script src="~/js/datepicker.js" asp-append-version="true"></script>
+    @* Part 46: ไลบรารี MIT จาก GitHub (เก็บในโปรเจกต์ ไม่ต้องใช้อินเทอร์เน็ต/npm ตอนรัน) — กล่องยืนยันธีมเดียวกัน + เปิดหน้าเร็วขึ้น *@
+    <script src="~/lib/sweetalert2/sweetalert2.min.js" asp-append-version="true"></script>
+    <script src="~/js/confirm.js" asp-append-version="true"></script>
+    <script src="~/lib/notyf/notyf.min.js" asp-append-version="true"></script>
+    <script src="~/lib/glightbox/glightbox.min.js" asp-append-version="true"></script>
+    <script src="~/lib/tom-select/tom-select.complete.min.js" asp-append-version="true"></script>
+    @if (ViewData["Charts"] is true) { <script src="~/lib/chartjs/chart.umd.min.js" asp-append-version="true"></script> }
+    <script src="~/js/enhance.js" asp-append-version="true"></script>
+    <script src="~/lib/instantpage/instantpage.js" type="module" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        // Part 44: เมนูบัญชีลูกค้า — มือถือแสดงรายการในเมนูเลย · จอคอมปิดเมื่อคลิกที่อื่นหรือกด Esc
+        (function () {
+            var acct = document.querySelector('.nav-acct'); if (!acct) return;
+            var mq = window.matchMedia('(max-width: 760px)');
+            function sync() { if (mq.matches) acct.open = true; else acct.open = false; }
+            sync(); mq.addEventListener ? mq.addEventListener('change', sync) : mq.addListener(sync);
+            document.addEventListener('click', function (e) { if (!mq.matches && acct.open && !acct.contains(e.target)) acct.open = false; });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !mq.matches && acct.open) { acct.open = false; acct.querySelector('summary').focus(); } });
+        })();
+    </script>
+</body>
+
+</html>

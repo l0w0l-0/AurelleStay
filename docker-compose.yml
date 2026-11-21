@@ -1,0 +1,69 @@
+# =====================================================================
+# AurelleStay — เว็บ + MySQL 8 ด้วยคำสั่งเดียว (Part 45)
+#   วิธีที่ง่ายที่สุด (Windows PowerShell):   .\docker.ps1 up
+#   หรือเอง:  คัดลอก .env.example เป็น .env ตั้งรหัสผ่าน แล้ว  docker compose up -d --build
+#   เปิดเว็บ: http://localhost:8088
+# เป็นโปรเจกต์ Docker ชื่อ "aurellestay" แยกต่างหาก ไม่ยุ่งกับโปรเจกต์อื่นในเครื่อง
+# =====================================================================
+name: aurellestay
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: csi402db
+      MYSQL_USER: aurelle
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      TZ: Asia/Bangkok
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+07:00"]
+    volumes:
+      - db-data:/var/lib/mysql
+      # สร้างตารางครั้งแรก (ทำงานเฉพาะตอนฐานข้อมูลยังว่าง) — เรียงตามชื่อ: โครงสร้างก่อน แล้วห้อง/บริการตัวอย่าง
+      - ./Database/aurellestay_mysql.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./Database/aurellestay_sample_catalog.sql:/docker-entrypoint-initdb.d/02_sample_catalog.sql:ro
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-3317}:3306"   # ต่อจาก MySQL Workbench ในเครื่องนี้ได้ (ไม่เปิดสู่เครือข่าย)
+    healthcheck:
+      # ต่อผ่าน TCP: ระหว่างสร้างตารางครั้งแรก MySQL ยังไม่เปิด TCP จึงไม่ถือว่าพร้อมก่อนสร้างเสร็จ
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uaurelle -p\"$$MYSQL_PASSWORD\" -e 'SELECT 1 FROM csi402db.users LIMIT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  web:
+    build: .
+    image: aurellestay-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "server=db;port=3306;database=csi402db;user=aurelle;password=${DB_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True"
+      TZ: Asia/Bangkok
+      Hotel__Name: ${HOTEL_NAME:-AurelleStay}
+      Hotel__Phone: ${HOTEL_PHONE:-}
+      Hotel__Email: ${HOTEL_EMAIL:-}
+      Hotel__LineId: ${HOTEL_LINE:-}
+      Hotel__Address: ${HOTEL_ADDRESS:-}
+      # ช่องทางรับเงิน (Part 49): ใส่เบอร์พร้อมเพย์/เลขบัตร 13 หลัก → QR ระบุยอดอัตโนมัติ · บัญชีธนาคารแสดงในแท็บ "โอนเข้าบัญชี"
+      Payment__PromptPayId: ${PROMPTPAY_ID:-}
+      Payment__AccountName: ${PAY_ACCOUNT_NAME:-}
+      Payment__BankName: ${PAY_BANK_NAME:-}
+      Payment__AccountNo: ${PAY_ACCOUNT_NO:-}
+    ports:
+      - "${WEB_PORT:-8088}:8080"
+    volumes:
+      - slips:/app/App_Data/slips                    # สลิปการชำระเงิน
+      - room-images:/app/wwwroot/images/rooms        # รูปห้อง (ครั้งแรกคัดลอกรูปตัวอย่างให้)
+      - service-images:/app/wwwroot/images/services
+      - keys:/home/app/.aspnet/DataProtection-Keys   # กุญแจคุกกี้: รีสตาร์ตแล้วไม่ต้องเข้าสู่ระบบใหม่
+
+volumes:
+  db-data:
+  slips:
+  room-images:
+  service-images:
+  keys:

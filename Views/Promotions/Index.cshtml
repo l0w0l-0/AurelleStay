@@ -1,0 +1,87 @@
+@model List<pameka_7033_l005.ViewModels.PromoPublicViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "โปรโมชั่น";
+    Layout = "_Homelayout";
+    var mine = Model.Where(p => p.Claimed && !p.UsedUp).ToList();
+    var coupons = Model.Where(p => p.Claimable && !p.Claimed).ToList();
+    var autos = Model.Where(p => !p.Claimable).ToList();
+    var best = Model.Any() ? Model.Max(p => p.Percent) : 0;
+    var openCount = coupons.Count(p => p.ClaimState == "open");
+}
+
+<section class="pm-hero">
+    <div class="cx-wrap">
+        <p class="cx-eyebrow">Privileges &amp; Offers</p>
+        <h1>โปรโมชั่น<br /><em>และคูปองเทศกาล</em></h1>
+        <p class="pm-lead">ส่วนลดอัตโนมัติ ระบบเลือกโปรที่คุ้มที่สุดให้ตอนจอง · คูปองกดเก็บ กดเก็บไว้ก่อน แล้วระบบใช้ให้เองเมื่อการจองตรงเงื่อนไข ไม่ต้องพิมพ์รหัส</p>
+        @if (Model.Any())
+        {
+            <p class="pm-best">ส่วนลดสูงสุด <b>@best.ToString("0.##")%</b> · @(openCount > 0 ? $"คูปองเปิดให้เก็บ {openCount} ใบ · " : "")@autos.Count ส่วนลดอัตโนมัติ</p>
+        }
+        <nav class="pm-jump" aria-label="ไปยังหมวดโปรโมชั่น">
+            @if (mine.Any()) { <a href="#pm-mine">คูปองของฉัน (@mine.Count)</a> }
+            @if (coupons.Any()) { <a href="#pm-claim">คูปองให้เก็บ</a> }
+            @if (autos.Any()) { <a href="#pm-auto">ส่วนลดอัตโนมัติ</a> }
+            <a href="#pm-howto-h">วิธีใช้</a>
+        </nav>
+    </div>
+</section>
+
+<div class="cx-wrap pm-body">
+    <partial name="_Flash" />
+    @if (!Model.Any())
+    {
+        <div class="cx-empty cx-empty--page"><b>ยังไม่มีโปรโมชั่นในตอนนี้</b><span>ติดตามโปรโมชั่นใหม่ได้เร็ว ๆ นี้ หรือจองห้องพักในราคาปกติได้เลย</span></div>
+    }
+
+    @if (mine.Any())
+    {
+        <section class="pm-sec" id="pm-mine" aria-labelledby="pm-mine-h">
+            <div class="pm-sec__head">
+                <h2 id="pm-mine-h">คูปองของฉัน</h2>
+                <p>เก็บไว้แล้ว ระบบจะใช้ให้อัตโนมัติเมื่อวันเข้าพักตรงเงื่อนไข (ใช้ได้ 1 โปรต่อการจอง เลือกที่ลดมากที่สุด)</p>
+            </div>
+            <div class="cp-grid">
+                @foreach (var p in mine) { <partial name="_CouponCard" model="p" /> }
+            </div>
+        </section>
+    }
+
+    @if (coupons.Any())
+    {
+        <section class="pm-sec" id="pm-claim" aria-labelledby="pm-claim-h">
+            <div class="pm-sec__head">
+                <h2 id="pm-claim-h">คูปองเทศกาล กดเก็บก่อนหมด</h2>
+                <p>คูปองจำนวนจำกัด กดเก็บในช่วงเวลาที่กำหนด · เก็บแล้วไม่ต้องจำรหัส</p>
+            </div>
+            <div class="cp-grid">
+                @foreach (var p in coupons) { <partial name="_CouponCard" model="p" /> }
+            </div>
+        </section>
+    }
+
+    @if (autos.Any())
+    {
+        <section class="pm-sec" id="pm-auto" aria-labelledby="pm-auto-h">
+            <div class="pm-sec__head">
+                <h2 id="pm-auto-h">ส่วนลดอัตโนมัติ ไม่ต้องเก็บ</h2>
+                <p>ตรงเงื่อนไขเมื่อไร ระบบลดให้ทันทีในหน้าสรุปการจอง</p>
+            </div>
+            <div class="cp-grid">
+                @foreach (var p in autos) { <partial name="_CouponCard" model="p" /> }
+            </div>
+        </section>
+    }
+
+    <section class="pm-howto" aria-labelledby="pm-howto-h">
+        <h2 id="pm-howto-h">ใช้โปรโมชั่นอย่างไร</h2>
+        <ol>
+            <li><b>เก็บคูปองที่ต้องการ</b><span>กด "เก็บคูปอง" (ต้องเข้าสู่ระบบ) คูปองจะอยู่ใน "คูปองของฉัน"</span></li>
+            <li><b>เลือกห้องและวันที่</b><span>ระบบตรวจทุกโปรและคูปองที่คุณเก็บไว้ แล้วเลือกส่วนลดที่คุ้มที่สุดให้เอง</span></li>
+            <li><b>มีรหัสจากโรงแรม?</b><span>กรอกในช่อง "รหัสโปรโมชั่น" ในหน้าสรุปการจอง</span></li>
+            <li><b>เห็นส่วนลดก่อนยืนยัน</b><span>ยอดสุทธิแสดงชัดเจนก่อนกดยืนยันการจอง</span></li>
+        </ol>
+        <p class="pm-note">ใช้ได้ 1 โปรต่อการจอง (ระบบเลือกที่ลดมากที่สุด) · ส่วนลดคิดจากค่าห้องพัก ไม่รวมบริการเสริม · คูปองท่านละ 1 ใบ · การจองที่ยกเลิกจะคืนสิทธิ์ให้โปรที่จำกัดจำนวน · ช่วงเทศกาลราคาห้องอาจปรับตามฤดูกาล ส่วนลดคิดจากราคาจริงของคืนนั้น</p>
+    </section>
+</div>

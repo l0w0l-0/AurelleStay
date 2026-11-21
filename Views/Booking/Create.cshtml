@@ -1,0 +1,244 @@
+@model pameka_7033_l005.ViewModels.BookingFormViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = Model.Staff ? "จองห้องให้ลูกค้า" : "จองห้องพัก";
+    Layout = Model.Staff ? "_Adminlayout" : "_Homelayout";
+    var ctl = ViewContext.RouteData.Values["controller"]?.ToString();
+    var current = Model.Summary != null ? 4 : (Model.RoomIds.Any() ? 3 : 2);
+    string Cls(int n) => n == current ? "on" : (n < current ? "done" : "");
+}
+
+<div class="cx-wrap cx-page">
+    <h1>@ViewData["Title"]</h1>
+
+    <ol class="cx-stepper" aria-label="ขั้นตอนการจอง">
+        <li class="@Cls(1)" aria-current="@(current == 1 ? "step" : null)">เลือกวัน</li>
+        <li class="@Cls(2)" aria-current="@(current == 2 ? "step" : null)">เลือกห้อง</li>
+        <li class="@Cls(3)" aria-current="@(current == 3 ? "step" : null)">บริการเสริม</li>
+        <li class="@Cls(4)" aria-current="@(current == 4 ? "step" : null)">ตรวจสอบและยืนยัน</li>
+    </ol>
+
+    @if (Model.Error != null)
+    {
+        <div class="cx-alert cx-alert--error" role="alert">@Model.Error</div>
+    }
+
+    <form method="post" asp-controller="@ctl" asp-action="Preview" class="cx-booking">
+        <input type="hidden" name="Staff" value="@Model.Staff.ToString().ToLowerInvariant()" />
+        <div>
+            @if (Model.Staff)
+            {
+                <div class="cx-box">
+                    <fieldset>
+                        <legend>ลูกค้า</legend>
+                        <label class="cx-field">อีเมลของลูกค้า<input type="email" name="CustomerEmail" value="@Model.CustomerEmail" maxlength="100" required data-ts-customer data-lookup="@Url.Action("CustomerLookup", "FrontDesk")" autocomplete="off" /></label>
+                        <details class="wk-new" @(Model.NewCustomer ? "open" : "")>
+                            <summary>ลูกค้าใหม่ ยังไม่มีบัญชี? กรอกข้อมูลเพื่อสร้างบัญชีให้</summary>
+                            <div class="wk-new__grid">
+                                <label class="cx-field">ชื่อ<input name="NewFirstName" value="@Model.NewFirstName" maxlength="50" /></label>
+                                <label class="cx-field">นามสกุล<input name="NewLastName" value="@Model.NewLastName" maxlength="50" /></label>
+                                <label class="cx-field">เบอร์โทร<input name="NewPhone" value="@Model.NewPhone" inputmode="tel" pattern="\+?[0-9]{9,14}" maxlength="15" /></label>
+                            </div>
+                            <p class="wk-new__hint">ระบบสร้างบัญชีให้เมื่อกดยืนยันการจอง และแสดงรหัสผ่านชั่วคราวครั้งเดียวให้แจ้งลูกค้า หากอีเมลมีบัญชีอยู่แล้วระบบจะใช้บัญชีเดิม</p>
+                        </details>
+                    </fieldset>
+                </div>
+            }
+            <div class="cx-box">
+                <fieldset>
+                    <legend>วันเข้าพัก</legend>
+                    <div class="cx-dates">
+                        <label class="cx-field">เช็คอิน<input type="date" data-dp-in data-dp-refresh="#dpRefresh" name="CheckIn" value="@Model.CheckIn?.ToString("yyyy-MM-dd")" /></label>
+                        <label class="cx-field">เช็คเอาท์<input type="date" data-dp-out name="CheckOut" value="@Model.CheckOut?.ToString("yyyy-MM-dd")" /></label>
+                        <label class="cx-field">ผู้เข้าพัก (คน)<input type="number" name="Guests" min="1" max="@BookingRules.MaxGuests" value="@(Model.Guests ?? 1)" required /></label>
+                        <button type="submit" class="cx-btn cx-btn--ghost" id="dpRefresh">อัปเดตห้องว่าง</button>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="cx-box">
+                <fieldset>
+                    <legend>เลือกห้อง (เลือกได้หลายห้อง)</legend>
+                    @if (!Model.AvailableRooms.Any())
+                    {
+                        <div class="cx-empty cx-empty--inline">
+                            <b>ไม่มีห้องว่างในช่วงวันที่เลือก</b>
+                            <span>ลองเปลี่ยนวันที่ แล้วกด "อัปเดตห้องว่าง" หรือดู<a asp-controller="Rooms" asp-action="Availability">ปฏิทินห้องว่าง</a></span>
+                        </div>
+                    }
+                    @foreach (var r in Model.AvailableRooms)
+                    {
+                        <label class="cx-pick cx-pick--room @(Model.RoomIds.Contains(r.RoomId) ? "is-checked" : "")">
+                            <input type="checkbox" name="RoomIds" value="@r.RoomId" checked="@Model.RoomIds.Contains(r.RoomId)" data-price="@r.BasePrice.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="cx-pick__img" aria-hidden="true">
+                                @if (!string.IsNullOrEmpty(r.ImageUrl)) { <img src="@r.ImageUrl" alt="" loading="lazy" width="96" height="64" /> }
+                                else { <span class="cx-arch cx-scene--@ThaiLabels.SceneFor(r.ThemeName)"></span> }
+                            </span>
+                            <span class="grow">
+                                <b>ห้อง @r.RoomNo · @r.TypeName</b>
+                                <span class="cx-pick__chips">
+                                    <span>พักได้ @r.MaxGuests คน</span>
+                                    @if (r.ThemeName != null) { <span>@ThaiLabels.ThemeLabel(r.ThemeName)</span> }
+                                </span>
+                            </span>
+                            <em>฿@r.BasePrice.ToString("N0")<small>/คืน@(r.PriceVaries ? " เฉลี่ย" : "")</small>@if (r.SeasonName != null) { <small class="cx-pick__season">@r.SeasonName</small> }</em>
+                        </label>
+                    }
+                </fieldset>
+            </div>
+
+            <div class="cx-box">
+                <fieldset>
+                    <legend>บริการเสริม (จำนวนต่อห้อง)</legend>
+                    @if (!Model.Services.Any())
+                    {
+                        <p>ยังไม่มีบริการเสริมที่เปิดให้บริการ</p>
+                    }
+                    @foreach (var s in Model.Services)
+                    {
+                        Model.ServiceQty.TryGetValue(s.ServiceId, out var qty);
+                        <label class="cx-pick @(qty > 0 ? "is-checked" : "")">
+                            <span class="cx-step">
+                                <button type="button" class="cx-step__btn" data-step="-1" aria-label="ลดจำนวน @s.Name">−</button>
+                                <input type="number" name="ServiceQty[@s.ServiceId]" min="0" max="5" value="@qty" aria-label="จำนวน @s.Name" data-price="@s.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                                <button type="button" class="cx-step__btn" data-step="1" aria-label="เพิ่มจำนวน @s.Name">+</button>
+                            </span>
+                            @if (s.ImageUrl != null) { <img class="cx-svc-thumb" src="@s.ImageUrl" alt="" loading="lazy" width="400" height="300" /> }
+                            <span class="grow">@s.Name@if (s.Description != null) { <small class="cx-svc-desc">@s.Description</small> }</span>
+                            <em>+@s.Price.ToString("N0") บาท</em>
+                        </label>
+                    }
+                </fieldset>
+            </div>
+        </div>
+
+        <aside class="cx-summary" aria-label="สรุปราคา">
+            <h2>สรุปการจอง</h2>
+            <p class="cx-est" data-est hidden aria-live="polite"><span>ประมาณการก่อนส่วนลด</span><b data-est-sum></b><small data-est-note></small></p>
+            @if (Model.Summary != null) { <p class="cx-stale" data-stale hidden role="status">มีการเปลี่ยนห้องหรือบริการ — กด "คำนวณใหม่" เพื่ออัปเดตยอดสุทธิ</p> }
+            <div class="cx-code">
+                <label for="PromoCode">รหัสโปรโมชั่น (ถ้ามี)</label>
+                <div class="cx-code__row">
+                    <input id="PromoCode" name="PromoCode" value="@Model.PromoCode" maxlength="30" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="เช่น SUMMER10" aria-describedby="code-msg" />
+                    <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ใช้รหัส</button>
+                </div>
+                @if (Model.Summary?.CodeMessage is { } cm)
+                {
+                    <p id="code-msg" class="cx-code__msg @(Model.Summary.CodeApplied ? "is-ok" : "is-bad")" role="status">@cm</p>
+                }
+            </div>
+            @if (!Model.Staff && Model.Coupons.Any())
+            {
+                @* Part 49: คูปองที่ใช้กับวันเข้าพักนี้ได้ — กดเก็บแล้วคำนวณราคาใหม่ทันที (ไม่ต้องออกจากหน้าจอง) *@
+                <div class="bk-coupons" aria-label="คูปองสำหรับการจองนี้">
+                    <p class="bk-coupons__h">คูปองสำหรับวันที่เลือก</p>
+                    @foreach (var c in Model.Coupons)
+                    {
+                        var using_ = Model.Summary?.PromoName == c.Name;
+                        <div class="bk-cp cp-card--@c.Theme @(c.Claimed ? "is-claimed" : "")">
+                            <b class="bk-cp__pct">@c.Percent.ToString("0.##")%</b>
+                            <span class="bk-cp__txt"><b>@c.Name</b><small>@(c.MaxDiscount is { } cap ? $"ลดสูงสุด {cap:N0} บาท" : "ลดค่าห้องพัก")@(c.MinNights is { } mn && mn > 1 ? $" · พัก {mn} คืนขึ้นไป" : "")</small></span>
+                            @if (!c.Claimed)
+                            {
+                                <button type="button" class="cx-btn cx-btn--sun cx-btn--small" data-claim-inline="@c.Id" data-claim-url="@Url.Action("Claim", "Promotions")">เก็บและใช้</button>
+                            }
+                            else if (using_) { <span class="bk-cp__state is-on">ใช้อยู่</span> }
+                            else { <span class="bk-cp__state">เก็บแล้ว</span> }
+                        </div>
+                    }
+                    <p class="bk-coupons__note">คูปองที่เก็บแล้วระบบใช้ให้อัตโนมัติ (เลือกส่วนลดที่คุ้มที่สุด 1 รายการ)</p>
+                </div>
+            }
+            @if (Model.Summary is { } sum)
+            {
+                <input type="hidden" name="QuotedNet" value="@sum.Net.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                <dl>
+                    <div class="row"><dt>ผู้เข้าพัก</dt><dd>@(Model.Guests ?? 1) คน</dd></div>
+                    <div class="row"><dt>ค่าห้อง (@sum.RoomCount ห้อง × @sum.Nights คืน)</dt><dd>@sum.RoomsTotal.ToString("N2")</dd></div>
+                    <div class="row"><dt>บริการเสริม</dt><dd>@sum.ServicesTotal.ToString("N2")</dd></div>
+                    <div class="row discount">
+                        <dt>@(sum.PromoName != null ? $"ส่วนลด {sum.PromoName} ({sum.PromoPercent:0.##}%)" : "ส่วนลด (ไม่มีโปรที่ตรงเงื่อนไข)")</dt>
+                        <dd>-@sum.Discount.ToString("N2")</dd>
+                    </div>
+                    <div class="row net"><dt>ยอดสุทธิ</dt><dd>@sum.Net.ToString("N2") บาท</dd></div>
+                </dl>
+                @if (sum.PromoCapped) { <p class="cx-code__note">ส่วนลดของโปรนี้จำกัดสูงสุดตามเงื่อนไขโปรโมชั่น</p> }
+                @if (sum.PromoNeedsId) { <p class="cx-code__note">โปรนี้ต้องแสดงบัตรประชาชนเพื่อยืนยันสิทธิ์ตอนเช็คอิน หากยืนยันไม่ได้ โรงแรมอาจเรียกเก็บส่วนต่าง</p> }
+                <button type="submit" class="cx-btn" formaction="@Url.Action("Confirm", ctl)">@(Model.Staff ? "ยืนยันและรับเงินสด" : "ยืนยันการจอง")</button>
+                <button type="submit" class="cx-btn cx-btn--ghost" style="margin-top:8px">คำนวณใหม่</button>
+            }
+            else
+            {
+                <p>เลือกห้อง แล้วกด "ดูราคา" เพื่อดูส่วนลดและยอดสุทธิก่อนยืนยัน</p>
+                <button type="submit" class="cx-btn">ดูราคา</button>
+            }
+            <p class="policy">ส่วนลดใช้กับค่าห้อง ระบบเลือกโปรที่ลดมากที่สุด 1 รายการ @(Model.Staff ? "การจองที่เคาน์เตอร์จะยืนยันทันทีและบันทึกการรับเงินสด" : "รายการที่ยังรอดำเนินการยกเลิกได้เองในหน้า \"การจองของฉัน\" รายการที่ยืนยันแล้วกรุณาติดต่อพนักงาน")</p>
+        </aside>
+
+        @* แถบปุ่มติดล่างจอบนมือถือ: สรุปอยู่ท้ายหน้า จึงให้กดดูราคา/ยืนยันได้โดยไม่ต้องเลื่อนลงไป *@
+        <div class="cx-mbar" aria-hidden="true">
+            @if (Model.Summary is { } ms)
+            {
+                <span>ยอดสุทธิ <b>฿@ms.Net.ToString("N2")</b></span>
+                <button type="submit" class="cx-btn" tabindex="-1" formaction="@Url.Action("Confirm", ctl)">@(Model.Staff ? "ยืนยันและรับเงินสด" : "ยืนยันการจอง")</button>
+            }
+            else
+            {
+                <span>เลือกห้องแล้วดูยอดสุทธิ</span>
+                <button type="submit" class="cx-btn" tabindex="-1">ดูราคา</button>
+            }
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        // ไฮไลต์แถวที่เลือก (ใช้ class แทน :has() เพื่อให้ทำงานได้ทุกเบราว์เซอร์)
+        document.querySelectorAll('.cx-pick input').forEach(function (input) {
+            function sync() {
+                var on = input.type === 'checkbox' ? input.checked : Number(input.value) > 0;
+                input.closest('.cx-pick').classList.toggle('is-checked', on);
+            }
+            input.addEventListener('change', sync);
+            input.addEventListener('input', sync);
+            sync();
+        });
+
+        // ปุ่ม − / + ของบริการเสริม (จำกัด 0–5 ตามที่เซิร์ฟเวอร์ตรวจ)
+        document.querySelectorAll('.cx-step__btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                var input = btn.parentNode.querySelector('input');
+                var v = Math.min(5, Math.max(0, (Number(input.value) || 0) + Number(btn.getAttribute('data-step'))));
+                input.value = v;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        // ประมาณการราคาทันทีที่เลือก (ยอดจริงพร้อมส่วนลดคำนวณที่เซิร์ฟเวอร์เมื่อกด "ดูราคา")
+        (function () {
+            var box = document.querySelector('[data-est]'); if (!box) return;
+            var form = box.closest('form'), stale = document.querySelector('[data-stale]'), first = true;
+            var cin = form.querySelector('[name=CheckIn]'), cout = form.querySelector('[name=CheckOut]');
+            function nights() {
+                var a = Date.parse(cin.value), b = Date.parse(cout.value);
+                return a && b && b > a ? Math.round((b - a) / 86400000) : 0;
+            }
+            function calc() {
+                var n = nights(), rooms = 0, roomSum = 0, svc = 0;
+                form.querySelectorAll('input[name=RoomIds]:checked').forEach(function (r) { rooms++; roomSum += Number(r.getAttribute('data-price')) || 0; });
+                form.querySelectorAll('input[name^="ServiceQty"]').forEach(function (s) { svc += (Number(s.value) || 0) * (Number(s.getAttribute('data-price')) || 0); });
+                var total = roomSum * n + svc * rooms;
+                box.hidden = !(rooms && n);
+                box.querySelector('[data-est-sum]').textContent = '฿' + total.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                box.querySelector('[data-est-note]').textContent = rooms + ' ห้อง × ' + n + ' คืน' + (svc ? ' + บริการเสริม' : '');
+                if (stale && !first) stale.hidden = false;
+                first = false;
+            }
+            form.addEventListener('change', function (e) {
+                if (e.target.matches('input[name=RoomIds], input[name^="ServiceQty"]')) calc();
+            });
+            calc();
+        })();
+    </script>
+}

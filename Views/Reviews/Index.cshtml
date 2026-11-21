@@ -1,0 +1,30 @@
+@model pameka_7033_l005.ViewModels.ReviewsPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "รีวิวจากผู้เข้าพัก";
+    Layout = "_Homelayout";
+}
+
+<div class="cx-wrap cx-page">
+    <h1>รีวิวจากผู้เข้าพัก</h1>
+    <partial name="_Flash" />
+
+    @if (Model.Count == 0)
+    {
+        <div class="cx-alert cx-alert--info">ยังไม่มีรีวิว ผู้เข้าพักเขียนรีวิวได้จากหน้า "การจองของฉัน" หลังเช็คเอาท์</div>
+    }
+    else
+    {
+        <div class="cx-box">
+            <h2>@Model.Average.ToString("0.0") / 5 <small>(@ThaiLabels.Stars((int)Math.Round(Model.Average)))</small></h2>
+            <p>จากทั้งหมด @Model.Count.ToString("N0") รีวิว</p>
+        </div>
+        @foreach (var r in Model.Items)
+        {
+            <article class="cx-box">
+                <h3>@ThaiLabels.Stars(r.Rating) <small>@r.Name · @r.CreatedAt.ToString("dd/MM/yyyy")</small></h3>
+                @if (!string.IsNullOrWhiteSpace(r.Comment)) { <p>@r.Comment</p> }
+            </article>
+        }
+    }
+</div>

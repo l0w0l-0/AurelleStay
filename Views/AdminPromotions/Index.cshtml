@@ -1,0 +1,213 @@
+@model List<pameka_7033_l005.ViewModels.PromoAdminRowViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "โปรโมชั่น";
+    Layout = "_Adminlayout";
+    var newTypes = new[] { "CODE", "SEASONAL", "LONG_STAY", "EARLY_BIRD", "MEMBER", "BIRTHDAY", "ANNIVERSARY" };
+    string Hint(string t) => t switch
+    {
+        "SEASONAL" => "ส่วนลดเมื่อวันเข้าพักอยู่ในช่วงที่กำหนด เช่น สงกรานต์ ปีใหม่",
+        "CODE" => "ลูกค้ากรอกรหัสตอนจองจึงได้ส่วนลด — แจกผ่านโซเชียล อีเมล หรือพาร์ตเนอร์ (ไม่แสดงในหน้าโปรโมชั่นสาธารณะ)",
+        "LONG_STAY" => "ส่วนลดเมื่อพักตั้งแต่จำนวนคืนที่กำหนด",
+        "EARLY_BIRD" => "ส่วนลดเมื่อจองล่วงหน้าตามจำนวนวันที่กำหนด",
+        "MEMBER" => "ส่วนลดให้สมาชิกทุกการจอง",
+        "BIRTHDAY" => "ส่วนลดเมื่อช่วงพักตรงวันเกิดในโปรไฟล์ลูกค้า",
+        "ANNIVERSARY" => "ส่วนลดเมื่อช่วงพักตรงวันครบรอบในโปรไฟล์ลูกค้า",
+        _ => ""
+    };
+    var today = DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);
+}
+
+<div class="dashboard">
+    <h1>โปรโมชั่น</h1>
+    <partial name="_Flash" />
+    <p>ส่วนลดใช้กับค่าห้องเท่านั้น และระบบเลือกโปรที่ลดได้มากที่สุดให้ลูกค้า 1 รายการต่อการจอง (ไม่ซ้อนกัน)
+        · <a asp-controller="Promotions" asp-action="Index" target="_blank" rel="noopener">ดูหน้าที่ลูกค้าเห็น</a></p>
+
+    <div class="pr-kpis">
+        <div><span>โปรที่เปิดอยู่</span><b>@Model.Count(p => p.IsActive)</b></div>
+        <div><span>การจองที่ใช้โปร</span><b>@Model.Sum(p => p.Used).ToString("N0")</b></div>
+        <div><span>ส่วนลดที่ให้ไปแล้ว</span><b>@Model.Sum(p => p.DiscountGiven).ToString("N0") ฿</b></div>
+        <div><span>ยอดจองจากโปร</span><b>@Model.Sum(p => p.Revenue).ToString("N0") ฿</b></div>
+    </div>
+
+    <div class="pr-quick">
+        <button type="button" class="cx-btn" data-pr-new="CODE">+ สร้างรหัสโปรโมชั่น</button>
+        <button type="button" class="cx-btn cx-btn--ghost" data-pr-new="SEASONAL">+ สร้างโปรโมชั่นแบบอื่น</button>
+        <form asp-action="GenerateCampaigns" method="post" class="pr-gen"><button type="submit" class="cx-btn cx-btn--ghost">สร้างแคมเปญเทศกาลตอนนี้</button></form>
+    </div>
+    <p class="cx-hint pr-auto-hint">ระบบสร้างแคมเปญเทศกาลไทยให้ล่วงหน้าอัตโนมัติทุกวัน (ป้าย "อัตโนมัติ"): คูปองกดเก็บ ปีใหม่ · วาเลนไทน์ · สงกรานต์ · ลอยกระทง · วันพ่อ · 11.11 · 12.12 และส่วนลดอัตโนมัติหน้าฝน — แก้ % ช่วงเวลา หรือปิดได้ตามต้องการ</p>
+
+    <details class="staff-card pr-new" id="pr-new">
+        <summary><h2>สร้างโปรโมชั่นใหม่ / สร้างรหัสโปรโมชั่น</h2></summary>
+        <form asp-action="Save" method="post" class="pr-form" data-pr-form>
+            <input type="hidden" name="PromoId" value="0" />
+            <label class="pr-f pr-f--wide">ประเภท
+                <select name="PromoType" required data-pr-type>
+                    @foreach (var t in newTypes) { <option value="@t">@ThaiLabels.PromoType(t) — @Hint(t)</option> }
+                </select>
+            </label>
+            <label class="pr-f pr-f--wide">ชื่อโปรโมชั่น<input name="PromoName" maxlength="100" required placeholder="เช่น สงกรานต์ลด 15%" /></label>
+            <label class="pr-f">ส่วนลด (%)<input name="DiscountPercent" type="number" min="0.01" max="100" step="0.01" required /></label>
+            <label class="pr-f" data-show="CODE">รหัสโปรโมชั่น<input name="PromoCode" maxlength="30" pattern="[A-Za-z0-9_\-]{3,30}" placeholder="เช่น SONGKRAN15" /></label>
+            <label class="pr-f" data-show="EARLY_BIRD">จองล่วงหน้าอย่างน้อย (วัน)<input name="MinAdvanceDays" type="number" min="0" max="365" value="30" /></label>
+            <label class="pr-f">เข้าพักตั้งแต่<input name="StartDate" type="date" /></label>
+            <label class="pr-f">เข้าพักถึง<input name="EndDate" type="date" /></label>
+            <label class="pr-f">พักอย่างน้อย (คืน)<input name="MinNights" type="number" min="1" max="60" placeholder="ไม่กำหนด" /></label>
+            <label class="pr-f">ส่วนลดสูงสุด/การจอง (บาท)<input name="MaxDiscount" type="number" min="1" max="1000000" step="1" placeholder="ไม่จำกัด" /></label>
+            <label class="pr-f">จำนวนสิทธิ์ทั้งหมด<input name="MaxUses" type="number" min="1" max="100000" placeholder="ไม่จำกัด" /></label>
+            <label class="pr-f">ใช้ได้กี่ครั้งต่อลูกค้า<input name="MaxPerUser" type="number" min="1" max="100" placeholder="ไม่จำกัด" /></label>
+            <label class="pr-check" data-show="CODE"><input type="checkbox" name="RecipientsOnly" value="true" checked /> ใช้ได้เฉพาะลูกค้าที่โรงแรมส่งรหัสให้</label>
+            <input type="hidden" name="RecipientsOnly" value="false" />
+            <label class="pr-check pr-f--wide"><input type="checkbox" name="Claimable" value="true" /> คูปองกดเก็บ: ลูกค้าต้องกด "เก็บคูปอง" ก่อน แล้วระบบใช้ให้อัตโนมัติ (ไม่ต้องพิมพ์รหัส)</label>
+            <input type="hidden" name="Claimable" value="false" />
+            <label class="pr-f">เปิดให้เก็บตั้งแต่<input name="ClaimFrom" type="date" /></label>
+            <label class="pr-f">ปิดเก็บวันที่<input name="ClaimUntil" type="date" /></label>
+            <label class="pr-check pr-f--wide"><input type="checkbox" name="Featured" value="true" /> แสดงเป็นแบนเนอร์บนหน้าแรก</label>
+            <input type="hidden" name="Featured" value="false" />
+            <label class="pr-f pr-f--wide">คำอธิบาย (แสดงให้ลูกค้าเห็น)<textarea name="Description" maxlength="300" rows="2"></textarea></label>
+            <label class="pr-check"><input type="checkbox" name="NeedStaffConfirm" value="true" /> ต้องแสดงบัตรยืนยันตอนเช็คอิน</label>
+            <input type="hidden" name="NeedStaffConfirm" value="false" />
+            <label class="pr-check"><input type="checkbox" name="IsActive" value="true" checked /> เปิดใช้งานทันที</label>
+            <input type="hidden" name="IsActive" value="false" />
+            <div class="pr-actions"><button type="submit" class="cx-btn">สร้างโปรโมชั่น</button></div>
+        </form>
+    </details>
+
+    <div class="pr-grid">
+        @foreach (var p in Model)
+        {
+            var expired = p.EndDate is { } e && e < today;
+            var full = p.MaxUses is { } mu && p.Used >= mu;
+            var state = !p.IsActive ? ("ปิดอยู่", "off") : expired ? ("หมดช่วงแล้ว", "off") : full ? ("สิทธิ์เต็ม", "off") : p.StartDate is { } s && s > today ? ("ยังไม่เริ่ม", "soon") : ("ใช้งานอยู่", "on");
+            <article class="staff-card pr-card is-@state.Item2" aria-labelledby="pr-@p.PromoId">
+                <header class="pr-head">
+                    <div class="pr-pct">@p.DiscountPercent.ToString("0.##")<small>%</small></div>
+                    <div>
+                        <p class="pr-type">@ThaiLabels.PromoType(p.PromoType)@(p.PromoCode != null ? " · " + p.PromoCode : "")</p>
+                        <h2 id="pr-@p.PromoId">@p.PromoName</h2>
+                        <p class="pr-badges">
+                            @if (p.Claimable) { <span class="pr-badge pr-badge--claim">คูปองกดเก็บ · เก็บแล้ว @p.Recipients@(p.MaxUses is { } mq ? $"/{mq}" : "")</span> }
+                            @if (p.Featured) { <span class="pr-badge">แบนเนอร์หน้าแรก</span> }
+                            @if (p.AutoKey != null) { <span class="pr-badge pr-badge--auto">อัตโนมัติ</span> }
+                        </p>
+                    </div>
+                    <span class="pr-state pr-state--@state.Item2">@state.Item1</span>
+                </header>
+                <dl class="pr-stats">
+                    <div><dt>ใช้ไปแล้ว</dt><dd>@p.Used@(p.MaxUses.HasValue ? " / " + p.MaxUses : "")</dd></div>
+                    <div><dt>ส่วนลดที่ให้</dt><dd>@p.DiscountGiven.ToString("N0") ฿</dd></div>
+                    <div><dt>ยอดจอง</dt><dd>@p.Revenue.ToString("N0") ฿</dd></div>
+                </dl>
+                @if (p.MaxUses is { } cap && cap > 0)
+                {
+                    <div class="pr-bar" role="img" aria-label="ใช้สิทธิ์ไป @p.Used จาก @cap"><span style="width:@(Math.Min(100, 100 * p.Used / cap))%"></span></div>
+                }
+                @if (p.Claimable && (p.ClaimFrom.HasValue || p.ClaimUntil.HasValue))
+                {
+                    <p class="pr-codeinfo">ช่วงเก็บคูปอง @(p.ClaimFrom?.ToString("dd/MM/yyyy") ?? "ตั้งแต่เปิด") – @(p.ClaimUntil?.ToString("dd/MM/yyyy") ?? "จนกว่าโปรจะหมด")</p>
+                }
+                @if (p.PromoType == "CODE" && !p.Claimable)
+                {
+                    <p class="pr-codeinfo">
+                        <code>@p.PromoCode</code>
+                        @(p.RecipientsOnly ? $"ใช้ได้เฉพาะผู้ได้รับรหัส · ส่งแล้ว {p.Recipients} คน" : $"ใครมีรหัสก็ใช้ได้ (แจกทางโซเชียล/ป้ายได้) · ส่งในระบบแล้ว {p.Recipients} คน")
+                    </p>
+                    @if (state.Item2 != "off")
+                    {
+                        <details class="pr-edit pr-send">
+                            <summary>ส่งรหัสให้ลูกค้า</summary>
+                            <form asp-action="SendCode" method="post" class="pr-form">
+                                <input type="hidden" name="id" value="@p.PromoId" />
+                                <label class="pr-f pr-f--wide">ส่งให้
+                                    <select name="target" data-ts>
+                                        <option value="STAYED">ลูกค้าที่เคยเข้าพักแล้ว</option>
+                                        <option value="ALL">ลูกค้าทุกคน</option>
+                                        <option value="EMAILS">ระบุอีเมลลูกค้า (ด้านล่าง)</option>
+                                    </select>
+                                </label>
+                                <label class="pr-f pr-f--wide">อีเมลลูกค้า (พิมพ์ชื่อ/อีเมล/เบอร์เพื่อค้นหา หรือคั่นด้วย , · ใช้เมื่อเลือก "ระบุอีเมล")<input type="text" name="emails" maxlength="20000" placeholder="เช่น a@mail.com, b@mail.com" data-ts-emails data-lookup="@Url.Action("CustomerLookup", "FrontDesk")" /></label>
+                                <p class="pr-f--wide cx-hint">ลูกค้าได้รับเป็นการแจ้งเตือนในระบบ พร้อมปุ่มจองห้องที่เติมรหัสให้ และเห็นรหัสในหน้าสมาชิก · คนที่เคยได้รับแล้วจะไม่ได้รับซ้ำ</p>
+                                <div class="pr-actions"><button type="submit" class="cx-btn cx-btn--small">ส่งรหัส</button></div>
+                            </form>
+                        </details>
+                    }
+                }
+                <details class="pr-edit">
+                    <summary>แก้ไข</summary>
+                    <form asp-action="Save" method="post" class="pr-form">
+                        <input type="hidden" name="PromoId" value="@p.PromoId" />
+                        <label class="pr-f pr-f--wide">ชื่อโปรโมชั่น<input name="PromoName" value="@p.PromoName" maxlength="100" required /></label>
+                        <label class="pr-f">ส่วนลด (%)<input name="DiscountPercent" type="number" min="0.01" max="100" step="0.01" value="@p.DiscountPercent.ToString("0.##")" required /></label>
+                        @if (p.PromoType == "CODE") { <label class="pr-f">รหัสโปรโมชั่น<input name="PromoCode" value="@p.PromoCode" maxlength="30" required pattern="[A-Za-z0-9_\-]{3,30}" /></label> }
+                        @if (p.PromoType == "EARLY_BIRD") { <label class="pr-f">จองล่วงหน้าอย่างน้อย (วัน)<input name="MinAdvanceDays" type="number" min="0" max="365" value="@p.MinAdvanceDays" /></label> }
+                        <label class="pr-f">เข้าพักตั้งแต่<input name="StartDate" type="date" value="@p.StartDate?.ToString("yyyy-MM-dd")" required="@(p.PromoType is "SEASONAL" or "MOTHERS_DAY")" /></label>
+                        <label class="pr-f">เข้าพักถึง<input name="EndDate" type="date" value="@p.EndDate?.ToString("yyyy-MM-dd")" required="@(p.PromoType is "SEASONAL" or "MOTHERS_DAY")" /></label>
+                        <label class="pr-f">พักอย่างน้อย (คืน)<input name="MinNights" type="number" min="1" max="60" value="@p.MinNights" placeholder="ไม่กำหนด" required="@(p.PromoType == "LONG_STAY")" /></label>
+                        <label class="pr-f">ส่วนลดสูงสุด (บาท)<input name="MaxDiscount" type="number" min="1" max="1000000" step="1" value="@p.MaxDiscount?.ToString("0")" placeholder="ไม่จำกัด" /></label>
+                        <label class="pr-f">จำนวนสิทธิ์ทั้งหมด<input name="MaxUses" type="number" min="1" max="100000" value="@p.MaxUses" placeholder="ไม่จำกัด" /></label>
+                        <label class="pr-f">ใช้ได้กี่ครั้งต่อลูกค้า<input name="MaxPerUser" type="number" min="1" max="100" value="@p.MaxPerUser" placeholder="ไม่จำกัด" /></label>
+                        @if (p.PromoType == "CODE")
+                        {
+                            <label class="pr-check pr-f--wide"><input type="checkbox" name="RecipientsOnly" value="true" checked="@p.RecipientsOnly" /> ใช้ได้เฉพาะลูกค้าที่โรงแรมส่งรหัสให้</label>
+                            <input type="hidden" name="RecipientsOnly" value="false" />
+                        }
+                        @if (p.PromoType is not ("MEMBER" or "BIRTHDAY" or "ANNIVERSARY"))
+                        {
+                            <label class="pr-check pr-f--wide"><input type="checkbox" name="Claimable" value="true" checked="@p.Claimable" /> คูปองกดเก็บ (ลูกค้ากดเก็บก่อน แล้วใช้อัตโนมัติ)</label>
+                            <input type="hidden" name="Claimable" value="false" />
+                            <label class="pr-f">เปิดให้เก็บตั้งแต่<input name="ClaimFrom" type="date" value="@p.ClaimFrom?.ToString("yyyy-MM-dd")" /></label>
+                            <label class="pr-f">ปิดเก็บวันที่<input name="ClaimUntil" type="date" value="@p.ClaimUntil?.ToString("yyyy-MM-dd")" /></label>
+                        }
+                        <label class="pr-check pr-f--wide"><input type="checkbox" name="Featured" value="true" checked="@p.Featured" /> แสดงเป็นแบนเนอร์บนหน้าแรก</label>
+                        <input type="hidden" name="Featured" value="false" />
+                        <label class="pr-f pr-f--wide">คำอธิบาย<textarea name="Description" maxlength="300" rows="2">@p.Description</textarea></label>
+                        <label class="pr-check"><input type="checkbox" name="NeedStaffConfirm" value="true" checked="@p.NeedStaffConfirm" /> ตรวจบัตรตอนเช็คอิน</label>
+                        <input type="hidden" name="NeedStaffConfirm" value="false" />
+                        <label class="pr-check"><input type="checkbox" name="IsActive" value="true" checked="@p.IsActive" /> เปิดใช้งาน</label>
+                        <input type="hidden" name="IsActive" value="false" />
+                        <div class="pr-actions"><button type="submit" class="cx-btn cx-btn--small">บันทึก</button></div>
+                    </form>
+                    @if (!p.HasBookings)
+                    {
+                        <form asp-action="Delete" method="post" class="pr-del" onsubmit="return confirm('ลบโปรโมชั่น @p.PromoName ?');">
+                            <input type="hidden" name="id" value="@p.PromoId" />
+                            <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบโปรโมชั่น</button>
+                        </form>
+                    }
+                </details>
+            </article>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // ฟอร์มสร้างโปร: แสดงช่องเฉพาะประเภทที่เกี่ยวข้อง (ฝั่งเซิร์ฟเวอร์ตรวจซ้ำทุกช่อง)
+        (function () {
+            var form = document.querySelector('[data-pr-form]'); if (!form) return;
+            var type = form.querySelector('[data-pr-type]');
+            function sync() {
+                form.querySelectorAll('[data-show]').forEach(function (el) {
+                    var on = el.getAttribute('data-show') === type.value;
+                    el.hidden = !on; el.querySelectorAll('input').forEach(function (i) { i.disabled = !on; });
+                });
+                var code = form.querySelector('[name=PromoCode]'); code.required = type.value === 'CODE';
+                var dates = form.querySelectorAll('[name=StartDate],[name=EndDate]');
+                dates.forEach(function (d) { d.required = type.value === 'SEASONAL'; });
+                form.querySelector('[name=MinNights]').required = type.value === 'LONG_STAY';
+            }
+            type.addEventListener('change', sync); sync();
+            // ปุ่มลัด: เปิดฟอร์มพร้อมเลือกประเภทให้ แล้วเลื่อนไปที่ช่องแรกที่ต้องกรอก
+            var box = document.getElementById('pr-new');
+            document.querySelectorAll('[data-pr-new]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    type.value = b.getAttribute('data-pr-new'); sync(); box.open = true;
+                    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    var first = form.querySelector(type.value === 'CODE' ? '[name=PromoCode]' : '[name=PromoName]');
+                    setTimeout(function () { first.focus(); }, 300);
+                });
+            });
+        })();
+    </script>
+}

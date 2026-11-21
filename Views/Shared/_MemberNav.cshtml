@@ -1,0 +1,24 @@
+@* Part 44: เมนูพื้นที่สมาชิก (ลูกค้า) — แสดงบนทุกหน้าของบัญชีลูกค้า ให้เดินทางระหว่างหน้าได้ในคลิกเดียว *@
+@{
+    var c = ViewContext.RouteData.Values["controller"]?.ToString();
+    var a = ViewContext.RouteData.Values["action"]?.ToString();
+    var items = new[]
+    {
+        ("Member", "Index", "ภาพรวม"),
+        ("Booking", "MyBookings", "การจองของฉัน"),
+        ("Member", "Messages", "ข้อความของฉัน"),
+        ("Member", "Reviews", "รีวิวของฉัน"),
+        ("Notifications", "Index", "การแจ้งเตือน"),
+        ("Settings", "Index", "ตั้งค่าบัญชี"),
+    };
+}
+<nav class="mb-nav" aria-label="เมนูสมาชิก">
+    <div class="mb-nav__in">
+        @foreach (var (ctl, act, label) in items)
+        {
+            var on = string.Equals(c, ctl, StringComparison.OrdinalIgnoreCase) && string.Equals(a, act, StringComparison.OrdinalIgnoreCase);
+            <a asp-controller="@ctl" asp-action="@act" data-no-instant="@(ctl == "Notifications" ? "" : null)" class="@(on ? "is-on" : "")" aria-current="@(on ? "page" : null)">@label</a>
+        }
+        <a asp-controller="Booking" asp-action="Create" class="mb-nav__book">+ จองห้องพัก</a>
+    </div>
+</nav>

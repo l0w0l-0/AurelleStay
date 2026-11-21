@@ -1,0 +1,33 @@
+@model pameka_7033_l005.ViewModels.EditUserViewModel
+@{
+    ViewData["Title"] = "แก้ไขข้อมูลผู้ใช้";
+    Layout = "_Adminlayout";
+}
+
+<div class="cx-wrap cx-page">
+    <h1>แก้ไขข้อมูลผู้ใช้ #@Model.UserId</h1>
+    <partial name="_Flash" />
+
+    <form asp-controller="Account" asp-action="EditUser" method="post" class="cx-box">
+        <input type="hidden" asp-for="UserId" />
+        <div asp-validation-summary="All" class="cx-alert cx-alert--error"></div>
+
+        <label class="cx-field">ชื่อ<input asp-for="FirstName" /></label>
+        <label class="cx-field">นามสกุล<input asp-for="LastName" /></label>
+        <label class="cx-field">เบอร์โทร<input asp-for="Phone" /></label>
+        <label class="cx-field">อีเมล<input asp-for="Email" type="email" /></label>
+        <label class="cx-field">วันเกิด<input type="date" name="BirthDate" data-dp-start="1990-01-01" max="@pameka_7033_l005.Helpers.AppClock.Today.ToString("yyyy-MM-dd")" value="@Model.BirthDate?.ToString("yyyy-MM-dd")" /></label>
+        <label class="cx-field">วันครบรอบ<input type="date" name="AnniversaryDate" data-dp-start="2015-01-01" max="@pameka_7033_l005.Helpers.AppClock.Today.ToString("yyyy-MM-dd")" value="@Model.AnniversaryDate?.ToString("yyyy-MM-dd")" /></label>
+        <label class="st-check"><input asp-for="IsMember" type="checkbox" /> <span>เป็นสมาชิก (ได้ส่วนลดสมาชิก)</span></label>
+
+        <h2>ตั้งรหัสผ่านใหม่ให้ผู้ใช้ (เว้นว่างถ้าไม่เปลี่ยน)</h2>
+        <p><small>ใช้เมื่อผู้ใช้ลืมรหัสผ่าน ไม่ต้องรู้รหัสเดิม แจ้งรหัสใหม่ให้ผู้ใช้และให้เปลี่ยนเองที่หน้า "ตั้งค่า"</small></p>
+        <label class="cx-field">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว มีตัวอักษรและตัวเลข)<input asp-for="NewPassword" type="password" autocomplete="new-password" /></label>
+        <label class="cx-field">ยืนยันรหัสผ่านใหม่<input asp-for="ConfirmPassword" type="password" autocomplete="new-password" /></label>
+
+        <p>
+            <button type="submit" class="cx-btn">บันทึก</button>
+            <a asp-action="UserList" class="cx-btn cx-btn--ghost">ยกเลิก</a>
+        </p>
+    </form>
+</div>

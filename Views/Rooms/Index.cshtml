@@ -1,0 +1,157 @@
+@model pameka_7033_l005.ViewModels.RoomsPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ห้องพัก";
+    Layout = "_Homelayout";
+    var s = Model.Search;
+    var showDates = s.CheckIn.HasValue && s.CheckOut.HasValue && Model.DateError == null;
+    var nights = showDates ? s.CheckOut!.Value.DayNumber - s.CheckIn!.Value.DayNumber : 0;
+    var searched = s.TypeId.HasValue || s.Sort != null || s.CheckIn.HasValue || s.CheckOut.HasValue || s.Guests.HasValue || s.MaxPrice.HasValue || s.ThemeId.HasValue;
+}
+
+<div class="cx-wrap cx-page">
+    <div class="cx-pagehead">
+        <h1>ห้องพัก</h1>
+        <a asp-controller="Rooms" asp-action="Availability" class="cx-btn cx-btn--ghost"><svg class="cx-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>ปฏิทินห้องว่าง</a>
+    </div>
+
+    <form method="get" asp-controller="Rooms" asp-action="Index" class="cx-searchbar rl-search" aria-label="ค้นหาและกรองห้องพัก">
+        <label class="cx-field">เช็คอิน<input type="date" data-dp-in name="CheckIn" value="@s.CheckIn?.ToString("yyyy-MM-dd")" min="@pameka_7033_l005.Helpers.AppClock.Today.ToString("yyyy-MM-dd")" /></label>
+        <label class="cx-field">เช็คเอาท์<input type="date" data-dp-out name="CheckOut" value="@s.CheckOut?.ToString("yyyy-MM-dd")" min="@pameka_7033_l005.Helpers.AppClock.Today.AddDays(1).ToString("yyyy-MM-dd")" /></label>
+        <label class="cx-field">ผู้เข้าพัก<input type="number" name="Guests" min="1" max="10" value="@s.Guests" placeholder="ทุกขนาด" /></label>
+        <label class="cx-field">
+            ประเภทห้อง
+            <select name="TypeId" data-ts>
+                <option value="">ทุกประเภท</option>
+                @foreach (var t in Model.Types)
+                {
+                    <option value="@t.ThemeId" selected="@(s.TypeId == t.ThemeId)">@t.Name</option>
+                }
+            </select>
+        </label>
+        <label class="cx-field">
+            ธีมห้อง
+            <select name="ThemeId" data-ts>
+                <option value="">ทุกธีม</option>
+                @foreach (var t in Model.Themes)
+                {
+                    <option value="@t.ThemeId" selected="@(s.ThemeId == t.ThemeId)">@t.Name</option>
+                }
+            </select>
+        </label>
+        <label class="cx-field">ราคาไม่เกิน/คืน<input type="number" name="MaxPrice" min="0" step="100" value="@s.MaxPrice" placeholder="ไม่จำกัด" /></label>
+        <label class="cx-field">
+            เรียงตาม
+            <select name="Sort" data-ts>
+                <option value="">เลขห้อง</option>
+                <option value="price" selected="@(s.Sort == "price")">ราคาต่ำ → สูง</option>
+                <option value="price_desc" selected="@(s.Sort == "price_desc")">ราคาสูง → ต่ำ</option>
+                <option value="guests" selected="@(s.Sort == "guests")">ห้องใหญ่ก่อน</option>
+            </select>
+        </label>
+        <div class="rl-actions">
+            <button type="submit" class="cx-btn">ค้นหาห้องว่าง</button>
+            @if (searched)
+            {
+                <a asp-action="Index" class="cx-btn cx-btn--ghost">ล้าง</a>
+            }
+        </div>
+    </form>
+
+    @if (Model.DateError != null)
+    {
+        <div class="cx-alert cx-alert--error" role="alert">@Model.DateError</div>
+    }
+
+    <p class="cx-count">
+        @if (showDates)
+        {
+            <text>ห้องว่าง <b>@Model.Rooms.Count</b> ห้อง · @s.CheckIn?.ToString("dd/MM/yyyy") – @s.CheckOut?.ToString("dd/MM/yyyy") (@nights คืน)</text>
+        }
+        else
+        {
+            <text>พบ @Model.Rooms.Count ห้อง — เลือกวันเข้าพักเพื่อดูเฉพาะห้องที่ว่างและราคารวม</text>
+        }
+    </p>
+
+    @if (!Model.Rooms.Any())
+    {
+        <div class="cx-alert cx-alert--info">ไม่พบห้องที่ตรงกับเงื่อนไข ลองเปลี่ยนวันที่ เพิ่มงบประมาณ หรือกดล้างตัวกรอง</div>
+    }
+    else
+    {
+        <div class="rl-grid">
+            @foreach (var r in Model.Rooms)
+            {
+                var scene = ThaiLabels.SceneFor(r.ThemeName);
+                var amen = r.AmenityList.ToList();
+                <article class="rl-card">
+                    <a asp-controller="Rooms" asp-action="Details" asp-route-id="@r.RoomId" asp-route-checkIn="@s.CheckIn?.ToString("yyyy-MM-dd")" asp-route-checkOut="@s.CheckOut?.ToString("yyyy-MM-dd")" asp-route-guests="@s.Guests" class="rl-photo" aria-label="ดูรายละเอียดห้อง @r.RoomNo">
+                        @if (!string.IsNullOrEmpty(r.ImageUrl))
+                        {
+                            <img src="@r.ImageUrl" alt="ภาพห้อง @r.TypeName" loading="lazy" width="600" height="400" />
+                        }
+                        else
+                        {
+                            <span class="cx-arch cx-scene--@scene"></span>
+                        }
+                        <span class="rl-tag">@r.TypeName</span>
+                        @if (!string.IsNullOrEmpty(r.ThemeName))
+                        {
+                            <span class="rl-theme">@ThaiLabels.ThemeLabel(r.ThemeName)</span>
+                        }
+                    </a>
+                    <div class="rl-body">
+                        <div class="rl-head">
+                            <h2><a asp-controller="Rooms" asp-action="Details" asp-route-id="@r.RoomId" asp-route-checkIn="@s.CheckIn?.ToString("yyyy-MM-dd")" asp-route-checkOut="@s.CheckOut?.ToString("yyyy-MM-dd")" asp-route-guests="@s.Guests">ห้อง @r.RoomNo</a></h2>
+                            <span class="rl-cap" title="พักได้สูงสุด"><svg class="cx-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>@r.MaxGuests คน</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(r.Description))
+                        {
+                            <p class="rl-desc">@r.Description</p>
+                        }
+                        @if (amen.Any())
+                        {
+                            <ul class="rl-amen" aria-label="สิ่งอำนวยความสะดวก">
+                                @foreach (var a in amen.Take(4)) { <li>@a</li> }
+                                @if (amen.Count > 4) { <li class="more">+@(amen.Count - 4)</li> }
+                            </ul>
+                        }
+                        <div class="rl-foot">
+                            <div class="rl-price">
+                                <b>฿@r.BasePrice.ToString("N0")</b><small>/คืน@(showDates && r.PriceVaries ? " (เฉลี่ย)" : "")</small>
+                                @if (showDates)
+                                {
+                                    <span>รวม @nights คืน ฿@((r.BasePrice * nights).ToString("N0")) ก่อนส่วนลด</span>
+                                    @if (r.SeasonName != null) { <span class="rl-season">@r.SeasonName</span> }
+                                }
+                                else if (r.WeekendPrice is > 0)
+                                {
+                                    <span>คืนศุกร์–เสาร์ ฿@r.WeekendPrice.Value.ToString("N0")</span>
+                                }
+                            </div>
+                            <div class="rl-btns">
+                                <a asp-controller="Rooms" asp-action="Details" asp-route-id="@r.RoomId" asp-route-checkIn="@s.CheckIn?.ToString("yyyy-MM-dd")" asp-route-checkOut="@s.CheckOut?.ToString("yyyy-MM-dd")" asp-route-guests="@s.Guests" class="cx-btn cx-btn--ghost cx-btn--small">รายละเอียด</a>
+                                @if (User.IsInRole(RoleNames.FrontDesk) || User.IsInRole(RoleNames.Admin))
+                                {
+                                    <a asp-controller="FrontDesk" asp-action="WalkIn" asp-route-checkIn="@(showDates ? s.CheckIn?.ToString("yyyy-MM-dd") : null)"
+                                       asp-route-checkOut="@(showDates ? s.CheckOut?.ToString("yyyy-MM-dd") : null)" asp-route-roomIds="@r.RoomId" asp-route-guests="@s.Guests" class="cx-btn cx-btn--small">จองให้ลูกค้า</a>
+                                }
+                                else if (User.Identity?.IsAuthenticated != true || User.IsInRole(RoleNames.Customer))
+                                {
+                                    <a asp-controller="Booking" asp-action="Create" asp-route-checkIn="@(showDates ? s.CheckIn?.ToString("yyyy-MM-dd") : null)"
+                                       asp-route-checkOut="@(showDates ? s.CheckOut?.ToString("yyyy-MM-dd") : null)" asp-route-roomIds="@r.RoomId" asp-route-guests="@s.Guests" class="cx-btn cx-btn--small">จองห้องนี้</a>
+                                }
+                                else
+                                {
+                                    <span class="rl-staffnote" title="บัญชีพนักงานจองห้องเองไม่ได้">จองผ่านฝ่ายบริการ</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+        <p class="rl-credit">ภาพห้องตัวอย่างจาก Unsplash</p>
+    }
+</div>

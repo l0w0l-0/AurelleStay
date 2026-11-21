@@ -1,0 +1,102 @@
+@model pameka_7033_l005.ViewModels.ReportViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "รายงาน";
+    ViewData["Charts"] = true;
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>รายงาน</h1>
+
+    <form method="get" class="staff-form" style="margin-bottom:14px">
+        <label>ตั้งแต่ <input type="date" name="from" value="@Model.From.ToString("yyyy-MM-dd")" /></label>
+        <label>ถึง <input type="date" name="to" value="@Model.To.ToString("yyyy-MM-dd")" /></label>
+        <button type="submit" class="cx-btn">ดูรายงาน</button>
+    </form>
+
+    @if (Model.Error != null)
+    {
+        <div class="cx-alert cx-alert--error" role="alert">@Model.Error</div>
+    }
+    else
+    {
+        <p><a data-no-instant asp-action="Export" asp-route-from="@Model.From.ToString("yyyy-MM-dd")" asp-route-to="@Model.To.ToString("yyyy-MM-dd")" class="cx-btn cx-btn--ghost cx-btn--small">ส่งออก CSV</a></p>
+        <div class="dashboard-cards">
+            <div class="dashboard-card"><span>รายรับ (ชำระแล้ว ยังไม่คืน)</span><strong>฿@Model.Revenue.ToString("N0")</strong></div>
+            <div class="dashboard-card"><span>คืนเงินแล้ว</span><strong>฿@Model.Refunded.ToString("N0")</strong></div>
+            <div class="dashboard-card"><span>รายจ่าย</span><strong>฿@Model.Expenses.ToString("N0")</strong></div>
+            <div class="dashboard-card"><span>กำไรสุทธิ</span><strong style="color:@(Model.Profit < 0 ? "#b42a45" : "#17803d")">@(Model.Profit < 0 ? "-" : "")฿@Math.Abs(Model.Profit).ToString("N0")</strong></div>
+            <div class="dashboard-card"><span>การจองใหม่</span><strong>@Model.NewBookings.ToString("N0")</strong></div>
+            <div class="dashboard-card"><span>จำนวนคืนที่ขายห้อง</span><strong>@Model.RoomNights.ToString("N0")</strong></div>
+        </div>
+
+        <div class="staff-card">
+            <div class="occ-head">
+                <h2>อัตราการเข้าพักรายคืน</h2>
+                <div class="occ-kpis">
+                    <div><span>เฉลี่ยทั้งช่วง</span><strong>@Model.OccupancyPercent.ToString("0.#")%</strong></div>
+                    <div><span>ADR ราคาห้องเฉลี่ย/คืน</span><strong>฿@Model.Adr.ToString("N0")</strong></div>
+                    <div><span>RevPAR ต่อห้องต่อคืน</span><strong>฿@Model.RevPar.ToString("N0")</strong></div>
+                </div>
+            </div>
+            @if (Model.TotalRooms == 0) { <p>ยังไม่มีห้องพักในระบบ</p> }
+            else
+            {
+                var step = Math.Max(1, (int)Math.Ceiling(Model.Occupancy.Count / 10.0));
+                <div class="occ-chart" role="img" aria-label="กราฟอัตราการเข้าพักรายคืน">
+                    @foreach (var o in Model.Occupancy)
+                    {
+                        var pct = Math.Round(100m * o.Occupied / Model.TotalRooms, 1);
+                        <div class="occ-col" title="@o.Date.ToString("dd/MM/yyyy"): @o.Occupied/@Model.TotalRooms ห้อง (@pct%)">
+                            <div class="occ-bar@(pct >= 80 ? " occ-hi" : "")" style="height:@(Math.Max(pct, o.Occupied > 0 ? 3 : 0).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
+                        </div>
+                    }
+                </div>
+                <div class="occ-axis">
+                    @for (var i = 0; i < Model.Occupancy.Count; i++) { <span>@(i % step == 0 ? Model.Occupancy[i].Date.ToString("dd/MM") : "")</span> }
+                </div>
+                <script type="application/json" data-chart data-replace=".occ-chart,.occ-axis">@Json.Serialize(new { kind = "line", unit = "%", max = 100, labels = Model.Occupancy.Select(o => o.Date.ToString("d MMM", new System.Globalization.CultureInfo("th-TH"))), series = new[] { new { name = "อัตราการเข้าพัก", data = Model.Occupancy.Select(o => Math.Round(100m * o.Occupied / Model.TotalRooms, 1)), color = "#5f3d8e" } } })</script>
+                <p class="occ-note">นับห้องที่ยืนยันการจองแล้ว (ยืนยัน/เข้าพัก/ออกแล้ว) จากห้องทั้งหมด @Model.TotalRooms ห้อง · ADR/RevPAR คิดจากราคาห้องก่อนส่วนลด · แท่งสีทอง = 80% ขึ้นไป</p>
+            }
+        </div>
+
+        <div class="staff-card">
+            <h2>รายรับรายวัน</h2>
+            @if (!Model.Daily.Any()) { <p>ไม่มีรายรับในช่วงนี้</p> }
+            else
+            {
+                <script type="application/json" data-chart data-height="260">@Json.Serialize(new { kind = "bar", unit = "฿", labels = Model.Daily.Select(d => d.Date.ToString("d MMM", new System.Globalization.CultureInfo("th-TH"))), series = new[] { new { name = "รายรับ", data = Model.Daily.Select(d => d.Amount), color = "#5f3d8e" } } })</script>
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>วันที่</th><th>รายรับ (บาท)</th></tr></thead>
+                    <tbody>@foreach (var d in Model.Daily) { <tr><td>@d.Date.ToString("dd/MM/yyyy")</td><td>@d.Amount.ToString("N2")</td></tr> }</tbody>
+                </table>
+            }
+        </div>
+
+        <div class="staff-card">
+            <h2>การจองแยกตามสถานะ</h2>
+            @if (!Model.StatusCounts.Any()) { <p>ไม่มีการจองในช่วงนี้</p> }
+            else
+            {
+                <script type="application/json" data-chart data-height="240">@Json.Serialize(new { kind = "doughnut", unit = "รายการ", labels = Model.StatusCounts.Select(s => ThaiLabels.BookingStatus(s.Status)), series = new[] { new { name = "การจอง", data = Model.StatusCounts.Select(s => (decimal)s.Count), colors = Model.StatusCounts.Select(s => s.Status switch { "CONFIRMED" => "#3f8f5e", "CHECKED_IN" => "#5f3d8e", "CHECKED_OUT" => "#9a95a8", "PENDING" => "#e3c57e", "CANCELLED" => "#c0566a", "NO_SHOW" => "#a2442d", _ => "#7f98a8" }) } } })</script>
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>สถานะ</th><th>จำนวน</th></tr></thead>
+                    <tbody>@foreach (var s in Model.StatusCounts) { <tr><td><span class="cx-badge cx-badge--@s.Status">@ThaiLabels.BookingStatus(s.Status)</span></td><td>@s.Count</td></tr> }</tbody>
+                </table>
+            }
+        </div>
+
+        <div class="staff-card">
+            <h2>บริการเสริมที่ขายได้ (เฉพาะการจองที่ยืนยันแล้ว)</h2>
+            @if (!Model.Services.Any()) { <p>ไม่มีรายการ</p> }
+            else
+            {
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>บริการ</th><th>จำนวน</th><th>ยอดขาย (บาท)</th></tr></thead>
+                    <tbody>@foreach (var s in Model.Services) { <tr><td>@s.Name</td><td>@s.Qty</td><td>@s.Total.ToString("N2")</td></tr> }</tbody>
+                </table>
+            }
+        </div>
+    }
+</div>

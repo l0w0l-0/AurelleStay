@@ -1,0 +1,101 @@
+@model pameka_7033_l005.ViewModels.PromoPublicViewModel
+@using pameka_7033_l005.Helpers
+@* Part 49: การ์ดโปรโมชั่น/คูปองแบบตั๋ว — ใช้ในหน้าโปรโมชั่น หน้าแรก (แบนเนอร์) และหน้าจอง
+   ViewData["Compact"] = true → ย่อสำหรับแบนเนอร์/หน้าจอง · ViewData["ReturnUrl"] = หน้าที่จะกลับหลังกดเก็บ *@
+@{
+    var p = Model;
+    var today = DateOnly.FromDateTime(AppClock.Today);
+    var compact = ViewData["Compact"] is true;
+    var ret = ViewData["ReturnUrl"] as string ?? (Context.Request.Path + Context.Request.QueryString);
+    var isCustomer = User.IsInRole(RoleNames.Customer);
+    var anon = !(User.Identity?.IsAuthenticated ?? false);
+    string[] mo = { "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค." };
+    string D(DateOnly d) => $"{d.Day} {mo[d.Month - 1]}" + (d.Year != today.Year ? $" {d.Year + 543}" : "");
+    // วันที่ที่ใช้ค้นหาห้องว่างให้ตรงเงื่อนไขของโปร
+    var ci = p.Start is { } s && s > today ? s : p.MinAdvanceDays is { } a ? today.AddDays(a) : today.AddDays(1);
+    if (p.End is { } e0 && ci > e0) ci = e0;
+    var co = ci.AddDays(Math.Max(1, p.MinNights ?? 1));
+    // นับถอยหลัง: ช่วงเก็บคูปอง (เปิดอยู่ → ถึงวันปิด, เร็ว ๆ นี้ → ถึงวันเปิด)
+    DateOnly? cdTo = p.ClaimState == "open" ? p.ClaimUntil : p.ClaimState == "soon" ? p.ClaimFrom : null;
+    var cdIso = cdTo is { } t ? (p.ClaimState == "open" ? t.AddDays(1) : t).ToString("yyyy-MM-dd") + "T00:00:00+07:00" : null;
+    var stateLabel = p.Claimable switch
+    {
+        true when p.UsedUp => "ใช้สิทธิ์แล้ว",
+        true when p.Claimed => "เก็บแล้ว · ใช้ให้อัตโนมัติ",
+        true when p.ClaimState == "soon" => "เร็ว ๆ นี้",
+        true when p.ClaimState == "soldout" => "หมดแล้ว",
+        true => "คูปองกดเก็บ",
+        _ => "ลดอัตโนมัติ"
+    };
+}
+<article class="cp-card cp-card--@p.Theme @(compact ? "cp-card--compact" : "") @(p.Claimed ? "is-claimed" : "") @(p.Upcoming ? "is-soon" : "")" id="coupon-@p.Id">
+    <div class="cp-card__stub" aria-hidden="true">
+        <b>@p.Percent.ToString("0.##")<small>%</small></b>
+        <span>ส่วนลด</span>
+    </div>
+    <div class="cp-card__body">
+        <div class="cp-card__top">
+            <span class="cp-tag @(p.Claimable ? "cp-tag--claim" : "cp-tag--auto")">@stateLabel</span>
+            @if (p.Remaining is { } r && r <= 50 && !p.Claimed && p.ClaimState != "soon") { <span class="cp-left">เหลือ @r สิทธิ์</span> }
+        </div>
+        <h3 class="cp-name">@p.Name</h3>
+        <p class="cp-pct-text">ลด @p.Percent.ToString("0.##")%@(p.MaxDiscount is { } cap ? $" สูงสุด {cap:N0} บาท" : "")</p>
+        @if (!compact && p.Description != null) { <p class="cp-desc">@p.Description</p> }
+        @if (!compact)
+        {
+            <ul class="cp-cond">
+                @foreach (var c in p.Condition.Split(" · ", StringSplitOptions.RemoveEmptyEntries)) { <li>@c</li> }
+            </ul>
+        }
+        <p class="cp-dates">
+            @if (p.Start.HasValue || p.End.HasValue) { <span>เข้าพัก @(p.Start is { } ss ? D(ss) : "วันนี้") – @(p.End is { } ee ? D(ee) : "ไม่มีกำหนด")</span> }
+            @if (p.Claimable && p.ClaimState is "open" or "soon" && !p.Claimed && (p.ClaimFrom.HasValue || p.ClaimUntil.HasValue))
+            {
+                <span>เก็บได้ @(p.ClaimFrom is { } f ? D(f) : "วันนี้") – @(p.ClaimUntil is { } u ? D(u) : "จนกว่าจะหมด")</span>
+            }
+        </p>
+        @if (cdIso != null && !p.Claimed)
+        {
+            <p class="cp-countdown" data-countdown="@cdIso" data-cd-label="@(p.ClaimState == "open" ? "ปิดเก็บใน" : "เปิดเก็บใน")">
+                @(p.ClaimState == "open" ? "เก็บได้ถึง " + D(cdTo!.Value) : "เปิดให้เก็บ " + D(cdTo!.Value))
+            </p>
+        }
+        <div class="cp-actions">
+            @if (p.Claimable && !p.Claimed && p.ClaimState == "open")
+            {
+                if (isCustomer)
+                {
+                    <form method="post" asp-controller="Promotions" asp-action="Claim" class="cp-claim">
+                        <input type="hidden" name="id" value="@p.Id" />
+                        <input type="hidden" name="returnUrl" value="@ret" />
+                        <button type="submit" class="cx-btn cx-btn--sun" data-claim="@p.Id">เก็บคูปอง</button>
+                    </form>
+                }
+                else if (anon)
+                {
+                    <a class="cx-btn cx-btn--sun" asp-controller="Account" asp-action="Login" asp-route-returnUrl="@($"/Promotions#coupon-{p.Id}")">เข้าสู่ระบบเพื่อเก็บ</a>
+                }
+                else { <span class="cp-note">เฉพาะบัญชีลูกค้า</span> }
+            }
+            else if (p.Claimable && p.ClaimState == "soon" && !p.Claimed)
+            {
+                <span class="cp-note">ยังไม่เปิดให้เก็บ</span>
+            }
+            @if (!compact || p.Claimed || !p.Claimable)
+            {
+                if (p.Type is "BIRTHDAY" or "ANNIVERSARY")
+                {
+                    <a asp-controller="Settings" asp-action="Index" class="cx-btn cx-btn--ghost">ตั้ง@(p.Type == "BIRTHDAY" ? "วันเกิด" : "วันครบรอบ")ในโปรไฟล์</a>
+                }
+                else if (p.Type == "MEMBER" && anon)
+                {
+                    <a asp-controller="Account" asp-action="Login" asp-route-tab="register" class="cx-btn cx-btn--ghost">สมัครสมาชิกฟรี</a>
+                }
+                else if (!p.UsedUp && ViewData["NoSearch"] is not true)
+                {
+                    <a asp-controller="Rooms" asp-action="Index" asp-route-checkIn="@ci.ToString("yyyy-MM-dd")" asp-route-checkOut="@co.ToString("yyyy-MM-dd")" class="cx-btn cx-btn--ghost">ค้นหาห้องว่าง</a>
+                }
+            }
+        </div>
+    </div>
+</article>

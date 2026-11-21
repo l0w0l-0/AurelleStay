@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>1025cf19-19a1-40fd-ac36-400e635d6d0b</UserSecretsId>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <!-- ระบุเวอร์ชันตรง: 2.4.0 ที่ Pomelo ดึงมามีช่องโหว่ GHSA-473q-m89c-ghf8 (คำเตือน NU1902) — 2.6.x ยังเข้ากันกับ Pomelo 9 -->
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- สคริปต์ฐานข้อมูลไปกับไฟล์ publish (ระบบใช้ไฟล์ตัวอย่างห้องตอนฐานข้อมูลยังว่าง) -->
+    <None Update="Database\*.sql" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
+

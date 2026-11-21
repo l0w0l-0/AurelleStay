@@ -1,0 +1,30 @@
+@model ErrorViewModel
+@{
+    var notFound = Model.StatusCode == 404;
+    ViewData["Title"] = notFound ? "ไม่พบหน้า" : "เกิดข้อผิดพลาด";
+    Layout = "_Homelayout";
+}
+
+<div class="cx-wrap cx-page cx-errorpage">
+    <p class="cx-errorcode">@Model.StatusCode</p>
+    @if (notFound)
+    {
+        <h1>ไม่พบหน้าที่คุณต้องการ</h1>
+        <p>ลิงก์อาจพิมพ์ผิด หรือหน้านี้ถูกย้าย/ลบไปแล้ว</p>
+    }
+    else if (Model.StatusCode >= 500)
+    {
+        <h1>ระบบขัดข้องชั่วคราว</h1>
+        <p>ขออภัยในความไม่สะดวก กรุณาลองใหม่อีกครั้ง หากยังพบปัญหาโปรดติดต่อเจ้าหน้าที่</p>
+        @if (Model.ShowRequestId) { <p><small>รหัสอ้างอิง: <code>@Model.RequestId</code></small></p> }
+    }
+    else
+    {
+        <h1>ไม่สามารถทำรายการนี้ได้</h1>
+        <p>คำขอไม่ถูกต้อง กรุณากลับไปลองใหม่อีกครั้ง</p>
+    }
+    <p class="cx-errorlinks">
+        <a href="/" class="cx-btn">กลับหน้าแรก</a>
+        <a href="/Rooms" class="cx-btn cx-btn--ghost">ดูห้องพัก</a>
+    </p>
+</div>

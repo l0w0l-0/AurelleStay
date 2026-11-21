@@ -1,0 +1,34 @@
+@model pameka_7033_l005.ViewModels.ReviewFormViewModel
+@{
+    ViewData["Title"] = "เขียนรีวิว";
+    Layout = "_Homelayout";
+}
+
+<div class="cx-wrap cx-page">
+    <h1>เขียนรีวิว</h1>
+    <partial name="_Flash" />
+    <form asp-action="Create" method="post" class="cx-box">
+        <input type="hidden" asp-for="BookingId" />
+        <p>@Model.Summary</p>
+        <div asp-validation-summary="ModelOnly" class="cx-alert cx-alert--error"></div>
+
+        <fieldset>
+            <legend>ให้คะแนน</legend>
+            @for (var i = 5; i >= 1; i--)
+            {
+                <label style="margin-right:14px"><input type="radio" name="Rating" value="@i" checked="@(Model.Rating == i)" /> @i ดาว</label>
+            }
+            <span asp-validation-for="Rating" class="cx-error"></span>
+        </fieldset>
+
+        <label class="cx-field">ความคิดเห็น (ไม่เกิน 500 ตัวอักษร)
+            <textarea asp-for="Comment" rows="4" maxlength="500"></textarea>
+            <span asp-validation-for="Comment" class="cx-error"></span>
+        </label>
+
+        <p>
+            <button type="submit" class="cx-btn">ส่งรีวิว</button>
+            <a asp-controller="Booking" asp-action="MyBookings" class="cx-btn cx-btn--ghost">ยกเลิก</a>
+        </p>
+    </form>
+</div>

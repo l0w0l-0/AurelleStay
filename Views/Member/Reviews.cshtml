@@ -1,0 +1,51 @@
+@model pameka_7033_l005.ViewModels.MyReviewsViewModel
+@{
+    ViewData["Title"] = "รีวิวของฉัน";
+    ViewData["NoIndex"] = true;
+    Layout = "_Homelayout";
+    string[] months = { "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค." };
+    string D(DateOnly d) => $"{d.Day} {months[d.Month - 1]} {d.Year}";
+}
+
+<div class="cx-wrap cx-page">
+    <partial name="_MemberNav" />
+    <div class="mm-head">
+        <div>
+            <h1>รีวิวของฉัน</h1>
+            <p class="cx-hint">รีวิวช่วยผู้เข้าพักคนอื่นตัดสินใจ · 1 การเข้าพัก เขียนได้ 1 รีวิว</p>
+        </div>
+        <a asp-controller="Reviews" asp-action="Index" class="cx-btn cx-btn--ghost">รีวิวทั้งหมดของโรงแรม</a>
+    </div>
+
+    @foreach (var b in Model.ToReview)
+    {
+        <div class="mm-todo">
+            <span><b>การเข้าพัก @D(b.CheckIn) – @D(b.CheckOut)</b> · การจอง #@b.BookingId · รอรีวิวจากคุณ</span>
+            <a asp-controller="Reviews" asp-action="Create" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">เขียนรีวิว</a>
+        </div>
+    }
+
+    @if (!Model.Written.Any() && !Model.ToReview.Any())
+    {
+        <div class="cx-empty cx-empty--page">
+            <b>ยังไม่มีรีวิว</b>
+            <span>หลังเช็คเอาท์ คุณจะเขียนรีวิวการเข้าพักได้จากหน้านี้</span>
+            <a asp-controller="Booking" asp-action="MyBookings" class="cx-btn cx-btn--ghost cx-btn--small">ไปที่การจองของฉัน</a>
+        </div>
+    }
+    else if (Model.Written.Any())
+    {
+        <ul class="mm-list">
+            @foreach (var r in Model.Written)
+            {
+                <li class="mm-item">
+                    <header>
+                        <span class="mm-stars" aria-label="@r.Rating ดาว">@(new string('★', r.Rating) + new string('☆', 5 - r.Rating))</span>
+                        <small>การเข้าพัก @D(r.CheckIn) – @D(r.CheckOut) · รีวิวเมื่อ @r.CreatedAt.ToString("dd/MM/yyyy")</small>
+                    </header>
+                    <p>@(string.IsNullOrWhiteSpace(r.Comment) ? "(ให้คะแนนโดยไม่มีข้อความ)" : r.Comment)</p>
+                </li>
+            }
+        </ul>
+    }
+</div>

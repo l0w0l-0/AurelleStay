@@ -1,0 +1,111 @@
+@model pameka_7033_l005.ViewModels.FrontDeskPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "เช็คอิน / เช็คเอาท์";
+    Layout = "_Adminlayout";
+    var today = DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);
+    // บอกระยะเวลาแบบคนอ่าน: วันนี้ / พรุ่งนี้ / อีก N วัน / เลยมา N วัน
+    string When(DateOnly d) { var n = d.DayNumber - today.DayNumber; return n == 0 ? "วันนี้" : n == 1 ? "พรุ่งนี้" : n > 1 ? $"อีก {n} วัน" : $"เลยมา {-n} วัน"; }
+}
+
+<div class="dashboard">
+    <h1>เช็คอิน / เช็คเอาท์</h1>
+    <partial name="_Flash" />
+    <p>การจองที่ชำระแล้ว (รอเข้าพัก) และผู้ที่พักอยู่ เช็คอินได้ตั้งแต่วันเข้าพัก · ลูกค้าที่ไม่มาตามกำหนด บันทึก "ไม่มาเข้าพัก" ได้ตั้งแต่วันถัดไป เพื่อเปิดห้องให้จองต่อ</p>
+
+    <div class="fd-tools">
+        <nav class="fd-tabs" aria-label="กรองรายการ">
+            @foreach (var (key, label, n) in new[] { ("all", "ทั้งหมด", Model.CountAll), ("in", "ต้องเช็คอินวันนี้", Model.CountIn), ("out", "ต้องเช็คเอาท์", Model.CountOut), ("late", "เลยวันเข้าพัก ยังไม่มา", Model.CountLate) })
+            {
+                <a asp-action="Index" asp-route-view="@(key == "all" ? null : key)" asp-route-q="@Model.Q" class="fd-tab@(Model.View == key ? " active" : "")">@label <b>@n</b></a>
+            }
+        </nav>
+        <form method="get" asp-action="Index" class="fd-search" role="search">
+            @if (Model.View != "all") { <input type="hidden" name="view" value="@Model.View" /> }
+            <input type="search" name="q" value="@Model.Q" placeholder="ชื่อ · เบอร์ · #เลขจอง · ห้อง" aria-label="ค้นหา" />
+            <button type="submit" class="cx-btn cx-btn--small">ค้นหา</button>
+            @if (!string.IsNullOrEmpty(Model.Q)) { <a asp-action="Index" asp-route-view="@(Model.View == "all" ? null : Model.View)" class="cx-btn cx-btn--ghost cx-btn--small">ล้าง</a> }
+        </form>
+    </div>
+
+    <div class="staff-card">
+        @if (!Model.Rows.Any())
+        {
+            <div class="cx-empty">
+                <b>@(string.IsNullOrEmpty(Model.Q) && Model.View == "all" ? "ไม่มีการจองที่รอเข้าพักหรือกำลังพักอยู่" : "ไม่พบรายการที่ตรงกับเงื่อนไข")</b>
+                <span>ลูกค้า Walk-in จองได้จากปุ่ม "จองห้องให้ลูกค้า"</span>
+            </div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>การจอง</th><th>ลูกค้า</th><th>ห้อง</th><th>เข้าพัก</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td><a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@r.BookingId">#@r.BookingId</a></td>
+                            <td>@r.Customer<br /><small>@r.Phone</small>
+                                @if (r.IdCheckPromo != null && r.Status == "CONFIRMED") { <br /><span class="fd-idcheck" title="ตรวจบัตรประชาชนให้ตรงเงื่อนไขโปรก่อนเช็คอิน">ตรวจบัตร: @r.IdCheckPromo</span> }
+                                @if (r.Status is "CONFIRMED" or "PENDING" && (r.ArrivalTime != null || r.GuestRequest != null))
+                                {
+                                    <br /><span class="fd-prearr" title="ลูกค้าเช็คอินออนไลน์ล่วงหน้า">@(r.ArrivalTime != null ? $"มาถึงประมาณ {r.ArrivalTime} น." : "")@(r.ArrivalTime != null && r.GuestRequest != null ? " · " : "")@(r.GuestRequest != null ? "ขอ: " + r.GuestRequest : "")</span>
+                                }
+                            </td>
+                            <td>@(string.IsNullOrWhiteSpace(r.Rooms) ? "—" : r.Rooms)</td>
+                            <td>@r.CheckIn.ToString("dd/MM/yy") – @r.CheckOut.ToString("dd/MM/yy")
+                                <br /><small class="fd-when@(r.Status == "CHECKED_IN" ? (r.CheckOut <= today ? " is-due" : "") : r.CheckIn <= today ? " is-due" : "")">@(r.Status == "CHECKED_IN" ? "เช็คเอาท์ " + When(r.CheckOut) : "เข้าพัก " + When(r.CheckIn))</small></td>
+                            <td>
+                                <span class="cx-badge cx-badge--@r.Status">@ThaiLabels.BookingStatus(r.Status)</span>
+                                @if (r.PendingRefund) { <br /><small>มีคำขอคืนเงินค้างอยู่</small> }
+                            </td>
+                            <td>
+                                @if (r.CanCheckIn)
+                                {
+                                    <form asp-action="CheckIn" method="post" class="staff-inline" onsubmit="return confirm('เช็คอินการจอง #@r.BookingId ?');">
+                                        <input type="hidden" name="id" value="@r.BookingId" />
+                                        <button type="submit" class="cx-btn cx-btn--small">เช็คอิน</button>
+                                    </form>
+                                }
+                                @if (r.CanCheckOut)
+                                {
+                                    <form asp-action="CheckOut" method="post" class="staff-inline" onsubmit="return confirm('เช็คเอาท์การจอง #@r.BookingId ?');">
+                                        <input type="hidden" name="id" value="@r.BookingId" />
+                                        <button type="submit" class="cx-btn cx-btn--small">เช็คเอาท์</button>
+                                    </form>
+                                }
+                                @if (r.CanMarkNoShow)
+                                {
+                                    <form asp-action="MarkNoShow" method="post" class="staff-inline" onsubmit="return confirm('บันทึกว่าการจอง #@r.BookingId ไม่มาเข้าพัก ?\nห้องจะเปิดให้จองต่อทันที (เงินที่ชำระแล้วยังคงอยู่)');">
+                                        <input type="hidden" name="id" value="@r.BookingId" />
+                                        <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ไม่มาเข้าพัก</button>
+                                    </form>
+                                }
+                                @if (r.CanUndoNoShow)
+                                {
+                                    <form asp-action="UndoNoShow" method="post" class="staff-inline" onsubmit="return confirm('ลูกค้ามาแล้ว / บันทึกผิด — คืนสถานะการจอง #@r.BookingId เป็นจองสำเร็จ ?');">
+                                        <input type="hidden" name="id" value="@r.BookingId" />
+                                        <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ลูกค้ามาแล้ว (คืนสถานะ)</button>
+                                    </form>
+                                }
+                                @if (!r.CanCheckIn && !r.CanCheckOut && !r.CanMarkNoShow && !r.CanUndoNoShow && !r.CanSendDelivery)
+                                {
+                                    <small class="fd-hint">@(r.PendingRefund ? "รอฝ่ายบัญชีพิจารณาคืนเงิน" : r.Status == "CONFIRMED" && r.CheckIn > today ? $"เช็คอินได้ตั้งแต่ {r.CheckIn:dd/MM/yy}" : "—")</small>
+                                }
+                                @if (r.CanSendDelivery)
+                                {
+                                    <form asp-action="SendDelivery" method="post" class="staff-inline">
+                                        <input type="hidden" name="id" value="@r.BookingId" />
+                                        <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ส่งงานส่งของ (@r.UnsentServices)</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

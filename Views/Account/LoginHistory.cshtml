@@ -1,0 +1,50 @@
+@model pameka_7033_l005.ViewModels.LoginHistoryPageViewModel
+@{
+    ViewData["Title"] = "ประวัติเข้าสู่ระบบ";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>ประวัติเข้าสู่ระบบ</h1>
+    <partial name="_Flash" />
+    <p>เรียงจากล่าสุด · ทั้งหมด @Model.TotalCount.ToString("N0") ครั้ง (เวลาตามเครื่องเซิร์ฟเวอร์)</p>
+
+    @if (Model.TotalCount > 0)
+    {
+        <form asp-action="ClearLoginHistory" method="post" class="staff-card lh-clear"
+              onsubmit="var s=this.keepDays; return confirm(s.value==='0' ? 'ล้างประวัติเข้าสู่ระบบทั้งหมด? กู้คืนไม่ได้' : 'ล้างประวัติที่เก่ากว่า ' + s.value + ' วัน? กู้คืนไม่ได้');">
+            <label>ล้างประวัติ
+                <select name="keepDays" class="form-select">
+                    <option value="90">เก่ากว่า 90 วัน</option>
+                    <option value="30">เก่ากว่า 30 วัน</option>
+                    <option value="0">ทั้งหมด</option>
+                </select>
+            </label>
+            <button type="submit" class="btn btn-outline-danger">ล้างประวัติ</button>
+            <small>การล้างจะถูกบันทึกในบันทึกกิจกรรม · ไม่กระทบบัญชีผู้ใช้</small>
+        </form>
+    }
+
+    <div class="staff-card">
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>#</th><th>รหัสผู้ใช้</th><th>ชื่อ-นามสกุล</th><th>อีเมล</th><th>เวลาเข้าสู่ระบบ</th></tr></thead>
+                <tbody>
+                @foreach (var h in Model.Items)
+                {
+                    <tr><td>@h.Id</td><td>@h.UserId</td><td>@h.FullName</td><td>@h.Email</td><td>@DateTime.SpecifyKind(h.LoggedInAtUtc, DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td></tr>
+                }
+                @if (!Model.Items.Any()) { <tr><td colspan="5" class="text-center">ยังไม่มีประวัติการเข้าสู่ระบบ</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="staff-form">
+                @if (Model.Page > 1) { <a asp-action="LoginHistory" asp-route-page="@(Model.Page - 1)" class="cx-btn cx-btn--ghost cx-btn--small">« ก่อนหน้า</a> }
+                <span>หน้า @Model.Page / @Model.TotalPages</span>
+                @if (Model.Page < Model.TotalPages) { <a asp-action="LoginHistory" asp-route-page="@(Model.Page + 1)" class="cx-btn cx-btn--ghost cx-btn--small">ถัดไป »</a> }
+            </nav>
+        }
+    </div>
+</div>

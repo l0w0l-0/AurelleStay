@@ -1,0 +1,102 @@
+@model List<pameka_7033_l005.ViewModels.MyBookingItemViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "การจองของฉัน";
+    Layout = "_Homelayout";
+    string[] months = { "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค." };
+    // แบ่งแท็บ: กำลังจะมาถึง (เรียงวันเข้าพักใกล้สุดก่อน) / ที่ผ่านมา / ยกเลิก
+    var today = DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);
+    string Group(pameka_7033_l005.ViewModels.MyBookingItemViewModel b) =>
+        b.Status == "CANCELLED" ? "cancelled"
+        : b.Status is "CHECKED_OUT" or "NO_SHOW" || b.CheckOut < today ? "past" : "upcoming";
+    var tab = Context.Request.Query["tab"].ToString();
+    if (tab is not ("upcoming" or "past" or "cancelled")) tab = Model.Any(b => Group(b) == "upcoming") || !Model.Any() ? "upcoming" : "past";
+    var counts = Model.GroupBy(Group).ToDictionary(g => g.Key, g => g.Count());
+    var shown = Model.Where(b => Group(b) == tab).ToList();
+    shown = tab == "upcoming" ? shown.OrderBy(b => b.CheckIn).ThenBy(b => b.BookingId).ToList() : shown.OrderByDescending(b => b.CheckIn).ToList();
+    var tabs = new[] { ("upcoming", "กำลังจะมาถึง"), ("past", "ที่ผ่านมา"), ("cancelled", "ยกเลิก") };
+}
+
+<div class="cx-wrap cx-page">
+    <partial name="_MemberNav" />
+    <h1>การจองของฉัน</h1>
+
+    <partial name="_Flash" />
+
+    <p><a asp-action="Create" class="cx-btn">จองห้องพักใหม่</a></p>
+
+    @if (!Model.Any())
+    {
+        <div class="cx-empty cx-empty--page">
+            <b>ยังไม่มีการจอง</b>
+            <span>เลือกวันเข้าพักและห้องที่ชอบ แล้วจองได้ในไม่กี่ขั้นตอน สมาชิกรับส่วนลดทุกการจอง</span>
+            <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">ดูห้องพัก</a>
+        </div>
+    }
+    else
+    {
+        <nav class="cx-tabs" aria-label="กลุ่มการจอง">
+            @foreach (var (k, label) in tabs)
+            {
+                <a href="?tab=@k" class="@(k == tab ? "is-on" : "")" aria-current="@(k == tab ? "page" : null)">@label <span>@(counts.GetValueOrDefault(k))</span></a>
+            }
+        </nav>
+        @if (!shown.Any())
+        {
+            <div class="cx-empty cx-empty--page">
+                <b>@(tab == "upcoming" ? "ยังไม่มีการเข้าพักที่กำลังจะมาถึง" : tab == "past" ? "ยังไม่มีการเข้าพักที่ผ่านมา" : "ไม่มีการจองที่ยกเลิก")</b>
+                @if (tab == "upcoming") { <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">ค้นหาห้องว่าง</a> }
+            </div>
+        }
+        <div class="cx-bookings">
+            @foreach (var b in shown)
+            {
+                <article class="cx-bk">
+                    <div class="cx-date" aria-label="วันเข้าพัก @b.CheckIn.ToString("dd/MM/yyyy")">
+                        <b>@b.CheckIn.Day</b><span>@months[b.CheckIn.Month - 1]</span>
+                    </div>
+                    <div>
+                        <h2><a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@b.BookingId">การจอง #@b.BookingId</a><span class="cx-badge cx-badge--@b.Status">@ThaiLabels.BookingStatus(b.Status)</span></h2>
+                        <p>@b.CheckIn.ToString("dd/MM/yyyy") ถึง @b.CheckOut.ToString("dd/MM/yyyy") @(b.Rooms.Any() ? " · ห้อง " + string.Join(", ", b.Rooms) : "") · @(b.CheckOut.DayNumber - b.CheckIn.DayNumber) คืน</p>
+                        @if (b.PromoName != null)
+                        {
+                            <p>ใช้โปร @b.PromoName ลด @b.Discount.ToString("N2") บาท</p>
+                        }
+                        <p>จองเมื่อ @b.BookedAt.ToString("dd/MM/yyyy HH:mm")</p>
+                    </div>
+                    <div class="cx-total">
+                        <b>@b.Net.ToString("N2") บาท</b>
+                        @if (b.PendingPayment) { <span class="cx-badge cx-badge--PENDING">รอตรวจสอบการชำระเงิน</span> }
+                        @if (b.PendingRefund) { <span class="cx-badge cx-badge--PENDING">รอคืนเงิน</span> }
+                        @if (b.Refunded) { <span class="cx-badge cx-badge--REFUNDED">คืนเงินแล้ว</span> }
+                        @if (b.Reviewed) { <span class="cx-badge cx-badge--CONFIRMED">รีวิวแล้ว</span> }
+                        <a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@b.BookingId" class="cx-btn cx-btn--ghost cx-btn--small">รายละเอียด</a>
+                        @if (BookingWorkflow.CanReview(b.Status, b.Reviewed))
+                        {
+                            <a asp-controller="Reviews" asp-action="Create" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">เขียนรีวิว</a>
+                        }
+                        @if (BookingWorkflow.CanPay(b.Status, b.Flags))
+                        {
+                            <a asp-action="Pay" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">ชำระเงิน</a>
+                            <span class="cx-paydue">@(b.LastRejectedAt != null ? "สลิปถูกปฏิเสธ แนบใหม่ภายใน" : "ชำระภายใน") @BookingExpiry.Deadline(b.BookedAt, b.CheckIn, b.LastRejectedAt).ToString("dd/MM HH:mm") น.</span>
+                        }
+                        @if (BookingWorkflow.CanCancelDirect(b.Status, b.Flags))
+                        {
+                            <form asp-action="Cancel" method="post" onsubmit="return confirm('ยืนยันยกเลิกการจองนี้ ?');">
+                                <input type="hidden" name="id" value="@b.BookingId" />
+                                <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิกการจอง</button>
+                            </form>
+                        }
+                        @if (BookingWorkflow.CanCustomerRequestRefund(b.Status, b.Flags, b.CheckOut, DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today)))
+                        {
+                            <form asp-action="RequestRefund" method="post" onsubmit="return confirm('ขอยกเลิกและคืนเงินการจองนี้ ?');">
+                                <input type="hidden" name="id" value="@b.BookingId" />
+                                <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ขอคืนเงิน</button>
+                            </form>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>

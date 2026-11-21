@@ -1,0 +1,93 @@
+@model pameka_7033_l005.ViewModels.UserListPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ลูกค้า / ผู้ใช้";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>ลูกค้า / ผู้ใช้ทั้งหมด</h1>
+    <partial name="_Flash" />
+    @if (TempData["NewPassword"] is string pw)
+    {
+        <div class="staff-cred">
+            <strong>แจ้งรหัสผ่านใหม่ให้ผู้ใช้ (แสดงครั้งเดียว ให้ผู้ใช้เปลี่ยนรหัสเองที่หน้าตั้งค่า)</strong>
+            <div>อีเมล: <code>@TempData["NewEmail"]</code></div>
+            <div>รหัสผ่าน: <code>@pw</code></div>
+        </div>
+    }
+    <p>พบ @Model.TotalCount รายการ · เพิ่มหรือเปลี่ยนบทบาทพนักงานได้ที่ <a asp-controller="AdminStaff" asp-action="Index">จัดการพนักงาน</a></p>
+
+    <form method="get" asp-controller="Account" asp-action="UserList" class="staff-form" style="margin-bottom:14px">
+        <input type="text" name="q" value="@Model.Query" placeholder="ค้นหาชื่อ / อีเมล / เบอร์" aria-label="ค้นหาชื่อ / อีเมล / เบอร์" />
+        <select name="role" onchange="this.form.submit()" aria-label="บทบาท">
+            <option value="">ทุกบทบาท</option>
+            <option value="customer" selected="@(Model.Role == "customer")">ลูกค้า</option>
+            <option value="staff" selected="@(Model.Role == "staff")">พนักงานทั้งหมด</option>
+            @foreach (var r in RoleNames.Staff)
+            {
+                <option value="@r" selected="@(Model.Role == r)">@RoleNames.Label(r)</option>
+            }
+        </select>
+        <button type="submit" class="cx-btn">ค้นหา</button>
+        @if (!string.IsNullOrEmpty(Model.Query) || !string.IsNullOrEmpty(Model.Role))
+        {
+            <a asp-action="UserList" class="cx-btn cx-btn--ghost">ล้าง</a>
+        }
+    </form>
+
+    <div class="staff-card">
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>#</th><th>ชื่อ-นามสกุล</th><th>ติดต่อ</th><th>บทบาท</th><th>สมัครเมื่อ</th><th>จัดการ</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>@item.UserId</td>
+                        <td>@item.FullName</td>
+                        <td>@item.Email<br /><small class="text-muted">@item.Phone</small></td>
+                        <td>@RoleNames.Label(item.RoleName)@if (item.IsMember) {<br /><small class="text-muted">สมาชิก</small>}</td>
+                        <td>@item.CreatedAt.ToString("dd/MM/yyyy")</td>
+                        <td>
+                            @if (item.UserId == (int)(ViewBag.MeId ?? 0))
+                            {
+                                <a asp-controller="Settings" asp-action="Index" class="cx-btn cx-btn--small">ตั้งค่าของฉัน</a>
+                            }
+                            else
+                            {
+                                <a asp-action="EditUser" asp-route-userId="@item.UserId" class="cx-btn cx-btn--small">แก้ไข</a>
+                                <form asp-controller="AdminStaff" asp-action="ResetPassword" method="post" class="staff-inline"
+                                      data-msg="ออกรหัสผ่านใหม่ให้ @item.FullName ? รหัสเดิมจะใช้ไม่ได้ทันที" onsubmit="return confirm(this.dataset.msg);">
+                                    <input type="hidden" name="userId" value="@item.UserId" />
+                                    <input type="hidden" name="back" value="users" />
+                                    <button type="submit" class="cx-btn cx-btn--small">ออกรหัสใหม่</button>
+                                </form>
+                            }
+                            @if (!RoleNames.IsStaff(item.RoleName))
+                            {
+                                <form asp-action="DeleteUser" method="post" class="staff-inline" data-msg="ยืนยันลบผู้ใช้ @item.FullName ?" onsubmit="return confirm(this.dataset.msg);">
+                                    <input type="hidden" name="userId" value="@item.UserId" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center">ไม่พบข้อมูลผู้ใช้</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="staff-form">
+                @if (Model.Page > 1) { <a asp-action="UserList" asp-route-q="@Model.Query" asp-route-role="@Model.Role" asp-route-page="@(Model.Page - 1)" class="cx-btn cx-btn--ghost cx-btn--small">« ก่อนหน้า</a> }
+                <span>หน้า @Model.Page / @Model.TotalPages</span>
+                @if (Model.Page < Model.TotalPages) { <a asp-action="UserList" asp-route-q="@Model.Query" asp-route-role="@Model.Role" asp-route-page="@(Model.Page + 1)" class="cx-btn cx-btn--ghost cx-btn--small">ถัดไป »</a> }
+            </nav>
+        }
+    </div>
+</div>

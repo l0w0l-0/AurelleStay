@@ -1,0 +1,118 @@
+@model List<pameka_7033_l005.ViewModels.ServiceItemViewModel>
+@using System.Text.RegularExpressions
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "บริการเสริม";
+    Layout = "_Homelayout";
+    // หมวดจากฐานข้อมูล (ผู้จัดการเลือก) — ถ้ายังไม่เลือก ระบบเดาจากชื่อ · ชื่อที่ไม่เข้ากลุ่มไหนไปอยู่ "บริการอื่น ๆ"
+    var groups = ServiceCategories.All.Select(c => (Key: c.Key.ToLowerInvariant(), c.Eyebrow, Title: c.Label, c.Lead)).ToArray();
+    var byGroup = Model.GroupBy(s => ServiceCategories.Resolve(s.Category, s.Name).ToLowerInvariant()).ToDictionary(g => g.Key, g => g.OrderBy(s => s.Price).ToList());
+    var minPrice = Model.Any() ? Model.Min(s => s.Price) : 0;
+    // แยก "(60 นาที)" ออกจากชื่อ มาแสดงเป็นป้ายเวลา
+    (string Name, string? Dur) Split(string n)
+    {
+        var m = Regex.Match(n, @"^(.*?)\s*\(([^()]*\d[^()]*)\)\s*$");
+        return m.Success ? (m.Groups[1].Value, m.Groups[2].Value) : (n, null);
+    }
+}
+@functions {
+    // ไอคอนเส้นอย่างง่าย เลือกตามคำในชื่อบริการ
+    static string Icon(string name)
+    {
+        const string head = """<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">""";
+        if (name.Contains("เตียง")) return head + """<path d="M3 18V8M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg>""";
+        if (name.Contains("เช้า")) return head + """<circle cx="12" cy="13" r="4"/><path d="M12 4v2M4.5 8l1.4 1.4M19.5 8l-1.4 1.4M3 19h18"/></svg>""";
+        if (name.Contains("อาหาร") || name.Contains("เย็น")) return head + """<path d="M4 12h16a8 8 0 0 1-16 0zM8 8c0-1.5 1-1.5 1-3M12 8c0-1.5 1-1.5 1-3M16 8c0-1.5 1-1.5 1-3"/></svg>""";
+        if (name.Contains("นวด")) return head + """<path d="M7 20c0-4 2-6 5-6s5 2 5 6"/><circle cx="12" cy="8" r="3"/><path d="M4 12c1.5-1 3-1 4 0M20 12c-1.5-1-3-1-4 0"/></svg>""";
+        if (name.Contains("สปา")) return head + """<path d="M12 21c-4.5-1.5-7-5-7-9 2.5 0 5 1.2 7 3.5 2-2.3 4.5-3.5 7-3.5 0 4-2.5 7.5-7 9z"/><path d="M12 15.5C10.5 13 10.5 9 12 5c1.5 4 1.5 8 0 10.5z"/></svg>""";
+        return head + """<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>""";
+    }
+}
+
+<section class="sv-hero">
+    <div class="sv-hero__bg" aria-hidden="true"><img src="~/images/rooms/family-suite.jpg" alt="" width="1200" height="800" fetchpriority="high" /></div>
+    <div class="cx-wrap sv-hero__grid">
+        <div class="sv-hero__copy">
+            <p class="cx-eyebrow">The Service Collection</p>
+            <h1>บริการเสริม<br /><em>ระหว่างเข้าพัก</em></h1>
+            <p class="sv-hero__lead">เติมช่วงเวลาพักผ่อนให้สมบูรณ์ เลือกเพิ่มได้ในขั้นตอนจองห้องพัก และชำระรวมกับค่าห้องในครั้งเดียว</p>
+            @if (Model.Any())
+            {
+                <dl class="sv-stats">
+                    <div><dt>บริการ</dt><dd>@Model.Count.ToString("00")</dd></div>
+                    <div><dt>หมวด</dt><dd>@byGroup.Count.ToString("00")</dd></div>
+                    <div><dt>เริ่มต้น</dt><dd>@minPrice.ToString("N0")<small> บาท</small></dd></div>
+                </dl>
+            }
+        </div>
+        <aside class="sv-how" aria-labelledby="sv-how-h">
+            <p class="sv-how__kicker">How it works</p>
+            <h2 id="sv-how-h">เพิ่มบริการใน 3 ขั้น</h2>
+            <ol>
+                <li><b>เลือกห้องพักและวันที่</b><span>ค้นหาห้องว่างตามวันเข้าพัก</span></li>
+                <li><b>ติ๊กบริการที่ต้องการ</b><span>ในหน้าจองห้อง ระบุจำนวนได้</span></li>
+                <li><b>ชำระรวมกับค่าห้อง</b><span>สแกน QR และแนบสลิปครั้งเดียว</span></li>
+            </ol>
+            <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--sun">เลือกห้องพัก</a>
+        </aside>
+    </div>
+</section>
+
+<div class="sv-body">
+    <div class="cx-wrap">
+        @if (!Model.Any())
+        {
+            <div class="cx-empty cx-empty--page"><b>ยังไม่มีบริการเสริมที่เปิดให้บริการ</b><span>ติดต่อเคาน์เตอร์ต้อนรับเพื่อสอบถามบริการระหว่างเข้าพัก</span></div>
+        }
+        @if (byGroup.Count > 1)
+        {
+            <nav class="sv-jump" aria-label="หมวดบริการ">
+                @foreach (var g in groups.Where(g => byGroup.ContainsKey(g.Key)))
+                {
+                    <a href="#sv-@g.Key">@g.Title</a>
+                }
+            </nav>
+        }
+        @{ var no = 0; }
+        @foreach (var g in groups.Where(g => byGroup.ContainsKey(g.Key)))
+        {
+            no++;
+            <section class="sv-menu" id="sv-@g.Key" aria-labelledby="sv-@g.Key-h">
+                <header class="sv-menu__head">
+                    <span class="sv-menu__no" aria-hidden="true">@no.ToString("00")</span>
+                    <p class="cx-eyebrow">@g.Eyebrow</p>
+                    <h2 id="sv-@g.Key-h">@g.Title</h2>
+                    <p class="sv-menu__lead">@g.Lead</p>
+                    <p class="sv-menu__count">@byGroup[g.Key].Count รายการ</p>
+                </header>
+                <ul class="sv-list">
+                    @foreach (var s in byGroup[g.Key])
+                    {
+                        var (name, dur) = Split(s.Name);
+                        <li class="sv-item @(s.ImageUrl != null ? "has-photo" : "")">
+                            @if (s.ImageUrl != null)
+                            {
+                                <span class="sv-item__photo"><img src="@s.ImageUrl" alt="" loading="lazy" width="400" height="300" data-zoom data-zoom-title="@name" /></span>
+                            }
+                            else
+                            {
+                                <span class="sv-item__icon">@Html.Raw(Icon(s.Name))</span>
+                            }
+                            <span class="sv-item__name">
+                                <b>@name</b>
+                                @if (dur != null) { <small>@dur</small> }
+                                @if (s.Description != null) { <span class="sv-item__desc">@s.Description</span> }
+                            </span>
+                            <span class="sv-item__dots" aria-hidden="true"></span>
+                            <span class="sv-item__price"><b>@s.Price.ToString("N0")</b><small>บาท / ห้อง</small></span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+        @if (Model.Any())
+        {
+            <p class="sv-note">ราคาต่อรายการต่อห้อง รวมอยู่ในยอดชำระของการจอง · ส่วนลดสมาชิกและโปรโมชั่นใช้กับค่าห้องเท่านั้น</p>
+        }
+    </div>
+</div>

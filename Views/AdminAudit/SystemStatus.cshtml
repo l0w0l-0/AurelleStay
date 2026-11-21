@@ -1,0 +1,70 @@
+@model pameka_7033_l005.ViewModels.SystemStatusViewModel
+@{
+    ViewData["Title"] = "สถานะระบบ / สำรองข้อมูล";
+    Layout = "_Adminlayout";
+    string Size(long b) => b >= 1L << 30 ? $"{b / (double)(1L << 30):0.0} GB" : b >= 1 << 20 ? $"{b / (double)(1 << 20):0.0} MB" : $"{b / 1024.0:0.#} KB";
+    string Up(TimeSpan t) => t.TotalDays >= 1 ? $"{(int)t.TotalDays} วัน {t.Hours} ชม." : t.TotalHours >= 1 ? $"{(int)t.TotalHours} ชม. {t.Minutes} นาที" : $"{t.Minutes} นาที";
+    var usedPct = Model.DiskTotal is > 0 && Model.DiskFree.HasValue ? 100 - (int)(100 * Model.DiskFree.Value / Model.DiskTotal.Value) : (int?)null;
+}
+
+<div class="dashboard">
+    <h1>สถานะระบบ / สำรองข้อมูล</h1>
+    <partial name="_Flash" />
+
+    <div class="sys-grid">
+        <div class="sys-kpi @(Model.DbOk ? "is-ok" : "is-bad")"><span>ฐานข้อมูล</span><b>@(Model.DbOk ? "เชื่อมต่อปกติ" : "เชื่อมต่อไม่ได้")</b><span>@Model.DbName · MySQL @Model.DbVersion</span></div>
+        <div class="sys-kpi"><span>ขนาดข้อมูลทั้งหมด</span><b>@Size(Model.Tables.Sum(t => t.Bytes))</b><span>@Model.Tables.Count ตาราง · @Model.Tables.Sum(t => t.Rows).ToString("N0") แถว</span></div>
+        <div class="sys-kpi"><span>เวลาเซิร์ฟเวอร์ (ไทย)</span><b>@Model.ServerTime.ToString("dd/MM/yyyy HH:mm:ss")</b><span>ทำงานต่อเนื่อง @Up(Model.Uptime)</span></div>
+        <div class="sys-kpi"><span>พื้นที่ดิสก์</span><b>@(Model.DiskFree is { } f ? "ว่าง " + Size(f) : "-")</b>
+            @if (usedPct is { } u) { <div class="sys-bar" role="img" aria-label="ใช้ไป @u%"><span style="width:@u%"></span></div> }
+        </div>
+        <div class="sys-kpi"><span>สลิปการชำระเงิน</span><b>@Model.SlipFiles.ToString("N0") ไฟล์</b><span>@Size(Model.SlipBytes)</span></div>
+        <div class="sys-kpi"><span>แอปพลิเคชัน</span><b>@Model.Environment</b><span>@Model.Runtime</span></div>
+    </div>
+    @if (Model.DbError != null) { <div class="cx-alert cx-alert--error" role="alert">@Model.DbError</div> }
+
+    <section class="staff-card sys-backup" aria-labelledby="bk-h">
+        <div>
+            <h2 id="bk-h">สำรองข้อมูล</h2>
+            <p class="cx-hint">ดาวน์โหลดไฟล์ .zip ที่มี backup.sql (โครงสร้าง + ข้อมูลทุกตาราง) กู้คืนด้วยคำสั่งในไฟล์ "อ่านก่อน.txt" · ไฟล์มีข้อมูลส่วนบุคคลของลูกค้า เก็บในที่ปลอดภัย
+                <br />สำรองล่าสุด: <b>@(Model.LastBackup?.ToString("dd/MM/yyyy HH:mm") ?? "ยังไม่เคยสำรอง")</b></p>
+        </div>
+        <form asp-action="Backup" method="post"><button type="submit" class="cx-btn">ดาวน์โหลดไฟล์สำรองตอนนี้</button></form>
+    </section>
+
+    <section class="staff-card sys-backup" aria-labelledby="demo-h">
+        <div>
+            <h2 id="demo-h">ข้อมูลลูกค้าตัวอย่าง (สำหรับนำเสนอ)</h2>
+            <p class="cx-hint">สร้างลูกค้าสมมติ 30 คน พร้อมประวัติการจอง การชำระเงิน รีวิว และข้อความติดต่อ ให้หน้ารายงาน กราฟ และรายการต่าง ๆ มีข้อมูลให้ดู
+                · บัญชีใช้อีเมล <code>@pameka_7033_l005.Helpers.DemoData.Domain</code> รหัสผ่าน <code>@pameka_7033_l005.Helpers.DemoData.Password</code> (เช่น guest01@(pameka_7033_l005.Helpers.DemoData.Domain))
+                · ไม่จองทับห้องที่มีคนจองจริง และลบออกได้ทั้งหมดโดยไม่กระทบข้อมูลจริง
+                <br />ตอนนี้มีลูกค้าตัวอย่าง: <b>@Model.DemoUsers คน</b></p>
+        </div>
+        <div class="cx-actions">
+            @if (Model.DemoUsers == 0)
+            {
+                <form asp-action="SeedDemo" method="post"><button type="submit" class="cx-btn">สร้างข้อมูลตัวอย่าง</button></form>
+            }
+            else
+            {
+                <a asp-controller="Account" asp-action="UserList" asp-route-q="demo.aurellestay" class="cx-btn cx-btn--ghost">ดูรายชื่อลูกค้าตัวอย่าง</a>
+                <form asp-action="RemoveDemo" method="post" onsubmit="return confirm('ลบลูกค้าตัวอย่างทั้งหมดพร้อมการจองของบัญชีเหล่านั้น ? (ข้อมูลจริงไม่ถูกลบ)');"><button type="submit" class="cx-btn cx-btn--danger">ลบข้อมูลตัวอย่าง</button></form>
+            }
+        </div>
+    </section>
+
+    <section class="staff-card" aria-labelledby="tb-h">
+        <h2 id="tb-h">ตารางในฐานข้อมูล</h2>
+        <div class="staff-table-wrap">
+            <table class="staff-table">
+                <thead><tr><th scope="col">ตาราง</th><th scope="col" class="num">จำนวนแถว</th><th scope="col" class="num">ขนาด</th></tr></thead>
+                <tbody>
+                    @foreach (var t in Model.Tables.OrderByDescending(t => t.Rows))
+                    {
+                        <tr><td><code>@t.Name</code></td><td class="num">@t.Rows.ToString("N0")</td><td class="num">@Size(t.Bytes)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>

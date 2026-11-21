@@ -1,0 +1,25 @@
+@using System.Security.Claims
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ไม่มีสิทธิ์เข้าถึง";
+    Layout = "_Homelayout";
+    var role = User.FindFirstValue(ClaimTypes.Role);
+    var (pc, pa) = RoleNames.HomeFor(role);
+}
+
+<div class="cx-wrap cx-page">
+    <h1>ไม่มีสิทธิ์เข้าถึงหน้านี้</h1>
+    <div class="cx-box">
+        <p>บัญชีของคุณ (บทบาท: @RoleNames.Label(role)) ไม่ได้รับอนุญาตให้ใช้งานหน้านี้</p>
+        @if ((Context.Request.Query["ReturnUrl"].ToString()).StartsWith("/Booking", StringComparison.OrdinalIgnoreCase) && role != RoleNames.Customer)
+        {
+            <p><b>การจองห้องด้วยตัวเองใช้ได้กับบัญชีลูกค้าเท่านั้น</b> — ถ้าต้องการจองให้ลูกค้า ใช้เมนู "จองห้องให้ลูกค้า" (ฝ่ายบริการ/ผู้จัดการ)
+               หรือออกจากระบบแล้วเข้าใหม่ด้วยบัญชีลูกค้า</p>
+            @if (role == RoleNames.FrontDesk || role == RoleNames.Admin)
+            {
+                <a asp-controller="FrontDesk" asp-action="WalkIn" class="cx-btn cx-btn--ghost">จองห้องให้ลูกค้า</a>
+            }
+        }
+        <a asp-controller="@pc" asp-action="@pa" class="cx-btn">กลับหน้าหลักของฉัน</a>
+    </div>
+</div>

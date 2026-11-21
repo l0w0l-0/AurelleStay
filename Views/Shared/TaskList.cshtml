@@ -1,0 +1,64 @@
+@model pameka_7033_l005.ViewModels.TaskListViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = Model.Title;
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>@Model.Title</h1>
+    <partial name="_Flash" />
+    <p>@Model.Description</p>
+
+    <div class="staff-card">
+        @if (!Model.Rows.Any())
+        {
+            <div class="cx-empty"><b>@Model.EmptyText</b><span>งานใหม่จะแสดงที่นี่ทันทีที่มีลูกค้าเข้าพักหรือสั่งบริการ</span></div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead>
+                        <tr><th>ห้อง</th><th>รายละเอียด</th><th>สถานะ</th>
+                            @if (Model.ShowDone) { <th>ผู้ทำ</th><th>เสร็จเมื่อ</th> } else { <th>จัดการ</th> }</tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td>@r.RoomNo</td>
+                            <td>@r.Detail</td>
+                            <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.TaskStatus(r.Status)</span></td>
+                            @if (Model.ShowDone)
+                            {
+                                <td>@r.Assignee</td>
+                                <td>@(r.DoneAt?.ToString("dd/MM/yyyy HH:mm"))</td>
+                            }
+                            else
+                            {
+                                <td>
+                                    @if (r.CanTake)
+                                    {
+                                        <form asp-action="Take" method="post" class="staff-inline">
+                                            <input type="hidden" name="id" value="@r.TaskId" />
+                                            <button type="submit" class="cx-btn cx-btn--small">@Model.TakeLabel</button>
+                                        </form>
+                                    }
+                                    @if (r.CanFinish)
+                                    {
+                                        <form asp-action="Finish" method="post" class="staff-inline">
+                                            <input type="hidden" name="id" value="@r.TaskId" />
+                                            <button type="submit" class="cx-btn cx-btn--small">@Model.FinishLabel</button>
+                                        </form>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

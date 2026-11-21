@@ -1,0 +1,220 @@
+@model pameka_7033_l005.ViewModels.RoomsAdminPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "จัดการห้องพัก";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>จัดการห้องพัก</h1>
+    <partial name="_Flash" />
+
+    <div class="staff-card">
+        <h2>เพิ่มห้อง</h2>
+        <form asp-action="SaveRoom" method="post" class="staff-form">
+            <input type="hidden" name="RoomId" value="0" />
+            <input name="RoomNo" placeholder="เลขห้อง" maxlength="10" required aria-label="เลขห้อง" />
+            <select name="TypeId" required aria-label="ประเภทห้อง" data-ts>
+                <option value="">-- ประเภทห้อง --</option>
+                @foreach (var t in Model.Types) { <option value="@t.TypeId">@t.TypeName (@t.BasePrice.ToString("N0") บาท)</option> }
+            </select>
+            <select name="ThemeId" aria-label="ธีม" data-ts>
+                <option value="">-- ไม่มีธีม --</option>
+                @foreach (var t in Model.Themes) { <option value="@t.ThemeId">@t.ThemeName</option> }
+            </select>
+            <button type="submit" class="cx-btn">เพิ่มห้อง</button>
+        </form>
+    </div>
+
+    <div class="staff-card">
+        <h2>ห้องทั้งหมด (@Model.Rooms.Count)</h2>
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>เลขห้อง</th><th>ประเภท</th><th>ธีม</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+                <tbody>
+                @foreach (var r in Model.Rooms)
+                {
+                    <tr>
+                        <td><input form="room@(r.RoomId)" name="RoomNo" value="@r.RoomNo" maxlength="10" required style="width:90px" aria-label="เลขห้อง" /></td>
+                        <td>
+                            <select form="room@(r.RoomId)" name="TypeId" aria-label="ประเภทห้อง">
+                                @foreach (var t in Model.Types) { <option value="@t.TypeId" selected="@(t.TypeId == r.TypeId)">@t.TypeName</option> }
+                            </select>
+                        </td>
+                        <td>
+                            <select form="room@(r.RoomId)" name="ThemeId" aria-label="ธีม">
+                                <option value="">-- ไม่มีธีม --</option>
+                                @foreach (var t in Model.Themes) { <option value="@t.ThemeId" selected="@(t.ThemeId == r.ThemeId)">@t.ThemeName</option> }
+                            </select>
+                        </td>
+                        <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.RoomStatus(r.Status)</span></td>
+                        <td>
+                            <form id="room@(r.RoomId)" asp-action="SaveRoom" method="post" class="staff-inline">
+                                <input type="hidden" name="RoomId" value="@r.RoomId" />
+                                <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
+                            </form>
+                            <form asp-action="DeleteRoom" method="post" class="staff-inline" onsubmit="return confirm('ลบห้อง @r.RoomNo ?');">
+                                <input type="hidden" name="id" value="@r.RoomId" />
+                                <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="staff-card">
+        <h2>ประเภทห้อง (ราคาต่อคืน / จำนวนผู้เข้าพัก)</h2>
+        <p class="text-muted">ราคาคืนศุกร์–เสาร์ เว้นว่างได้ (= ใช้ราคาปกติทุกคืน) · ลูกค้าเห็นราคาเฉลี่ยต่อคืนตามวันที่เลือก</p>
+        <form asp-action="SaveType" method="post" class="staff-form">
+            <input type="hidden" name="TypeId" value="0" />
+            <input name="TypeName" placeholder="ชื่อประเภทห้องใหม่" maxlength="50" required aria-label="ชื่อประเภทห้องใหม่" />
+            <input name="BasePrice" type="number" min="1" step="0.01" placeholder="ราคาต่อคืน" required aria-label="ราคาต่อคืน" />
+            <input name="WeekendPrice" type="number" min="0" step="0.01" placeholder="ราคาคืนศุกร์–เสาร์ (ถ้ามี)" aria-label="ราคาคืนศุกร์–เสาร์" />
+            <input name="MaxGuests" type="number" min="1" max="20" placeholder="พักได้ (คน)" required aria-label="พักได้ (คน)" />
+            <button type="submit" class="cx-btn">เพิ่มประเภท</button>
+        </form>
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>ชื่อ</th><th>ราคา/คืน (บาท)</th><th>คืนศุกร์–เสาร์ (บาท)</th><th>พักได้ (คน)</th><th>จัดการ</th></tr></thead>
+                <tbody>
+                @foreach (var t in Model.Types)
+                {
+                    <tr>
+                        <td><input form="type@(t.TypeId)" name="TypeName" value="@t.TypeName" maxlength="50" required aria-label="ชื่อประเภทห้อง" /></td>
+                        <td><input form="type@(t.TypeId)" name="BasePrice" type="number" min="1" step="0.01" value="@t.BasePrice.ToString("0.##")" required style="width:120px" aria-label="ราคาต่อคืน" /></td>
+                        <td><input form="type@(t.TypeId)" name="WeekendPrice" type="number" min="0" step="0.01" value="@t.WeekendPrice?.ToString("0.##")" placeholder="ใช้ราคาปกติ" style="width:130px" aria-label="ราคาคืนศุกร์–เสาร์ @t.TypeName" /></td>
+                        <td><input form="type@(t.TypeId)" name="MaxGuests" type="number" min="1" max="20" value="@t.MaxGuests" required style="width:80px" aria-label="จำนวนผู้เข้าพักสูงสุด" /></td>
+                        <td>
+                            <form id="type@(t.TypeId)" asp-action="SaveType" method="post" class="staff-inline">
+                                <input type="hidden" name="TypeId" value="@t.TypeId" />
+                                <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="staff-card" id="seasons">
+        <h2>ช่วงราคาพิเศษ (ปรับราคาตามช่วงวันที่)</h2>
+        <p class="text-muted">ปรับราคาห้อง<b>ทุกประเภท</b>เป็น % ในช่วงวันที่ เช่น ปีใหม่ +30% · โลว์ซีซั่น −15% · คิดจากราคาปกติหรือราคาคืนศุกร์–เสาร์ แล้วปัดเป็นบาทเต็ม · ช่วงซ้อนกันใช้ % สูงสุด · มีผลกับ<b>การจองใหม่</b>เท่านั้น การจองเดิมไม่เปลี่ยน</p>
+        <div class="rs-auto">
+            <div>
+                <b>ราคาตามเทศกาลอัตโนมัติ</b>
+                <span>ระบบสร้างช่วงราคาให้ล่วงหน้าทุกวัน: วาเลนไทน์ +10% · ตรุษจีน +15% · สงกรานต์ +30% · ลอยกระทง +15% · คริสต์มาส +15% · ปีใหม่ +30% — ปรับ % / วันที่ หรือปิดเทศกาลที่ไม่ต้องการได้ในตาราง (รายการที่มีป้าย “อัตโนมัติ”)</span>
+            </div>
+            <form asp-action="GenerateFestivals" method="post"><button type="submit" class="cx-btn cx-btn--ghost">สร้างเทศกาลตอนนี้</button></form>
+        </div>
+        <form asp-action="SaveSeason" method="post" class="staff-form rs-form">
+            <input type="hidden" name="SeasonId" value="0" />
+            <label>ชื่อช่วงราคา<input name="Name" maxlength="100" placeholder="เช่น ปีใหม่ 2570" required /></label>
+            <label>วันเริ่ม (คืนแรก)<input name="Start" type="date" required /></label>
+            <label>วันสิ้นสุด (คืนสุดท้าย)<input name="End" type="date" required /></label>
+            <label>ปรับราคา (%)<input name="Percent" type="number" min="-90" max="300" step="0.01" placeholder="+30 หรือ -15" required /></label>
+            <button type="submit" class="cx-btn">เพิ่มช่วงราคา</button>
+        </form>
+        @if (!Model.Seasons.Any())
+        {
+            <div class="cx-empty"><b>ยังไม่มีช่วงราคาพิเศษ</b><span>ห้องทุกห้องใช้ราคาปกติ / ราคาคืนศุกร์–เสาร์</span></div>
+        }
+        else
+        {
+            var today = DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>ชื่อ</th><th>คืนแรก</th><th>คืนสุดท้าย</th><th>ปรับราคา (%)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+                    <tbody>
+                    @foreach (var s in Model.Seasons)
+                    {
+                        var past = s.EndDate < today;
+                        <tr class="@(s.IsActive ? "" : "is-off")">
+                            <td><input form="season@(s.SeasonId)" name="Name" value="@s.SeasonName" maxlength="100" required aria-label="ชื่อช่วงราคา" />@if (FestivalPricing.IsAuto(s)) { <span class="rs-autotag" title="ระบบสร้างให้อัตโนมัติ">อัตโนมัติ</span> }</td>
+                            <td><input form="season@(s.SeasonId)" name="Start" type="date" value="@s.StartDate.ToString("yyyy-MM-dd")" required aria-label="คืนแรก" /></td>
+                            <td><input form="season@(s.SeasonId)" name="End" type="date" value="@s.EndDate.ToString("yyyy-MM-dd")" required aria-label="คืนสุดท้าย" /></td>
+                            <td><input form="season@(s.SeasonId)" name="Percent" type="number" min="-90" max="300" step="0.01" value="@s.AdjustPercent.ToString("0.##")" required style="width:100px" aria-label="ปรับราคา %" /></td>
+                            <td class="nowrap">
+                                @if (!s.IsActive) { <span class="cx-badge cx-badge--CANCELLED">ปิดอยู่</span> }
+                                else if (past) { <span class="cx-badge cx-badge--CHECKED_OUT">หมดช่วงแล้ว</span> }
+                                else if (s.StartDate <= today) { <span class="cx-badge cx-badge--CONFIRMED">กำลังใช้</span> }
+                                else { <span class="cx-badge cx-badge--PENDING">รอถึงวัน</span> }
+                            </td>
+                            <td class="nowrap">
+                                <form id="season@(s.SeasonId)" asp-action="SaveSeason" method="post" class="staff-inline">
+                                    <input type="hidden" name="SeasonId" value="@s.SeasonId" />
+                                    <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
+                                </form>
+                                <form asp-action="ToggleSeason" method="post" class="staff-inline">
+                                    <input type="hidden" name="id" value="@s.SeasonId" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">@(s.IsActive ? "ปิด" : "เปิด")</button>
+                                </form>
+                                <form asp-action="DeleteSeason" method="post" class="staff-inline" onsubmit="return confirm('@(FestivalPricing.IsAuto(s) ? $"ปิดเทศกาลอัตโนมัติ {s.SeasonName} ? (ระบบจะไม่สร้างซ้ำ)" : $"ลบช่วงราคา {s.SeasonName} ? (การจองเดิมไม่เปลี่ยน)")');">
+                                    <input type="hidden" name="id" value="@s.SeasonId" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ลบ</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="staff-card">
+        <h2>รายละเอียดที่ลูกค้าเห็น (รูป คำอธิบาย สิ่งอำนวยความสะดวก)</h2>
+        <p class="text-muted">รูป JPG / PNG / WEBP ไม่เกิน 3 MB แนะนำแนวนอน 3:2 · สิ่งอำนวยความสะดวกคั่นด้วยเครื่องหมาย , หรือขึ้นบรรทัดใหม่</p>
+        <div class="tp-grid">
+            @foreach (var t in Model.Types)
+            {
+                <form asp-action="SaveTypeDetails" method="post" enctype="multipart/form-data" class="tp-card">
+                    <input type="hidden" name="TypeId" value="@t.TypeId" />
+                    <div class="tp-photo">
+                        @if (!string.IsNullOrEmpty(t.ImageUrl)) { <img src="@t.ImageUrl" alt="รูป @t.TypeName" loading="lazy" /> }
+                        else { <span>ยังไม่มีรูป</span> }
+                    </div>
+                    <b>@t.TypeName</b>
+                    <label>คำอธิบาย<textarea name="Description" rows="3" maxlength="2000">@t.Description</textarea></label>
+                    <label>สิ่งอำนวยความสะดวก<textarea name="Amenities" rows="3" maxlength="500">@t.Amenities</textarea></label>
+                    <label>เปลี่ยนรูป<input type="file" name="Image" accept="image/jpeg,image/png,image/webp" /></label>
+                    @if (!string.IsNullOrEmpty(t.ImageUrl)) { <label class="tp-check"><input type="checkbox" name="RemoveImage" value="true" /> ลบรูป</label> }
+                    <button type="submit" class="cx-btn cx-btn--small">บันทึกรายละเอียด</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    <div class="staff-card">
+        <h2>ธีมห้อง</h2>
+        <form asp-action="SaveTheme" method="post" class="staff-form">
+            <input type="hidden" name="ThemeId" value="0" />
+            <input name="ThemeName" placeholder="ชื่อธีมใหม่ (เช่น ธีมม่วง ธีมเหลือง)" maxlength="30" required aria-label="ชื่อธีมใหม่ (เช่น ธีมม่วง ธีมเหลือง)" />
+            <input name="Description" placeholder="คำอธิบาย" maxlength="255" aria-label="คำอธิบาย" />
+            <button type="submit" class="cx-btn">เพิ่มธีม</button>
+        </form>
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>ชื่อธีม</th><th>คำอธิบาย</th><th>จัดการ</th></tr></thead>
+                <tbody>
+                @foreach (var t in Model.Themes)
+                {
+                    <tr>
+                        <td><input form="theme@(t.ThemeId)" name="ThemeName" value="@t.ThemeName" maxlength="30" required aria-label="ชื่อธีม" /></td>
+                        <td><input form="theme@(t.ThemeId)" name="Description" value="@t.Description" maxlength="255" style="width:100%" aria-label="คำอธิบาย" /></td>
+                        <td>
+                            <form id="theme@(t.ThemeId)" asp-action="SaveTheme" method="post" class="staff-inline">
+                                <input type="hidden" name="ThemeId" value="@t.ThemeId" />
+                                <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

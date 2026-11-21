@@ -1,0 +1,165 @@
+@model pameka_7033_l005.ViewModels.RoomDetailsViewModel
+@using pameka_7033_l005.Helpers
+@{
+    var r = Model.Room;
+    ViewData["Title"] = $"ห้อง {r.RoomNo}";
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var isCustomer = User.IsInRole(RoleNames.Customer);
+    var isFrontDesk = User.IsInRole(RoleNames.FrontDesk) || User.IsInRole(RoleNames.Admin);   // ผู้จัดการจองให้ลูกค้าได้เหมือนฝ่ายบริการ
+    Layout = signedIn && !isCustomer ? "_Adminlayout" : "_Homelayout";
+    var (bookCtl, bookAct) = isFrontDesk ? ("FrontDesk", "WalkIn") : (!signedIn || isCustomer) ? ("Booking", "Create") : ("", "");
+    var canBook = bookCtl != "" && !Model.Maintenance;
+    var scene = ThaiLabels.SceneFor(r.ThemeName);
+    string[] thm = { "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค." };
+    string TD(DateOnly d) => $"{d.Day} {thm[d.Month - 1]}";
+    var th = new System.Globalization.CultureInfo("th-TH");
+    var dow = new[] { "อา", "จ", "อ", "พ", "พฤ", "ศ", "ส" };
+    var tomorrow = Model.Today.AddDays(1);
+}
+
+<div class="cx-wrap cx-page rd-page">
+    <p class="rd-back"><a asp-controller="Rooms" asp-action="Index">« ห้องพักทั้งหมด</a> · <a asp-controller="Rooms" asp-action="Availability">ปฏิทินห้องว่าง</a></p>
+
+    <section class="rd-hero">
+        @if (!string.IsNullOrEmpty(r.ImageUrl))
+        {
+            <img src="@r.ImageUrl" alt="ภาพห้อง @r.TypeName" class="rd-art rd-photo" width="1200" height="800" data-zoom data-zoom-title="ห้อง @r.RoomNo · @r.TypeName" />
+        }
+        else
+        {
+            <div class="cx-arch cx-scene--@scene rd-art" role="img" aria-label="ภาพประกอบห้อง @r.RoomNo"></div>
+        }
+        <div class="rd-info">
+            <h1>ห้อง @r.RoomNo</h1>
+            <ul class="cx-chips">
+                <li>@r.TypeName</li>
+                <li>พักได้ @r.MaxGuests คน</li>
+                @if (!string.IsNullOrEmpty(r.ThemeName)) { <li class="@(scene == "sun" ? "sun" : "")">@ThaiLabels.ThemeLabel(r.ThemeName)</li> }
+            </ul>
+            @if (!string.IsNullOrEmpty(r.Description)) { <p class="rd-desc">@r.Description</p> }
+            @if (!string.IsNullOrEmpty(r.ThemeDescription)) { <p class="rd-desc">ธีม: @r.ThemeDescription</p> }
+            @if (r.AmenityList.Any())
+            {
+                <ul class="rd-amen" aria-label="สิ่งอำนวยความสะดวก">@foreach (var a in r.AmenityList) { <li>@a</li> }</ul>
+            }
+            <div class="rd-meta">
+                <div class="rd-price">฿@r.RegularPrice.ToString("N0")<small>ต่อคืน ก่อนส่วนลด@(r.WeekendPrice is > 0 ? $" · คืนศุกร์–เสาร์ ฿{r.WeekendPrice.Value:N0}" : "")</small></div>
+                <div class="rd-rating">
+                    @if (Model.ReviewCount == 0) { <span>ยังไม่มีรีวิว</span> }
+                    else { <b>@Model.Average.ToString("0.0")</b><span class="rd-stars">@ThaiLabels.Stars((int)Math.Round(Model.Average))</span><small>@Model.ReviewCount รีวิว</small> }
+                </div>
+            </div>
+            @if (Model.Seasons.Any())
+            {
+                <ul class="rd-seasons" aria-label="ช่วงราคาพิเศษ">
+                    @foreach (var se in Model.Seasons)
+                    {
+                        <li><b>@se.Name</b> @TD(se.Start) – @TD(se.End)
+                            <span class="@(se.Percent < 0 ? "down" : "up")">@(se.Percent > 0 ? "+" : "")@se.Percent.ToString("0.##")%</span></li>
+                    }
+                </ul>
+            }
+            @if (Model.Maintenance) { <div class="cx-alert cx-alert--info">ห้องนี้ปิดปรับปรุงชั่วคราว ยังไม่เปิดให้จอง</div> }
+
+            @if (canBook)
+            {
+                <form method="get" asp-controller="@bookCtl" asp-action="@bookAct" class="rd-book">
+                    <input type="hidden" name="roomIds" value="@r.RoomId" />
+                    <label class="cx-field">เช็คอิน<input type="date" data-dp-in data-dp-booked="@Url.Action("BookedNights", "Rooms", new { id = r.RoomId })" name="checkIn" id="rdIn" min="@Model.Today.ToString("yyyy-MM-dd")" value="@Model.CheckIn.ToString("yyyy-MM-dd")" required /></label>
+                    <label class="cx-field">เช็คเอาท์<input type="date" data-dp-out name="checkOut" id="rdOut" min="@Model.CheckIn.AddDays(1).ToString("yyyy-MM-dd")" value="@Model.CheckOut.ToString("yyyy-MM-dd")" required /></label>
+                    <label class="cx-field">ผู้เข้าพัก<input type="number" name="guests" min="1" max="@r.MaxGuests" value="@Math.Min(Model.Guests, r.MaxGuests)" required /></label>
+                    <button type="submit" class="cx-btn">@(isFrontDesk ? "จองให้ลูกค้า" : "จองห้องนี้")</button>
+                </form>
+            }
+        </div>
+    </section>
+
+    @{
+        // สรุปภาพรวมวันว่าง (นับตั้งแต่วันนี้ ภายใน 2 เดือนที่แสดง)
+        var upcoming = Model.Months.SelectMany(m => m.Busy.Select((bz, i) => (D: m.Month.AddDays(i), Busy: bz))).Where(x => x.D >= Model.Today).ToList();
+        var freeCount = Model.Maintenance ? 0 : upcoming.Count(x => !x.Busy);
+        var nextFree = Model.Maintenance ? (DateOnly?)null : upcoming.Where(x => !x.Busy).Select(x => (DateOnly?)x.D).FirstOrDefault();
+        var prices = Model.Maintenance ? new List<decimal>() : upcoming.Where(x => !x.Busy).Select(x => RatePlan.NightPrice(r.RegularPrice, r.WeekendPrice, x.D, Model.Seasons)).ToList();
+        var anyUp = prices.Any(v => v > r.RegularPrice); var anyDown = prices.Any(v => v < r.RegularPrice);
+        string Short(decimal v) => v >= 10000 ? (v / 1000m).ToString("0.#") + "k" : v.ToString("#,0");
+    }
+    <section class="rd-section rd-avail" aria-labelledby="rd-avail-h">
+        <div class="rd-avail__head">
+            <div>
+                <h2 id="rd-avail-h">วันที่ว่างของห้องนี้</h2>
+                <p class="rd-avail__sub">@(canBook ? "แตะวันเช็คอิน แล้วแตะวันเช็คเอาท์เพื่อเลือกช่วงเข้าพัก · ตัวเลขใต้วันที่คือราคาต่อคืน" : Model.Maintenance ? "ห้องนี้ปิดปรับปรุงชั่วคราว ยังไม่เปิดให้จอง" : "ตัวเลขใต้วันที่คือราคาต่อคืน")</p>
+            </div>
+            <ul class="rd-stats">
+                <li><b>@freeCount</b><span>คืนที่ว่าง</span></li>
+                <li><b>@(nextFree is DateOnly nf ? (nf == Model.Today ? "คืนนี้" : TD(nf)) : "—")</b><span>ว่างคืนถัดไป</span></li>
+                <li><b>฿@r.RegularPrice.ToString("#,0")</b><span>ราคาปกติ/คืน</span></li>
+            </ul>
+        </div>
+        <div class="rd-cals">
+            @foreach (var (month, busy) in Model.Months)
+            {
+                var lead = (int)month.DayOfWeek;
+                var monthFree = Model.Maintenance ? 0 : Enumerable.Range(0, busy.Length).Count(i => !busy[i] && month.AddDays(i) >= Model.Today);
+                <div class="rd-cal">
+                    <div class="rd-cal__top">
+                        <h3>@month.ToString("MMMM yyyy", th)</h3>
+                        <span class="rd-cal__count">ว่าง @monthFree คืน</span>
+                    </div>
+                    <div class="rd-grid">
+                        @foreach (var w in dow) { <span class="rd-dow@(w is "ศ" or "ส" ? " rd-dow--we" : "")">@w</span> }
+                        @for (var i = 0; i < lead; i++) { <span class="rd-blank"></span> }
+                        @for (var i = 0; i < busy.Length; i++)
+                        {
+                            var d = month.AddDays(i); var past = d < Model.Today; var today = d == Model.Today ? " rd-today" : "";
+                            var price = RatePlan.NightPrice(r.RegularPrice, r.WeekendPrice, d, Model.Seasons);
+                            var tone = price > r.RegularPrice ? " rd-p--up" : price < r.RegularPrice ? " rd-p--down" : "";
+                            var we = d.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday ? " rd-we" : "";
+                            if (Model.Maintenance) { <span class="rd-d rd-off@(today)" title="ปิดปรับปรุง"><i>@d.Day</i></span> }
+                            else if (busy[i]) { <span class="rd-d rd-busy@(past ? " rd-past" : "")@(today)" title="มีผู้จองแล้ว" data-co="@(past || !canBook ? "" : d.ToString("yyyy-MM-dd"))"><i>@d.Day</i>@if (!past) { <small>เต็ม</small> }</span> }
+                            else if (past) { <span class="rd-d rd-free rd-past"><i>@d.Day</i></span> }
+                            else if (!canBook) { <span class="rd-d rd-free@(today)@(we)"><i>@d.Day</i><small class="rd-p@(tone)">@Short(price)</small></span> }
+                            else { <a class="rd-d rd-free@(today)@(we)" data-no-instant data-d="@d.ToString("yyyy-MM-dd")" data-p="@price.ToString(System.Globalization.CultureInfo.InvariantCulture)" asp-controller="@bookCtl" asp-action="@bookAct" asp-route-checkIn="@d.ToString("yyyy-MM-dd")" asp-route-checkOut="@d.AddDays(1).ToString("yyyy-MM-dd")" asp-route-roomIds="@r.RoomId" title="ว่าง — @TD(d) ฿@price.ToString("#,0")/คืน" aria-label="@TD(d) ว่าง ราคา @price.ToString("#,0") บาทต่อคืน"><i>@d.Day</i><small class="rd-p@(tone)">@Short(price)</small></a> }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        @if (canBook)
+        {
+            <div class="rd-pick" data-rd-pick hidden aria-live="polite">
+                <div class="rd-pick__txt"><b data-rd-pick-title></b><span data-rd-pick-sub></span></div>
+                <div class="rd-pick__act">
+                    <button type="button" class="cx-btn cx-btn--ghost" data-rd-pick-clear>ล้าง</button>
+                    <a class="cx-btn" data-rd-pick-go asp-controller="@bookCtl" asp-action="@bookAct" asp-route-roomIds="@r.RoomId">จองช่วงนี้</a>
+                </div>
+            </div>
+        }
+        <p class="rd-legend">
+            <span class="rd-k rd-k--free">ว่าง</span>
+            <span class="rd-k rd-k--busy">มีผู้จองแล้ว</span>
+            <span class="rd-k rd-k--today">วันนี้</span>
+            <span class="rd-k rd-k--we">ศุกร์–เสาร์</span>
+            @if (anyUp) { <span class="rd-k rd-k--up">ราคาสูงกว่าปกติ</span> }
+            @if (anyDown) { <span class="rd-k rd-k--down">ราคาพิเศษ</span> }
+        </p>
+    </section>
+
+    <section class="rd-section">
+        <h2>รีวิวจากผู้ที่เคยพักห้องนี้</h2>
+        @if (!Model.Reviews.Any()) { <div class="cx-box"><p>ยังไม่มีรีวิวสำหรับห้องนี้</p></div> }
+        else
+        {
+            <div class="rd-reviews">
+                @foreach (var rv in Model.Reviews)
+                {
+                    <article class="cx-box">
+                        <p class="rd-stars">@ThaiLabels.Stars(rv.Rating)</p>
+                        @if (!string.IsNullOrWhiteSpace(rv.Comment)) { <p>@rv.Comment</p> }
+                        <small>@rv.Name · @rv.CreatedAt.ToString("dd/MM/yyyy")</small>
+                    </article>
+                }
+            </div>
+            <p><a asp-controller="Reviews" asp-action="Index">ดูรีวิวทั้งหมดของโรงแรม »</a></p>
+        }
+    </section>
+</div>

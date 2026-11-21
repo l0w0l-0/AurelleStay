@@ -1,0 +1,61 @@
+@model pameka_7033_l005.ViewModels.AboutPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    var hotel = Model.Hotel;
+    ViewData["Title"] = "เกี่ยวกับเรา / ติดต่อ";
+    ViewData["Description"] = $"เกี่ยวกับ {hotel.Name} และช่องทางติดต่อ เวลาเช็คอิน {hotel.CheckInTime} น. เช็คเอาท์ {hotel.CheckOutTime} น.";
+    Layout = "_Homelayout";
+}
+
+<div class="cx-wrap cx-page">
+    <h1>เกี่ยวกับ AurelleStay</h1>
+    <div class="cx-box">
+        <p>
+            AurelleStay คือที่พักสไตล์บูทีคที่ตั้งใจมอบประสบการณ์การพักผ่อนที่สะดวกสบาย
+            พร้อมบริการที่ใส่ใจในทุกรายละเอียด ตั้งแต่ห้องพัก อาหาร ไปจนถึงบริการเสริมต่าง ๆ
+        </p>
+        <p>
+            <a asp-controller="Rooms" asp-action="Index" class="cx-btn">ดูห้องพัก</a>
+            <a asp-controller="Services" asp-action="Index" class="cx-btn cx-btn--ghost">บริการเสริม</a>
+        </p>
+    </div>
+
+    <h2 id="contact" class="mt-4">ติดต่อเรา</h2>
+    <partial name="_Flash" />
+    <div class="ct-grid">
+        <div class="cx-box">
+            <h3>ช่องทางติดต่อ</h3>
+            <dl class="cx-dl">
+                <dt>เช็คอิน / เช็คเอาท์</dt><dd>เช็คอินตั้งแต่ @hotel.CheckInTime น. · เช็คเอาท์ก่อน @hotel.CheckOutTime น.</dd>
+                @if (hotel.Phone != null) { <dt>โทร</dt><dd><a href="@hotel.TelHref">@hotel.Phone</a></dd> }
+                @if (hotel.Email != null) { <dt>อีเมล</dt><dd><a href="mailto:@hotel.Email">@hotel.Email</a></dd> }
+                @if (hotel.LineId != null) { <dt>LINE</dt><dd>@hotel.LineId</dd> }
+                @if (hotel.Address != null) { <dt>ที่อยู่</dt><dd>@hotel.Address</dd> }
+            </dl>
+            @if (!hotel.HasContact)
+            {
+                <p>สอบถามการจองได้ที่เคาน์เตอร์ต้อนรับของโรงแรม หรือส่งข้อความผ่านแบบฟอร์มนี้ เจ้าหน้าที่จะติดต่อกลับ</p>
+            }
+            <p class="cx-hint">ลืมรหัสผ่าน? เลือกหัวข้อ "ลืมรหัสผ่าน" ในแบบฟอร์ม เจ้าหน้าที่จะตรวจสอบตัวตนแล้วออกรหัสผ่านใหม่ให้</p>
+        </div>
+        <form asp-action="SendMessage" method="post" class="cx-box ct-form" novalidate>
+            <h3>ส่งข้อความถึงโรงแรม</h3>
+            <div class="ct-row">
+                <label class="cx-field">ชื่อ-นามสกุล<input asp-for="Form.Name" maxlength="100" autocomplete="name" required /></label>
+                <label class="cx-field">อีเมลสำหรับติดต่อกลับ<input asp-for="Form.Email" type="email" maxlength="150" autocomplete="email" required /></label>
+            </div>
+            <div class="ct-row">
+                <label class="cx-field">เบอร์โทร (ถ้ามี)<input asp-for="Form.Phone" inputmode="tel" maxlength="16" autocomplete="tel" /></label>
+                <label class="cx-field">หัวข้อ
+                    <select asp-for="Form.Topic" data-ts>
+                        @foreach (var t in ContactInbox.Topics) { <option value="@t.Key" selected="@(t.Key == Model.Form.Topic)">@t.Value</option> }
+                    </select>
+                </label>
+            </div>
+            <label class="cx-field">ข้อความ<textarea asp-for="Form.Message" rows="5" minlength="10" maxlength="2000" required placeholder="เช่น เลขการจอง วันที่เข้าพัก หรือรายละเอียดที่ต้องการสอบถาม"></textarea></label>
+            <div class="ct-hp" aria-hidden="true"><label>เว็บไซต์<input asp-for="Form.Website" tabindex="-1" autocomplete="off" /></label></div>
+            <p class="cx-hint">ข้อมูลนี้ใช้ติดต่อกลับเรื่องที่สอบถามเท่านั้น ตาม<a asp-action="Policy">นโยบายความเป็นส่วนตัว</a></p>
+            <button type="submit" class="cx-btn">ส่งข้อความ</button>
+        </form>
+    </div>
+</div>

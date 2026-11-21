@@ -1,0 +1,53 @@
+@model List<pameka_7033_l005.ViewModels.RoomStatusRowViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "สถานะห้อง";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>สถานะห้อง</h1>
+    <partial name="_Flash" />
+    <p>ห้องที่มีผู้พักเปลี่ยนสถานะเองไม่ได้ ต้องเช็คเอาท์ที่หน้า "เช็คอิน / เช็คเอาท์" ก่อน</p>
+
+    <div class="staff-card">
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>ห้อง</th><th>ประเภท</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+                <tbody>
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td>@r.RoomNo</td>
+                        <td>@r.TypeName</td>
+                        <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.RoomStatus(r.Status)</span></td>
+                        <td>
+                            @if (r.CanMakeAvailable)
+                            {
+                                <form asp-action="SetRoomStatus" method="post" class="staff-inline">
+                                    <input type="hidden" name="roomId" value="@r.RoomId" /><input type="hidden" name="status" value="AVAILABLE" />
+                                    <button type="submit" class="cx-btn cx-btn--small">ตั้งเป็นว่าง</button>
+                                </form>
+                            }
+                            @if (r.CanMaintenance)
+                            {
+                                <form asp-action="SetRoomStatus" method="post" class="staff-inline" onsubmit="return confirm('ปิดห้อง @r.RoomNo เพื่อซ่อมบำรุง ? ลูกค้าจะจองห้องนี้ไม่ได้');">
+                                    <input type="hidden" name="roomId" value="@r.RoomId" /><input type="hidden" name="status" value="MAINTENANCE" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ปิดซ่อมบำรุง</button>
+                                </form>
+                            }
+                            @if (r.CanSendCleaning)
+                            {
+                                <form asp-action="SendCleaning" method="post" class="staff-inline">
+                                    <input type="hidden" name="roomId" value="@r.RoomId" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ส่งงานทำความสะอาด</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,24 @@
+# build
+bin/
+obj/
+publish/
+*.user
+.vs/
+.vscode/
+
+# ข้อมูลลับ / ข้อมูลในเครื่อง (ห้ามขึ้น GitHub)
+.env
+appsettings.Development.json
+appsettings.*.local.json
+**/secrets.json
+App_Data/
+
+# ไฟล์สำรองและไฟล์ชั่วคราว
+Backups/
+*.zip
+*.log
+*.tmp
+~$*
+
+# รายงานส่วนตัว (ไม่ใช่ซอร์สโค้ด)
+รายงาน/

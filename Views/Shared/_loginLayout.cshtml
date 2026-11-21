@@ -1,0 +1,32 @@
+@{
+    Layout = null;
+    var ui = pameka_7033_l005.Helpers.UiPrefs.From(Context.Request);
+}
+
+<!DOCTYPE html>
+<html lang="th" data-font="@ui.Font" data-motion="@ui.Motion">
+<head>
+    @{ ViewData["NoIndex"] = true; }
+    <partial name="_Head" />
+    <title>@ViewData["Title"] - AurelleStay</title>
+
+    <!-- Main CSS -->
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer.css" asp-append-version="true" />
+
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+
+<body class="login-layout">
+
+    <a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
+    <main id="main" tabindex="-1">
+        @RenderBody()
+    </main>
+
+    @await RenderSectionAsync("Scripts", required: false)
+
+</body>
+</html>

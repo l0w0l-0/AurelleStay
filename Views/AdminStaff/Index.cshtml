@@ -1,0 +1,112 @@
+@model pameka_7033_l005.ViewModels.StaffPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "จัดการพนักงาน";
+    Layout = "_Adminlayout";
+    var currentId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+}
+
+<div class="dashboard">
+    <h1>จัดการพนักงาน</h1>
+
+    <partial name="_Flash" />
+
+    @if (TempData["NewPassword"] is string pw)
+    {
+        <div class="staff-cred">
+            <strong>ส่งรหัสผ่านนี้ให้พนักงาน (แสดงครั้งเดียว ระบบเก็บเป็นค่าเข้ารหัส ดูย้อนหลังไม่ได้)</strong>
+            <div>อีเมล: <code>@TempData["NewEmail"]</code></div>
+            <div>รหัสผ่าน: <code>@pw</code></div>
+        </div>
+    }
+
+    <div class="staff-card">
+        <h2>สร้างบัญชีพนักงาน</h2>
+        <form asp-action="Create" method="post" class="staff-form">
+            <div>
+                <input asp-for="Form.FirstName" placeholder="ชื่อ" aria-label="ชื่อ" />
+                <span asp-validation-for="Form.FirstName" class="text-danger"></span>
+            </div>
+            <div>
+                <input asp-for="Form.LastName" placeholder="นามสกุล" aria-label="นามสกุล" />
+                <span asp-validation-for="Form.LastName" class="text-danger"></span>
+            </div>
+            <div>
+                <input asp-for="Form.Phone" placeholder="เบอร์โทร" aria-label="เบอร์โทร" />
+                <span asp-validation-for="Form.Phone" class="text-danger"></span>
+            </div>
+            <div>
+                <input asp-for="Form.Email" placeholder="อีเมล" aria-label="อีเมล" />
+                <span asp-validation-for="Form.Email" class="text-danger"></span>
+            </div>
+            <div>
+                <select asp-for="Form.Role" aria-label="บทบาท" data-ts>
+                    <option value="">-- เลือกบทบาท --</option>
+                    @foreach (var r in RoleNames.Staff)
+                    {
+                        <option value="@r" selected="@(Model.Form.Role == r)">@RoleNames.Label(r)</option>
+                    }
+                </select>
+                <span asp-validation-for="Form.Role" class="text-danger"></span>
+            </div>
+            <button type="submit" class="cx-btn">สร้างบัญชีและออกรหัสผ่าน</button>
+        </form>
+    </div>
+
+    <div class="staff-card">
+        <h2>พนักงานทั้งหมด (@Model.Staff.Count)</h2>
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead>
+                    <tr><th>#</th><th>ชื่อ-นามสกุล</th><th>อีเมล</th><th>เบอร์</th><th>บทบาท</th><th>จัดการ</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var s in Model.Staff)
+                {
+                    var isSelf = currentId == s.UserId.ToString();
+                    <tr>
+                        <td>@s.UserId</td>
+                        <td>@s.FullName</td>
+                        <td>@s.Email</td>
+                        <td>@s.Phone</td>
+                        <td>
+                            @if (isSelf)
+                            {
+                                @RoleNames.Label(s.RoleName)
+                            }
+                            else
+                            {
+                                <form asp-action="ChangeRole" method="post" class="staff-inline">
+                                    <input type="hidden" name="userId" value="@s.UserId" />
+                                    <select name="role" onchange="this.form.submit()" aria-label="บทบาท">
+                                        @foreach (var r in RoleNames.Staff)
+                                        {
+                                            <option value="@r" selected="@(string.Equals(r, s.RoleName, StringComparison.OrdinalIgnoreCase))">@RoleNames.Label(r)</option>
+                                        }
+                                    </select>
+                                </form>
+                            }
+                        </td>
+                        <td>
+                            <form asp-action="ResetPassword" method="post" class="staff-inline"
+                                  onsubmit="return confirm('ออกรหัสผ่านใหม่ให้ @s.FullName ? รหัสเดิมจะใช้ไม่ได้ทันที');">
+                                <input type="hidden" name="userId" value="@s.UserId" />
+                                <button type="submit" class="cx-btn cx-btn--small">ออกรหัสใหม่</button>
+                            </form>
+                            @if (!isSelf)
+                            {
+                                <form asp-action="Delete" method="post" class="staff-inline"
+                                      onsubmit="return confirm('ยืนยันลบพนักงาน @s.FullName ?');">
+                                    <input type="hidden" name="userId" value="@s.UserId" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+

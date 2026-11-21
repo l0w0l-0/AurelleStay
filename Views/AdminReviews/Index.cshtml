@@ -1,0 +1,54 @@
+@model pameka_7033_l005.ViewModels.AdminReviewsPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "รีวิวจากลูกค้า";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>รีวิวจากลูกค้า</h1>
+    <partial name="_Flash" />
+
+    <form method="get" class="staff-form" style="margin-bottom:14px">
+        <select name="rating" onchange="this.form.submit()">
+            <option value="">ทุกคะแนน</option>
+            @for (var i = 5; i >= 1; i--) { <option value="@i" selected="@(Model.Rating == i)">@i ดาว</option> }
+        </select>
+        <span>พบ @Model.TotalCount รายการ</span>
+    </form>
+
+    <div class="staff-card">
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>วันที่</th><th>การจอง</th><th>ลูกค้า</th><th>คะแนน</th><th>ความคิดเห็น</th><th>จัดการ</th></tr></thead>
+                <tbody>
+                @foreach (var r in Model.Items)
+                {
+                    <tr>
+                        <td>@r.CreatedAt.ToString("dd/MM/yyyy")</td>
+                        <td><a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@r.BookingId">#@r.BookingId</a></td>
+                        <td>@r.Name</td>
+                        <td>@ThaiLabels.Stars(r.Rating)</td>
+                        <td>@r.Comment</td>
+                        <td>
+                            <form asp-action="Delete" method="post" class="staff-inline" onsubmit="return confirm('ลบรีวิวนี้ ?');">
+                                <input type="hidden" name="id" value="@r.Id" />
+                                <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Items.Any()) { <tr><td colspan="6" class="text-center">ไม่มีรีวิว</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="staff-form">
+                @if (Model.Page > 1) { <a asp-action="Index" asp-route-rating="@Model.Rating" asp-route-page="@(Model.Page - 1)" class="cx-btn cx-btn--ghost cx-btn--small">« ก่อนหน้า</a> }
+                <span>หน้า @Model.Page / @Model.TotalPages</span>
+                @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-rating="@Model.Rating" asp-route-page="@(Model.Page + 1)" class="cx-btn cx-btn--ghost cx-btn--small">ถัดไป »</a> }
+            </nav>
+        }
+    </div>
+</div>

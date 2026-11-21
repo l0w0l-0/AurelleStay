@@ -1,0 +1,203 @@
+@model pameka_7033_l005.ViewModels.PayPageViewModel
+@{
+    ViewData["Title"] = "ชำระเงิน";
+    Layout = "_Homelayout";
+    var pay = Model.Payment;
+    var hasQr = Model.QrPayload != null || Model.QrUrl != null;
+    var deadlineIso = Model.PayBy.ToString("yyyy-MM-ddTHH:mm:ss") + "+07:00";
+    var step = Model.PendingPayment ? 3 : 2;
+    string Mask(string id) { var d = new string(id.Where(char.IsDigit).ToArray()); return d.Length >= 10 ? d[..3] + "-xxx-" + d[^4..] : id; }
+}
+
+<div class="cx-wrap cx-page">
+    <h1>ชำระเงินการจอง #@Model.BookingId</h1>
+    <partial name="_Flash" />
+
+    @* Part 49: ขั้นตอนการจอง — ลูกค้าเห็นชัดว่าอยู่ตรงไหน *@
+    <ol class="py-steps" aria-label="ขั้นตอนการจอง">
+        <li class="is-done"><b>1</b><span>จองห้อง</span></li>
+        <li class="@(step == 2 ? "is-now" : "is-done")" aria-current="@(step == 2 ? "step" : null)"><b>2</b><span>ชำระเงิน</span></li>
+        <li class="@(step == 3 ? "is-now" : "")" aria-current="@(step == 3 ? "step" : null)"><b>3</b><span>ฝ่ายบัญชีตรวจสอบ</span></li>
+        <li><b>4</b><span>ยืนยันการจอง</span></li>
+    </ol>
+
+    <div class="cx-pay">
+        <div class="cx-pay-qr py-qr">
+            @if (!Model.PendingPayment)
+            {
+                <p class="py-timer" data-paydeadline="@deadlineIso">ชำระภายใน <b>@Model.PayBy.ToString("dd/MM/yyyy HH:mm") น.</b></p>
+            }
+            <div class="py-tabs" role="tablist" aria-label="ช่องทางชำระเงิน">
+                @if (hasQr) { <button type="button" role="tab" id="tab-qr" aria-controls="pane-qr" aria-selected="true" class="is-on">สแกน QR พร้อมเพย์</button> }
+                @if (pay.HasBank) { <button type="button" role="tab" id="tab-bank" aria-controls="pane-bank" aria-selected="@(hasQr ? "false" : "true")" class="@(hasQr ? "" : "is-on")">โอนเข้าบัญชี</button> }
+            </div>
+
+            @if (hasQr)
+            {
+                <div class="py-pane" id="pane-qr" role="tabpanel" aria-labelledby="tab-qr">
+                    @if (Model.QrPayload != null)
+                    {
+                        <div class="py-qrbox">
+                            <p class="py-qrbox__brand">THAI QR PAYMENT · พร้อมเพย์</p>
+                            <div class="py-qrbox__code" data-qr="@Model.QrPayload" role="img" aria-label="QR พร้อมเพย์ ยอด @Model.Net.ToString("N2") บาท">
+                                <noscript>เปิด JavaScript เพื่อแสดง QR หรือโอนผ่านพร้อมเพย์ @Mask(pay.PromptPayId!)</noscript>
+                            </div>
+                            <p class="py-qrbox__to">@(pay.AccountName ?? "AurelleStay") · พร้อมเพย์ @Mask(pay.PromptPayId!)</p>
+                        </div>
+                        <p class="py-qrnote">QR นี้ระบุยอดให้แล้ว สแกนแล้วยอดขึ้นอัตโนมัติ ไม่ต้องพิมพ์เอง</p>
+                        <button type="button" class="cx-btn cx-btn--ghost cx-btn--small" data-qr-save="aurellestay-booking-@(Model.BookingId).png">บันทึกรูป QR</button>
+                    }
+                    else
+                    {
+                        <img src="@Url.Content(Model.QrUrl!)" alt="QR Code สำหรับชำระเงิน" class="py-qrimg" />
+                        <p class="py-qrnote">สแกนแล้วกรอกยอดให้ตรงตามด้านล่างทุกสตางค์</p>
+                    }
+                </div>
+            }
+            @if (pay.HasBank)
+            {
+                <div class="py-pane" id="pane-bank" role="tabpanel" aria-labelledby="tab-bank" hidden="@hasQr">
+                    <dl class="py-bank">
+                        <dt>ธนาคาร</dt><dd>@pay.BankName</dd>
+                        <dt>ชื่อบัญชี</dt><dd>@(pay.AccountName ?? "-")</dd>
+                        <dt>เลขที่บัญชี</dt><dd><b data-copy-src>@pay.AccountNo</b> <button type="button" class="py-copy" data-copy="@pay.AccountNo">คัดลอก</button></dd>
+                    </dl>
+                </div>
+            }
+            @if (!hasQr && !pay.HasBank)
+            {
+                <div class="cx-pay-noqr">ยังไม่ได้ตั้งค่าช่องทางรับเงินของโรงแรม<br />กรุณาติดต่อโรงแรมเพื่อชำระเงิน</div>
+            }
+
+            <div class="py-amount">
+                <span>ยอดที่ต้องโอน</span>
+                <b>฿@Model.Net.ToString("N2")</b>
+                <button type="button" class="py-copy" data-copy="@Model.Net.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)">คัดลอกยอด</button>
+            </div>
+            <ol class="cx-pay-steps">
+                <li>@(Model.QrPayload != null ? "เปิดแอปธนาคาร แล้วสแกน QR (หรือบันทึกรูป QR แล้วเลือกจากอัลบั้ม)" : "สแกน QR หรือโอนเข้าบัญชีด้วยแอปธนาคาร")</li>
+                <li>ตรวจยอดให้ตรง <b>฿@Model.Net.ToString("N2")</b> ทุกสตางค์</li>
+                <li>แนบสลิปในแบบฟอร์มด้านข้าง ฝ่ายบัญชีจะตรวจและยืนยันให้</li>
+            </ol>
+        </div>
+
+        <div class="cx-pay-main">
+            <section class="cx-box cx-pay-sum" aria-labelledby="pay-sum-h">
+                <h2 id="pay-sum-h">รายละเอียดการจอง</h2>
+                <dl class="cx-dl">
+                    <dt>ห้อง</dt><dd>@string.Join(", ", Model.Rooms)</dd>
+                    <dt>เข้าพัก</dt><dd>@Model.CheckIn.ToString("dd/MM/yyyy") ถึง @Model.CheckOut.ToString("dd/MM/yyyy") (@(Model.CheckOut.DayNumber - Model.CheckIn.DayNumber) คืน)</dd>
+                    @if (Model.PromoName != null)
+                    {
+                        <dt>โปรโมชั่น</dt><dd>@Model.PromoName ลด @Model.Discount.ToString("N2") บาท</dd>
+                    }
+                </dl>
+                <p class="cx-pay-total">ยอดที่ต้องชำระ <b>@Model.Net.ToString("N2") บาท</b></p>
+                @if (!Model.PendingPayment)
+                {
+                    <p class="cx-paydue">กรุณาชำระภายใน <b>@Model.PayBy.ToString("dd/MM/yyyy HH:mm") น.</b> หากเกินกำหนด ระบบจะยกเลิกการจองอัตโนมัติ</p>
+                }
+            </section>
+            @if (Model.Rejected)
+            {
+                <div class="cx-alert cx-alert--error" role="alert">ฝ่ายบัญชีตรวจสลิปก่อนหน้าแล้วไม่พบยอดเงินที่ตรงกัน กรุณาตรวจยอดโอนและแนบสลิปใหม่</div>
+            }
+
+            @if (Model.PendingPayment)
+            {
+                <div class="cx-alert cx-alert--info">แจ้งชำระเงินแล้ว รอฝ่ายบัญชีตรวจสอบ เราจะแจ้งผลในหน้า "การแจ้งเตือน"</div>
+            }
+            else
+            {
+                <section class="cx-box" aria-labelledby="pay-form-h">
+                    <h2 id="pay-form-h">แจ้งชำระเงิน</h2>
+                    <p class="cx-hint">ฝ่ายบัญชีจะตรวจสอบกับยอดเข้าบัญชีก่อนยืนยันการจอง</p>
+                    <form asp-action="Pay" asp-route-id="@Model.BookingId" method="post" enctype="multipart/form-data" class="pay-slip" data-slipform>
+                        <label class="py-drop" data-drop>
+                            <input type="file" name="slip" accept="image/jpeg,image/png,image/webp,application/pdf" required data-slip />
+                            <span class="py-drop__ico" aria-hidden="true">⇪</span>
+                            <span class="py-drop__txt"><b>แตะเพื่อเลือกสลิป</b> หรือลากไฟล์มาวางที่นี่<small>JPG / PNG / WEBP / PDF ไม่เกิน 5 MB</small></span>
+                            <img class="py-drop__preview" alt="ตัวอย่างสลิปที่เลือก" hidden data-slip-preview />
+                            <span class="py-drop__name" data-slip-name hidden></span>
+                        </label>
+                        <p class="py-drop__err" role="alert" hidden data-slip-err></p>
+                        <label class="cx-field">เลขอ้างอิงธุรกรรม (ถ้ามี)
+                            <input type="text" name="reference" maxlength="100" placeholder="เช่น 2026111312345678" autocomplete="off" />
+                        </label>
+                        <button type="submit" class="cx-btn">ส่งหลักฐานการชำระเงิน</button>
+                    </form>
+                </section>
+            }
+            <p><a asp-action="MyBookings" class="cx-btn cx-btn--ghost cx-btn--small">กลับไปการจองของฉัน</a></p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @if (Model.QrPayload != null) { <script src="~/lib/qrcode/qrcode.js" asp-append-version="true"></script> }
+    <script>
+        (function () {
+            // QR พร้อมเพย์ (สร้างจากข้อความมาตรฐาน EMVCo ที่เซิร์ฟเวอร์คำนวณ CRC ไว้แล้ว)
+            var box = document.querySelector('[data-qr]');
+            if (box && window.qrcode) {
+                var qr = qrcode(0, 'M'); qr.addData(box.getAttribute('data-qr')); qr.make();
+                box.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+                var save = document.querySelector('[data-qr-save]');
+                if (save) save.addEventListener('click', function () {
+                    var n = qr.getModuleCount(), cell = 10, pad = 4 * cell, size = n * cell + pad * 2;
+                    var c = document.createElement('canvas'); c.width = size; c.height = size + 60; var g = c.getContext('2d');
+                    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
+                    for (var r = 0; r < n; r++) for (var k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect(pad + k * cell, pad + r * cell, cell, cell);
+                    g.fillStyle = '#2d1b47'; g.font = 'bold 22px sans-serif'; g.textAlign = 'center';
+                    g.fillText('@Model.Net.ToString("N2") THB · Booking #@Model.BookingId', size / 2, size + 36);
+                    var a = document.createElement('a'); a.download = save.getAttribute('data-qr-save'); a.href = c.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove();
+                });
+            }
+            // แท็บ QR / โอนเข้าบัญชี
+            var tabs = document.querySelectorAll('.py-tabs [role=tab]');
+            tabs.forEach(function (t) {
+                t.addEventListener('click', function () {
+                    tabs.forEach(function (o) { var on = o === t; o.classList.toggle('is-on', on); o.setAttribute('aria-selected', on); var p = document.getElementById(o.getAttribute('aria-controls')); if (p) p.hidden = !on; });
+                });
+            });
+            // ปุ่มคัดลอก
+            document.querySelectorAll('[data-copy]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var v = b.getAttribute('data-copy'), done = function () { var o = b.textContent; b.textContent = 'คัดลอกแล้ว ✓'; setTimeout(function () { b.textContent = o; }, 1600); };
+                    if (navigator.clipboard) navigator.clipboard.writeText(v).then(done, done); else done();
+                });
+            });
+            // นับถอยหลังกำหนดชำระ
+            var tm = document.querySelector('[data-paydeadline]');
+            if (tm) {
+                var end = Date.parse(tm.getAttribute('data-paydeadline')), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+                var tick = function () {
+                    var s = Math.max(0, Math.floor((end - Date.now()) / 1000));
+                    if (s <= 0) { tm.innerHTML = '<b>เลยกำหนดชำระแล้ว</b> — รีเฟรชหน้าเพื่อตรวจสถานะ'; tm.classList.add('is-late'); return; }
+                    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+                    tm.innerHTML = 'เหลือเวลาชำระ <b>' + (h >= 24 ? Math.floor(h / 24) + ' วัน ' + pad(h % 24) : pad(h)) + ':' + pad(m) + ':' + pad(s % 60) + '</b>';
+                    tm.classList.toggle('is-soon', s < 3600);
+                };
+                tick(); setInterval(tick, 1000);
+            }
+            // แนบสลิป: ลากวาง + ตัวอย่างรูป + ตรวจชนิด/ขนาดก่อนส่ง
+            var inp = document.querySelector('[data-slip]'), drop = document.querySelector('[data-drop]');
+            if (inp && drop) {
+                var prev = document.querySelector('[data-slip-preview]'), nm = document.querySelector('[data-slip-name]'), err = document.querySelector('[data-slip-err]');
+                var ok = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+                var show = function () {
+                    var f = inp.files && inp.files[0]; err.hidden = true; prev.hidden = true; nm.hidden = true; drop.classList.remove('has-file');
+                    if (!f) return;
+                    if (ok.indexOf(f.type) < 0) { err.textContent = 'รองรับเฉพาะไฟล์ JPG, PNG, WEBP หรือ PDF'; err.hidden = false; inp.value = ''; return; }
+                    if (f.size > 5 * 1024 * 1024) { err.textContent = 'ไฟล์ใหญ่เกิน 5 MB กรุณาลดขนาดรูป'; err.hidden = false; inp.value = ''; return; }
+                    drop.classList.add('has-file'); nm.textContent = f.name + ' · ' + Math.ceil(f.size / 1024) + ' KB'; nm.hidden = false;
+                    if (f.type.indexOf('image/') === 0) { prev.src = URL.createObjectURL(f); prev.hidden = false; }
+                };
+                inp.addEventListener('change', show);
+                ['dragenter', 'dragover'].forEach(function (e) { drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.add('is-over'); }); });
+                ['dragleave', 'drop'].forEach(function (e) { drop.addEventListener(e, function () { drop.classList.remove('is-over'); }); });
+                drop.addEventListener('drop', function (ev) { ev.preventDefault(); if (ev.dataTransfer && ev.dataTransfer.files.length) { inp.files = ev.dataTransfer.files; show(); } });
+            }
+        })();
+    </script>
+}

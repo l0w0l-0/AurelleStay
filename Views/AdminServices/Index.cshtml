@@ -1,0 +1,80 @@
+@model List<pameka_7033_l005.ViewModels.ServiceEditViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "บริการเสริม / อาหาร";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1>บริการเสริม / อาหาร</h1>
+    <partial name="_Flash" />
+    <p>รายการที่ "เปิดใช้งาน" แสดงในหน้าบริการเสริม และให้ลูกค้าเลือกตอนจอง (ราคาเป็นต่อห้อง) · บริการที่มีการจองแล้วลบไม่ได้ ให้ปิดการใช้งานแทน
+        · <a asp-controller="Services" asp-action="Index" target="_blank" rel="noopener">ดูหน้าที่ลูกค้าเห็น</a></p>
+
+    <details class="staff-card sva-new" @(Model.Count == 0 ? "open" : null)>
+        <summary><h2>เพิ่มบริการใหม่</h2></summary>
+        <form asp-action="Save" method="post" enctype="multipart/form-data" class="sva-form">
+            <input type="hidden" name="ServiceId" value="0" />
+            <label class="sva-f sva-f--wide">ชื่อบริการ<input name="ServiceName" maxlength="50" required placeholder="เช่น อาหารกลางวัน, นวดเท้า (30 นาที)" /></label>
+            <label class="sva-f">ราคา (บาท / ห้อง)<input name="Price" type="number" min="0.01" max="100000" step="0.01" required /></label>
+            <label class="sva-f">หมวด
+                <select name="Category">
+                    <option value="">ให้ระบบเลือกจากชื่อ</option>
+                    @foreach (var c in ServiceCategories.All) { <option value="@c.Key">@c.Label</option> }
+                </select>
+            </label>
+            <label class="sva-f sva-f--wide">คำอธิบายสั้น (ไม่เกิน 300 ตัวอักษร)<textarea name="Description" maxlength="300" rows="2" placeholder="แสดงใต้ชื่อบริการในหน้าลูกค้า"></textarea></label>
+            <label class="sva-f">รูป (JPG / PNG / WEBP ไม่เกิน 3 MB)<input type="file" name="Image" accept="image/jpeg,image/png,image/webp" /></label>
+            <label class="sva-check"><input type="checkbox" name="IsActive" value="true" checked /> เปิดใช้งาน</label>
+            <input type="hidden" name="IsActive" value="false" />
+            <div class="sva-actions"><button type="submit" class="cx-btn">เพิ่มบริการ</button></div>
+        </form>
+    </details>
+
+    <h2 class="sva-h">บริการทั้งหมด (@Model.Count)</h2>
+    @if (!Model.Any())
+    {
+        <div class="staff-card"><div class="cx-empty"><b>ยังไม่มีบริการเสริม</b><span>เพิ่มบริการแรกได้จากแบบฟอร์มด้านบน</span></div></div>
+    }
+    <div class="sva-grid">
+        @foreach (var s in Model)
+        {
+            var cat = ServiceCategories.Resolve(s.Category, s.ServiceName);
+            <article class="staff-card sva-card @(s.IsActive ? "" : "is-off")" aria-labelledby="sva-@s.ServiceId">
+                <div class="sva-media">
+                    @if (s.ImageUrl != null) { <img src="@s.ImageUrl" alt="" loading="lazy" width="400" height="300" /> }
+                    else { <span class="sva-noimg">ยังไม่มีรูป</span> }
+                    <span class="sva-tag">@ServiceCategories.Label(cat)@(s.Category == null ? " (อัตโนมัติ)" : "")</span>
+                    @if (!s.IsActive) { <span class="sva-off">ปิดใช้งาน</span> }
+                </div>
+                <form asp-action="Save" method="post" enctype="multipart/form-data" class="sva-form">
+                    <input type="hidden" name="ServiceId" value="@s.ServiceId" />
+                    <label class="sva-f sva-f--wide"><span id="sva-@s.ServiceId">ชื่อบริการ</span><input name="ServiceName" value="@s.ServiceName" maxlength="50" required /></label>
+                    <label class="sva-f">ราคา (บาท)<input name="Price" type="number" min="0.01" max="100000" step="0.01" value="@s.Price.ToString("0.##")" required /></label>
+                    <label class="sva-f">หมวด
+                        <select name="Category">
+                            <option value="" selected="@(s.Category == null)">ให้ระบบเลือกจากชื่อ</option>
+                            @foreach (var c in ServiceCategories.All) { <option value="@c.Key" selected="@(s.Category == c.Key)">@c.Label</option> }
+                        </select>
+                    </label>
+                    <label class="sva-f sva-f--wide">คำอธิบายสั้น<textarea name="Description" maxlength="300" rows="2">@s.Description</textarea></label>
+                    <label class="sva-f sva-f--wide">เปลี่ยนรูป<input type="file" name="Image" accept="image/jpeg,image/png,image/webp" /></label>
+                    @if (s.ImageUrl != null) { <label class="sva-check"><input type="checkbox" name="RemoveImage" value="true" /> ลบรูป</label> }
+                    <label class="sva-check"><input type="checkbox" name="IsActive" value="true" checked="@s.IsActive" /> เปิดใช้งาน</label>
+                    <input type="hidden" name="IsActive" value="false" />
+                    <div class="sva-actions">
+                        <small>ถูกจองแล้ว @s.TimesBooked ครั้ง</small>
+                        <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
+                    </div>
+                </form>
+                @if (s.TimesBooked == 0)
+                {
+                    <form asp-action="Delete" method="post" class="sva-del" onsubmit="return confirm('ลบ @s.ServiceName ?');">
+                        <input type="hidden" name="id" value="@s.ServiceId" />
+                        <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบบริการ</button>
+                    </form>
+                }
+            </article>
+        }
+    </div>
+</div>

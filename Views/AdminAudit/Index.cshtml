@@ -1,0 +1,89 @@
+@model pameka_7033_l005.ViewModels.AuditPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "บันทึกกิจกรรม";
+    Layout = "_Adminlayout";
+    var groups = new (string? Key, string Label)[] { (null, "ทั้งหมด"), ("staff", "พนักงาน"), ("customer", "ลูกค้า"), ("failed", "ไม่สำเร็จ"), ("login", "เข้าสู่ระบบ/สมัคร") };
+    var filtered = !string.IsNullOrEmpty(Model.Q) || Model.Group != null || Model.From != null || Model.To != null;
+}
+
+<div class="dashboard">
+    <h1>บันทึกกิจกรรม</h1>
+    <p>ทุกคำสั่งที่เปลี่ยนข้อมูลในระบบ และการเข้าสู่ระบบที่ไม่สำเร็จ · แก้ไขหรือลบไม่ได้ · เก็บไว้ตามค่า <code>Audit:RetentionDays</code> (ค่าเริ่มต้น 365 วัน)</p>
+
+    <nav class="audit-tabs" aria-label="กลุ่มกิจกรรม">
+        @foreach (var (key, label) in groups)
+        {
+            var on = Model.Group == key;
+            <a asp-action="Index" asp-route-group="@key" asp-route-q="@Model.Q" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+               class="cx-btn cx-btn--small @(on ? "" : "cx-btn--ghost")" aria-current="@(on ? "page" : null)">@label</a>
+        }
+    </nav>
+
+    <form method="get" class="staff-form" style="margin:12px 0 14px">
+        <input type="hidden" name="group" value="@Model.Group" />
+        <input type="text" name="q" value="@Model.Q" placeholder="ค้นหา อีเมลผู้ทำ / รายละเอียด / เลขรายการ / IP" aria-label="ค้นหา" />
+        <label>ตั้งแต่ <input type="date" name="from" value="@Model.From?.ToString("yyyy-MM-dd")" /></label>
+        <label>ถึง <input type="date" name="to" value="@Model.To?.ToString("yyyy-MM-dd")" /></label>
+        <button type="submit" class="cx-btn">ค้นหา</button>
+        @if (filtered) { <a asp-action="Index" class="cx-btn cx-btn--ghost">ล้าง</a> }
+        <span>พบ @Model.TotalCount.ToString("N0") รายการ</span>
+        @if (Model.TotalCount > 0)
+        {
+            <a data-no-instant asp-action="Export" asp-route-q="@Model.Q" asp-route-group="@Model.Group" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" class="cx-btn cx-btn--ghost">ส่งออก CSV</a>
+        }
+    </form>
+
+    <div class="staff-card">
+        @if (!Model.Rows.Any())
+        {
+            <div class="admin-empty-state">
+                <p>@(filtered ? "ไม่พบกิจกรรมตามเงื่อนไขที่เลือก" : "ยังไม่มีกิจกรรม เมื่อมีการทำรายการในระบบจะแสดงที่นี่")</p>
+            </div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table audit-table">
+                    <thead><tr><th>เวลา</th><th>ผู้ทำ</th><th>การกระทำ</th><th>ผล</th><th>รายละเอียด</th></tr></thead>
+                    <tbody>
+                    @foreach (var a in Model.Rows)
+                    {
+                        var kind = AuditTrail.TargetKind(a.Action);
+                        <tr>
+                            <td class="audit-time">@a.CreatedAt.ToString("dd/MM/yy")<br /><small>@a.CreatedAt.ToString("HH:mm:ss")</small></td>
+                            <td>@a.Actor<br /><small class="text-muted">@RoleNames.Label(a.ActorRole)@(a.UserId == null && a.Action != "Account.Login" ? " · บัญชีถูกลบแล้ว" : "")</small></td>
+                            <td>
+                                @AuditTrail.Label(a.Action)
+                                @if (a.TargetId != null)
+                                {
+                                    <br />
+                                    @if (AuditTrail.TargetsBooking(a.Action))
+                                    {
+                                        <a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@a.TargetId">การจอง #@a.TargetId</a>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">@(kind == "" ? "รายการ" : kind) #@a.TargetId</small>
+                                    }
+                                }
+                            </td>
+                            <td><span class="cx-badge @(a.Success ? "cx-badge--CONFIRMED" : "cx-badge--CANCELLED")">@(a.Success ? "สำเร็จ" : "ไม่สำเร็จ")</span></td>
+                            <td class="audit-detail">@a.Detail@if (a.Ip != null) {<br /><small class="text-muted">IP @a.Ip</small>}</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.TotalPages > 1)
+            {
+                var f = Model.From?.ToString("yyyy-MM-dd"); var t = Model.To?.ToString("yyyy-MM-dd");
+                <nav class="staff-form" aria-label="เปลี่ยนหน้า">
+                    @if (Model.Page > 1) { <a asp-action="Index" asp-route-q="@Model.Q" asp-route-group="@Model.Group" asp-route-from="@f" asp-route-to="@t" asp-route-page="@(Model.Page - 1)" class="cx-btn cx-btn--ghost cx-btn--small">« ก่อนหน้า</a> }
+                    <span>หน้า @Model.Page / @Model.TotalPages</span>
+                    @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-q="@Model.Q" asp-route-group="@Model.Group" asp-route-from="@f" asp-route-to="@t" asp-route-page="@(Model.Page + 1)" class="cx-btn cx-btn--ghost cx-btn--small">ถัดไป »</a> }
+                </nav>
+            }
+        }
+    </div>
+</div>

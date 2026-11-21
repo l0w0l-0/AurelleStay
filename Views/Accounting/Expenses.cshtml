@@ -1,0 +1,88 @@
+@model pameka_7033_l005.ViewModels.ExpensePageViewModel
+@using pameka_7033_l005.ViewModels
+@{
+    ViewData["Title"] = "รายจ่าย / กำไร";
+    Layout = "_Adminlayout";
+    var th = new System.Globalization.CultureInfo("th-TH");
+    var month = new DateOnly(Model.Year, Model.Month, 1);
+    var prev = month.AddMonths(-1);
+    var next = month.AddMonths(1);
+    var today = pameka_7033_l005.Helpers.AppClock.Today;
+    var defaultDate = (month.Year == today.Year && month.Month == today.Month) ? today : month.AddMonths(1).AddDays(-1).ToDateTime(TimeOnly.MinValue);
+    if (defaultDate > today) defaultDate = today;
+}
+
+<div class="dashboard">
+    <div class="fd-head">
+        <h1 class="fd-title">รายจ่าย / กำไร — @month.ToString("MMMM yyyy", th)</h1>
+        <div>
+            <a asp-action="Expenses" asp-route-year="@prev.Year" asp-route-month="@prev.Month" class="cx-btn cx-btn--ghost cx-btn--small">‹ เดือนก่อน</a>
+            <a asp-action="Expenses" asp-route-year="@next.Year" asp-route-month="@next.Month" class="cx-btn cx-btn--ghost cx-btn--small">เดือนถัดไป ›</a>
+        </div>
+    </div>
+    <partial name="_Flash" />
+
+    <div class="ex-sum">
+        <div class="pos"><span>รายรับ (ชำระแล้ว)</span><b>฿@Model.Revenue.ToString("N2")</b></div>
+        <div class="neg"><span>รายจ่าย</span><b>฿@Model.Total.ToString("N2")</b></div>
+        <div class="@(Model.Profit < 0 ? "neg" : "pos")"><span>กำไรสุทธิ</span><b>@(Model.Profit < 0 ? "-" : "")฿@Math.Abs(Model.Profit).ToString("N2")</b></div>
+    </div>
+
+    <div class="staff-card">
+        <h2>บันทึกรายจ่าย</h2>
+        <form asp-action="AddExpense" method="post" class="staff-form">
+            <select name="Category" required aria-label="หมวด" data-ts>
+                <option value="">-- หมวด --</option>
+                @foreach (var c in ExpenseFormViewModel.Categories) { <option>@c</option> }
+            </select>
+            <input name="Amount" type="number" min="0.01" step="0.01" placeholder="จำนวนเงิน (บาท)" required aria-label="จำนวนเงิน" />
+            <input name="SpentOn" type="date" value="@defaultDate.ToString("yyyy-MM-dd")" max="@today.ToString("yyyy-MM-dd")" required aria-label="วันที่จ่าย" />
+            <input name="Note" maxlength="255" placeholder="บันทึก (เช่น เลขใบเสร็จ ผู้รับเงิน)" aria-label="บันทึก" />
+            <button type="submit" class="cx-btn">บันทึก</button>
+        </form>
+    </div>
+
+    @if (Model.ByCategory.Any())
+    {
+        <div class="staff-card">
+            <h2>สรุปตามหมวด</h2>
+            <div class="ex-bars" aria-label="สัดส่วนรายจ่าย">
+                @foreach (var (cat, amt) in Model.ByCategory)
+                {
+                    var pct = Model.Total == 0 ? 0 : (int)Math.Round(amt / Model.Total * 100);
+                    <div class="ex-bar"><span>@cat</span><i style="width:@(Math.Max(pct, 2))%"></i><b>฿@amt.ToString("N0") (@pct%)</b></div>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="staff-card">
+        <h2>รายการเดือนนี้</h2>
+        @if (!Model.Rows.Any())
+        {
+            <p>ยังไม่มีรายจ่ายในเดือนนี้</p>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>วันที่</th><th>หมวด</th><th class="text-end">จำนวน (บาท)</th><th>บันทึก</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td>@r.SpentOn.ToString("dd/MM/yyyy")</td><td>@r.Category</td><td class="text-end">@r.Amount.ToString("N2")</td><td>@r.Note</td><td>@r.By</td>
+                            <td>
+                                <form asp-action="DeleteExpense" method="post" class="staff-inline" onsubmit="return confirm('ลบรายจ่าย @r.Category @r.Amount.ToString("N2") บาท ?');">
+                                    <input type="hidden" name="id" value="@r.Id" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

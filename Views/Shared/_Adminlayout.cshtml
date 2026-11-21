@@ -1,0 +1,200 @@
+@using System.Security.Claims
+@using pameka_7033_l005.Helpers
+@inject pameka_7033_l005.Models.Csi402dbContext MenuDb
+@{
+    // เลย์เอาต์หลังบ้านเดียว ใช้ทั้งผู้จัดการและพนักงานทุกฝ่าย: ต่างกันแค่เมนูด้านข้างตามบทบาท
+    Layout = null;
+    var ui = UiPrefs.From(Context.Request);
+    var role = User.FindFirstValue(ClaimTypes.Role);
+    var roleLabel = RoleNames.Label(role);
+    var isAdmin = string.Equals(role, RoleNames.Admin, StringComparison.OrdinalIgnoreCase);
+    var (homeController, homeAction) = RoleNames.HomeFor(role);
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+    var counts = await BookingQueries.MenuCountsAsync(MenuDb, role);
+
+    // เมนูผู้จัดการ: (หัวข้อ, [(controller, action, ชื่อเมนู)])
+    var adminMenu = new[]
+    {
+        ("DASHBOARD", new[] { ("Admin", "Index", "Dashboard") }),
+        ("HOTEL MANAGEMENT", new[] { ("AdminRooms", "Index", "จัดการห้องพัก"), ("AdminBookings", "Index", "การจองห้องพัก"), ("FrontDesk", "WalkIn", "จองห้องให้ลูกค้า"), ("Rooms", "Availability", "ปฏิทินห้องว่าง"), ("Account", "UserList", "ลูกค้า / ผู้ใช้"), ("Account", "LoginHistory", "ประวัติเข้าสู่ระบบ") }),
+        ("SERVICES", new[] { ("AdminServices", "Index", "บริการเสริม / อาหาร"), ("AdminPromotions", "Index", "โปรโมชั่น"), ("AdminReviews", "Index", "รีวิวจากลูกค้า"), ("AdminMessages", "Index", "ข้อความจากลูกค้า") }),
+        ("STAFF", new[] { ("AdminStaff", "Index", "จัดการพนักงาน") }),
+        ("SYSTEM", new[] { ("AdminReports", "Index", "รายงาน"), ("AdminAudit", "Index", "บันทึกกิจกรรม"), ("AdminAudit", "SystemStatus", "สถานะระบบ / สำรองข้อมูล") })
+    };
+
+    // ไอคอนเส้นบาง (SVG path) ตามเมนู — key = Controller.Action
+    var icons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Admin.Index"] = "M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 4v3h6V4z",
+        ["AdminRooms.Index"] = "M3 18V8m0 6h18v4M21 18v-6a3 3 0 0 0-3-3h-7v5M7 11.5a1.5 1.5 0 1 0 0-.01",
+        ["AdminBookings.Index"] = "M5 4h14v17l-3.5-2-3.5 2-3.5-2L5 21zM9 9h6M9 13h6",
+        ["FrontDesk.WalkIn"] = "M12 5v14M5 12h14",
+        ["Rooms.Availability"] = "M4 6h16v14H4zM4 10h16M9 3v4M15 3v4",
+        ["FrontDesk.Availability"] = "M4 6h16v14H4zM4 10h16M9 3v4M15 3v4",
+        ["Account.UserList"] = "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14a5 5 0 0 1 3 6",
+        ["Account.LoginHistory"] = "M12 7v5l3 2M4 12a8 8 0 1 0 2.3-5.6M4 4v3h3",
+        ["AdminServices.Index"] = "M5 11h14v2a7 7 0 0 1-14 0zM9 4c0 1.5 1 1.5 1 3M13 4c0 1.5 1 1.5 1 3",
+        ["AdminPromotions.Index"] = "M20 12.5 12.5 20a1.4 1.4 0 0 1-2 0L4 13.5V4h9.5l6.5 6.5a1.4 1.4 0 0 1 0 2zM8.5 8.5h.01",
+        ["AdminMessages.Index"] = "M4 6h16v12H4zM4 7l8 6 8-6",
+        ["AdminReviews.Index"] = "M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4l-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z",
+        ["AdminStaff.Index"] = "M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5 20a7 7 0 0 1 14 0M12 14l1 2-1 3-1-3z",
+        ["AdminReports.Index"] = "M4 20V10M10 20V4M16 20v-7M22 20H2",
+        ["AdminAudit.Index"] = "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6zM9 12l2 2 4-4",
+        ["AdminAudit.SystemStatus"] = "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
+        ["Accounting.Index"] = "M4 6h16v12H4zM4 10h16M8 15h3",
+        ["Accounting.Refunds"] = "M4 10a8 8 0 1 1 2 6M4 16v-6h6",
+        ["Accounting.History"] = "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
+        ["Accounting.Expenses"] = "M4 20V10M10 20V4M16 20v-7M22 20H2",
+        ["FrontDesk.Index"] = "M15 4h4v16h-4M10 16l4-4-4-4M14 12H4",
+        ["FrontDesk.Rooms"] = "M4 21V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v16M16 9h3a1 1 0 0 1 1 1v11M2 21h20M8 8h4M8 12h4",
+        ["Delivery.Index"] = "M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-.01M17 19a2 2 0 1 0 0-.01",
+        ["Delivery.Done"] = "M5 12l5 5L20 7",
+        ["Housekeeping.Index"] = "M12 3v9M8 12h8l1 9H7zM10 16v5M14 16v5",
+        ["Housekeeping.Done"] = "M5 12l5 5L20 7",
+    };
+    string Ico(string c, string a) => icons.TryGetValue($"{c}.{a}", out var d) ? d : "M12 12h.01";
+    var pageTitle = ViewData["Title"]?.ToString() ?? "";
+    var initial = (User.Identity?.Name ?? roleLabel ?? "A").Trim();
+    initial = initial.Length > 0 ? initial[..1].ToUpper() : "A";
+}
+<!DOCTYPE html>
+<html lang="th" data-font="@ui.Font" data-motion="@ui.Motion">
+<head>
+    @{ ViewData["NoIndex"] = true; }
+    <partial name="_Head" />
+    <title>@ViewData["Title"] - AurelleStay @roleLabel</title>
+    <link rel="stylesheet" href="~/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/flatpickr/flatpickr.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/notyf/notyf.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/glightbox/glightbox.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/tom-select/tom-select.min.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/customer.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+</head>
+<body class="admin-body" data-live="@Url.Content("~/live")">
+<a class="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
+<div class="admin-layout">
+    <div class="admin-scrim" data-nav-close hidden></div>
+    <aside class="admin-sidebar" id="admin-nav">
+        <div class="admin-logo">
+            <a asp-controller="@homeController" asp-action="@homeAction">Aurelle<span>Stay</span></a>
+            <small>@(isAdmin ? "ADMIN PANEL" : roleLabel)</small>
+        </div>
+
+        <div class="admin-profile">
+            <div class="admin-avatar">@initial</div>
+            <div>
+                <strong>@(User.Identity?.Name ?? roleLabel)</strong>
+                <span>@roleLabel</span>
+            </div>
+        </div>
+
+        <nav class="admin-menu" aria-label="เมนูหลังบ้าน">
+            @if (isAdmin)
+            {
+                foreach (var (heading, items) in adminMenu)
+                {
+                    <div class="menu-title">@heading</div>
+                    foreach (var (controller, action, label) in items)
+                    {
+                        var on = string.Equals(controller, currentController, StringComparison.OrdinalIgnoreCase) && string.Equals(action, currentAction, StringComparison.OrdinalIgnoreCase) ? " active" : "";
+                        <a asp-controller="@controller" asp-action="@action" class="admin-menu-item@(on)" aria-current="@(on == "" ? null : "page")" data-badge-key="@controller"><svg class="mi" viewBox="0 0 24 24" aria-hidden="true"><path d="@Ico(controller, action)" /></svg>@label@if (counts.TryGetValue(controller, out var an) && an > 0) { <b class="menu-badge" title="รอดำเนินการ">@an</b> }</a>
+                    }
+                }
+            }
+            else
+            {
+                <div class="menu-title">เมนู</div>
+                foreach (var (action, label) in RoleNames.Menu(role))
+                {
+                    var active = string.Equals(action, currentAction, StringComparison.OrdinalIgnoreCase) ? " active" : "";
+                    <a asp-controller="@homeController" asp-action="@action" class="admin-menu-item@(active)" aria-current="@(active == "" ? null : "page")" data-badge-key="@action" data-badge-label="@label"><svg class="mi" viewBox="0 0 24 24" aria-hidden="true"><path d="@Ico(homeController, action)" /></svg>@label@if (counts.TryGetValue(action, out var n) && n > 0) { <b class="menu-badge" title="รอดำเนินการ">@n</b> }</a>
+                }
+            }
+        </nav>
+
+        <div class="admin-sidebar-bottom">
+            <a asp-controller="Settings" asp-action="Index" class="back-home"><svg class="mi" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3.1 14H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3.1V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 20.9 10H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>ตั้งค่า</a>
+            <a asp-controller="Home" asp-action="Index" class="back-home"><svg class="mi" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6" /></svg>กลับหน้าเว็บไซต์</a>
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                <button type="submit" class="admin-logout"><svg class="mi" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" /></svg>ออกจากระบบ</button>
+            </form>
+        </div>
+    </aside>
+
+    <div class="admin-main">
+        <header class="admin-topbar">
+            <button type="button" class="admin-burger" aria-controls="admin-nav" aria-expanded="false" aria-label="เปิดเมนู">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
+            </button>
+            <a asp-controller="@homeController" asp-action="@homeAction" class="admin-topbar__logo">Aurelle<span>Stay</span></a>
+            <nav class="admin-crumb" aria-label="ตำแหน่งปัจจุบัน">
+                <a asp-controller="@homeController" asp-action="@homeAction">@(isAdmin ? "ผู้จัดการ" : roleLabel)</a>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">@pageTitle</span>
+            </nav>
+            <div class="admin-topbar__end">
+                <span class="admin-topbar__date">@pameka_7033_l005.Helpers.AppClock.Now.ToString("ddd d MMM yyyy", new System.Globalization.CultureInfo("th-TH"))</span>
+                <a asp-controller="Settings" asp-action="Index" class="admin-chip" title="ตั้งค่าบัญชี" aria-label="ตั้งค่าบัญชี @(User.Identity?.Name ?? roleLabel)">
+                    <span class="admin-avatar small" aria-hidden="true">@initial</span>
+                    <span class="admin-chip__name">@(User.Identity?.Name ?? roleLabel)</span>
+                </a>
+            </div>
+        </header>
+        <main class="admin-content" id="main" tabindex="-1">@RenderBody()</main>
+        <footer class="admin-footer"><span>© @pameka_7033_l005.Helpers.AppClock.Now.Year AurelleStay</span><span>@roleLabel</span></footer>
+    </div>
+</div>
+<script>
+    // เมนูหลังบ้านบนจอแคบ: เปิด/ปิดเป็นลิ้นชักด้านซ้าย (ปิดด้วย Esc หรือคลิกพื้นหลัง)
+    (function () {
+        var btn = document.querySelector('.admin-burger'), scrim = document.querySelector('.admin-scrim');
+        if (!btn) return;
+        function set(open) {
+            document.body.classList.toggle('nav-open', open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.setAttribute('aria-label', open ? 'ปิดเมนู' : 'เปิดเมนู');
+            scrim.hidden = !open;
+            if (open) { var a = document.querySelector('#admin-nav .admin-menu-item'); if (a) a.focus(); }
+        }
+        btn.addEventListener('click', function () { set(!document.body.classList.contains('nav-open')); });
+        scrim.addEventListener('click', function () { set(false); btn.focus(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.body.classList.contains('nav-open')) { set(false); btn.focus(); } });
+        window.matchMedia('(min-width: 861px)').addEventListener('change', function (m) { if (m.matches) set(false); });
+    })();
+    // ตารางที่กว้างเกินจอต้องเลื่อนด้วยคีย์บอร์ดได้: ให้กล่องเลื่อนรับโฟกัสเฉพาะตอนที่ล้นจริง
+    (function () {
+        var wraps = document.querySelectorAll('.staff-table-wrap');
+        function mark() {
+            wraps.forEach(function (w) {
+                var scroll = w.scrollWidth > w.clientWidth + 1;
+                if (scroll && !w.hasAttribute('tabindex')) {
+                    w.setAttribute('tabindex', '0'); w.setAttribute('role', 'region');
+                    var cap = w.querySelector('caption'), h = w.closest('section, .staff-card, .dashboard');
+                    var t = cap ? cap.textContent : (h && h.querySelector('h1, h2') ? h.querySelector('h1, h2').textContent : 'ตาราง');
+                    w.setAttribute('aria-label', t.trim() + ' (เลื่อนซ้าย-ขวาได้)');
+                } else if (!scroll && w.getAttribute('role') === 'region') {
+                    w.removeAttribute('tabindex'); w.removeAttribute('role'); w.removeAttribute('aria-label');
+                }
+            });
+        }
+        mark(); window.addEventListener('resize', mark);
+    })();
+</script>
+<script src="~/lib/flatpickr/flatpickr.min.js" asp-append-version="true"></script>
+    <script src="~/lib/flatpickr/l10n/th.js" asp-append-version="true"></script>
+    <script src="~/js/datepicker.js" asp-append-version="true"></script>
+    @* Part 46: ไลบรารี MIT จาก GitHub (เก็บในโปรเจกต์ ไม่ต้องใช้อินเทอร์เน็ต/npm ตอนรัน) — กล่องยืนยันธีมเดียวกัน + เปิดหน้าเร็วขึ้น *@
+    <script src="~/lib/sweetalert2/sweetalert2.min.js" asp-append-version="true"></script>
+    <script src="~/js/confirm.js" asp-append-version="true"></script>
+    <script src="~/lib/notyf/notyf.min.js" asp-append-version="true"></script>
+    <script src="~/lib/glightbox/glightbox.min.js" asp-append-version="true"></script>
+    <script src="~/lib/tom-select/tom-select.complete.min.js" asp-append-version="true"></script>
+    @if (ViewData["Charts"] is true) { <script src="~/lib/chartjs/chart.umd.min.js" asp-append-version="true"></script> }
+    <script src="~/js/enhance.js" asp-append-version="true"></script>
+    <script src="~/lib/instantpage/instantpage.js" type="module" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

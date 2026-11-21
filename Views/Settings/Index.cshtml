@@ -1,0 +1,134 @@
+@model pameka_7033_l005.ViewModels.SettingsPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ตั้งค่า";
+    Layout = User.IsInRole(RoleNames.Customer) ? "_Homelayout" : "_Adminlayout";
+    var isCustomer = Model.RoleName == RoleNames.Customer;
+    // Part 44: ลูกค้าใช้ชื่อหมวดแบบภาษาคนทั่วไป และแท็บแนวนอน (ไม่ใช้เมนูข้างแบบหลังบ้าน)
+    var tabs = isCustomer
+        ? new[] { ("profile", "ข้อมูลส่วนตัว"), ("security", "ความปลอดภัย"), ("appearance", "ขนาดตัวอักษร"), ("data", "ข้อมูลและบัญชี") }
+        : new[] { ("profile", "บัญชี"), ("security", "ความปลอดภัย"), ("appearance", "การแสดงผล"), ("data", "ข้อมูลของฉัน") };
+}
+
+<div class="cx-wrap cx-page">
+    @if (isCustomer) { <partial name="_MemberNav" /> }
+    <h1>@(isCustomer ? "ตั้งค่าบัญชี" : "ตั้งค่า")</h1>
+    <partial name="_Flash" />
+
+    <div class="st-layout@(isCustomer ? " st-layout--guest" : "")">
+        <nav class="@(isCustomer ? "cx-tabs st-tabs" : "st-nav")" aria-label="หมวดการตั้งค่า">
+            @foreach (var (key, label) in tabs)
+            {
+                <a asp-action="Index" asp-route-tab="@key" class="@(Model.Tab == key ? (isCustomer ? "is-on" : "active") : "")" aria-current="@(Model.Tab == key ? "page" : null)">@label</a>
+            }
+        </nav>
+
+        <section class="st-panel">
+        @if (Model.Tab == "profile")
+        {
+            <div class="st-head">
+                <div class="st-avatar" aria-hidden="true">@Model.FullName.Substring(0, 1)</div>
+                <div>
+                    <h2>@Model.FullName</h2>
+                    <p>@RoleNames.Label(Model.RoleName)@(Model.IsMember ? " · สมาชิก (ได้รับส่วนลดสมาชิก)" : "") · สมัครเมื่อ @Model.CreatedAt.ToString("dd/MM/yyyy")</p>
+                </div>
+            </div>
+
+            <form asp-action="SaveProfile" method="post" class="st-form">
+                <label class="cx-field">ชื่อ<input name="FirstName" value="@Model.Profile.FirstName" maxlength="50" required /></label>
+                <label class="cx-field">นามสกุล<input name="LastName" value="@Model.Profile.LastName" maxlength="50" required /></label>
+                <label class="cx-field">เบอร์โทร<input name="Phone" value="@Model.Profile.Phone" inputmode="tel" required /></label>
+                <label class="cx-field">อีเมล (ใช้เข้าสู่ระบบ)<input name="Email" type="email" value="@Model.Profile.Email" maxlength="100" required /></label>
+                @{ var lockDates = User.IsInRole(pameka_7033_l005.Helpers.RoleNames.Customer); }
+                <label class="cx-field">วันเกิด (ใช้รับส่วนลดวันเกิด)<input name="BirthDate" type="date" data-dp-start="1990-01-01" max="@pameka_7033_l005.Helpers.AppClock.Today.ToString("yyyy-MM-dd")" value="@Model.Profile.BirthDate?.ToString("yyyy-MM-dd")" readonly="@(lockDates && Model.Profile.BirthDate.HasValue)" /></label>
+                <label class="cx-field">วันครบรอบ (ใช้รับส่วนลดครบรอบ)<input name="AnniversaryDate" type="date" data-dp-start="2015-01-01" max="@pameka_7033_l005.Helpers.AppClock.Today.ToString("yyyy-MM-dd")" value="@Model.Profile.AnniversaryDate?.ToString("yyyy-MM-dd")" readonly="@(lockDates && Model.Profile.AnniversaryDate.HasValue)" /></label>
+                @if (lockDates)
+                {
+                    <p class="cx-hint">วันเกิดและวันครบรอบตั้งได้ครั้งเดียว (ใช้รับส่วนลดปีละครั้ง และแสดงบัตรยืนยันตอนเช็คอิน) หากกรอกผิด กรุณา<a asp-controller="Home" asp-action="About" asp-fragment="contact">ติดต่อโรงแรม</a></p>
+                }
+                <p><button type="submit" class="cx-btn">บันทึก</button></p>
+            </form>
+        }
+        else if (Model.Tab == "security")
+        {
+            <h2>เปลี่ยนรหัสผ่าน</h2>
+            <form asp-action="ChangePassword" method="post" class="st-form">
+                <label class="cx-field">รหัสผ่านปัจจุบัน<input name="CurrentPassword" type="password" autocomplete="current-password" required /></label>
+                <label class="cx-field">รหัสผ่านใหม่ (อย่างน้อย 8 ตัว มีตัวอักษรและตัวเลข)<input name="NewPassword" type="password" autocomplete="new-password" required /></label>
+                <label class="cx-field">ยืนยันรหัสผ่านใหม่<input name="ConfirmPassword" type="password" autocomplete="new-password" required /></label>
+                <p><button type="submit" class="cx-btn">เปลี่ยนรหัสผ่าน</button></p>
+            </form>
+
+            <h2>การเข้าสู่ระบบล่าสุดของฉัน</h2>
+            @if (!Model.RecentLogins.Any())
+            {
+                <p>ยังไม่มีประวัติ</p>
+            }
+            else
+            {
+                <ul class="st-list">
+                    @foreach (var t in Model.RecentLogins) { <li>@DateTime.SpecifyKind(t, DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</li> }
+                </ul>
+                <p><small>หากเห็นเวลาที่ไม่ใช่คุณ ให้เปลี่ยนรหัสผ่านทันที (อุปกรณ์อื่นจะถูกออกจากระบบอัตโนมัติ)</small></p>
+            }
+
+            <h2>ออกจากระบบอุปกรณ์อื่น</h2>
+            <p>ถ้าเคยเข้าสู่ระบบไว้ที่เครื่องอื่น เช่น คอมพิวเตอร์สาธารณะ กดปุ่มนี้เพื่อตัดเซสชันอื่นทั้งหมดทันที เครื่องนี้ยังใช้งานต่อได้</p>
+            <form asp-action="SignOutOthers" method="post" data-msg="ออกจากระบบทุกอุปกรณ์อื่น?" onsubmit="return confirm(this.dataset.msg);">
+                <button type="submit" class="cx-btn cx-btn--ghost">ออกจากระบบอุปกรณ์อื่นทั้งหมด</button>
+            </form>
+            <form asp-controller="Account" asp-action="Logout" method="post">
+                <button type="submit" class="cx-btn cx-btn--ghost">ออกจากระบบ</button>
+            </form>
+        }
+        else if (Model.Tab == "appearance")
+        {
+            <h2>การแสดงผล</h2>
+            <p>ตั้งค่านี้เก็บในเบราว์เซอร์เครื่องนี้ ไม่กระทบบัญชีของคุณบนเครื่องอื่น</p>
+            <form asp-action="SaveAppearance" method="post" class="st-form">
+                <fieldset class="st-fonts">
+                    <legend>ขนาดตัวอักษร</legend>
+                    @foreach (var f in UiPrefs.Fonts)
+                    {
+                        <label class="st-font st-font--@f"><input type="radio" name="font" value="@f" checked="@(Model.Ui.Font == f)" /> <span>@UiPrefs.FontLabel(f)</span><small>ตัวอย่างข้อความ AurelleStay</small></label>
+                    }
+                </fieldset>
+                <label class="st-check"><input type="checkbox" name="reduceMotion" value="true" checked="@Model.Ui.ReduceMotion" /> <span>ลดการเคลื่อนไหว (ปิดแอนิเมชัน/การเลื่อนนุ่มนวล)</span></label>
+                <input type="hidden" name="reduceMotion" value="false" />
+                <p><button type="submit" class="cx-btn">บันทึก</button></p>
+            </form>
+        }
+        else
+        {
+            <h2>ข้อมูลของฉัน</h2>
+            <p>ดาวน์โหลดข้อมูลของคุณทั้งหมดที่ระบบเก็บไว้ (ข้อมูลส่วนตัว การจอง การชำระเงิน รีวิว ประวัติเข้าสู่ระบบ) เป็นไฟล์ JSON ไม่รวมรหัสผ่าน</p>
+            <form asp-action="ExportData" method="post" data-no-busy>
+                <button type="submit" class="cx-btn">ดาวน์โหลดข้อมูลของฉัน</button>
+            </form>
+
+            @if (isCustomer)
+            {
+                <div class="st-danger">
+                    <h3>ลบบัญชี</h3>
+                    @if (Model.BookingCount > 0)
+                    {
+                        <p>บัญชีนี้มีประวัติการจอง @Model.BookingCount รายการ ซึ่งต้องเก็บไว้ตามบันทึกบัญชี จึงลบบัญชีเองไม่ได้ หากต้องการความช่วยเหลือโปรดติดต่อเจ้าหน้าที่</p>
+                    }
+                    else
+                    {
+                        <p>การลบบัญชีทำย้อนกลับไม่ได้ กรอกรหัสผ่านเพื่อยืนยัน</p>
+                        <form asp-action="DeleteAccount" method="post" class="st-form" onsubmit="return confirm('ลบบัญชีนี้ถาวร ?');">
+                            <label class="cx-field">รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required /></label>
+                            <p><button type="submit" class="cx-btn cx-btn--danger">ลบบัญชีของฉัน</button></p>
+                        </form>
+                    }
+                </div>
+            }
+            else
+            {
+                <p><small>บัญชีพนักงานลบเองไม่ได้ ให้ผู้จัดการเป็นผู้ดำเนินการ</small></p>
+            }
+        }
+        </section>
+    </div>
+</div>

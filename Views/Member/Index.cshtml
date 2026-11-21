@@ -1,0 +1,156 @@
+@model pameka_7033_l005.ViewModels.MemberDashboardViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "หน้าสมาชิก";
+    ViewData["NoIndex"] = true;
+    Layout = "_Homelayout";
+    string[] months = { "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค." };
+    string D(DateOnly d) => $"{d.Day} {months[d.Month - 1]} {d.Year}";
+    var hour = pameka_7033_l005.Helpers.AppClock.Now.Hour;
+    var greet = hour < 12 ? "สวัสดีตอนเช้า" : hour < 17 ? "สวัสดีตอนบ่าย" : "สวัสดีตอนเย็น";
+    var n = Model.Next;
+}
+
+<section class="mb-hero">
+    <div class="cx-wrap mb-hero__grid">
+        <div>
+            <p class="cx-eyebrow">Member Lounge</p>
+            <h1>@greet<br /><em>คุณ@(Model.FirstName)</em></h1>
+            <p class="mb-since">สมาชิก AurelleStay ตั้งแต่ @D(DateOnly.FromDateTime(Model.MemberSince))</p>
+        </div>
+        <dl class="mb-stats">
+            <div><dt>เข้าพักแล้ว</dt><dd>@Model.Stays<small> ครั้ง</small></dd></div>
+            <div><dt>รวม</dt><dd>@Model.Nights<small> คืน</small></dd></div>
+            <div><dt>ประหยัดไป</dt><dd>@Model.Saved.ToString("N0")<small> บาท</small></dd></div>
+        </dl>
+    </div>
+</section>
+
+<div class="cx-wrap mb-body">
+    <partial name="_MemberNav" />
+    <partial name="_Flash" />
+
+    @foreach (var b in Model.NeedAction)
+    {
+        <div class="mb-alert" role="status">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16.5h.01" /></svg>
+            <p>
+                <b>การจอง #@b.BookingId @(b.LastRejectedAt != null ? "— สลิปถูกปฏิเสธ แนบใหม่" : "— รอชำระเงิน")</b>
+                ภายใน @BookingExpiry.Deadline(b.BookedAt, b.CheckIn, b.LastRejectedAt).ToString("dd/MM HH:mm") น. มิฉะนั้นระบบจะยกเลิกอัตโนมัติ
+            </p>
+            <a asp-controller="Booking" asp-action="Pay" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">ชำระเงิน</a>
+        </div>
+    }
+
+    <div class="mb-grid">
+        <section class="mb-next" aria-labelledby="mb-next-h">
+            <p class="mb-kicker">Your next stay</p>
+            <h2 id="mb-next-h">การเข้าพักครั้งถัดไป</h2>
+            @if (n == null)
+            {
+                <div class="mb-empty">
+                    <p>ยังไม่มีการเข้าพักที่กำลังจะมาถึง</p>
+                    <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--sun">ค้นหาห้องว่าง</a>
+                </div>
+            }
+            else
+            {
+                var days = n.CheckIn.DayNumber - Model.Today.DayNumber;
+                var nights = n.CheckOut.DayNumber - n.CheckIn.DayNumber;
+                <div class="mb-count">
+                    @if (n.Status == "CHECKED_IN") { <b>กำลังเข้าพัก</b><span>เช็คเอาท์ @D(n.CheckOut)</span> }
+                    else if (days <= 0) { <b>วันนี้</b><span>พร้อมต้อนรับคุณ</span> }
+                    else { <b>@days</b><span>วันก่อนเข้าพัก</span> }
+                </div>
+                <div class="mb-trip">
+                    <div><small>เช็คอิน</small><b>@D(n.CheckIn)</b></div>
+                    <span class="mb-trip__line" aria-hidden="true"><i>@nights คืน</i></span>
+                    <div><small>เช็คเอาท์</small><b>@D(n.CheckOut)</b></div>
+                </div>
+                <p class="mb-rooms">การจอง #@n.BookingId@(n.Rooms.Any() ? " · ห้อง " + string.Join(", ", n.Rooms) : "") <span class="cx-badge cx-badge--@n.Status">@ThaiLabels.BookingStatus(n.Status)</span></p>
+                <div class="mb-actions">
+                    @if (BookingWorkflow.CanPay(n.Status, n.Flags)) { <a asp-controller="Booking" asp-action="Pay" asp-route-id="@n.BookingId" class="cx-btn cx-btn--sun">ชำระเงิน</a> }
+                    <a href="/Booking/Details/@n.BookingId" class="cx-btn cx-btn--light">รายละเอียด</a>
+                    <a href="/Booking/Document/@n.BookingId?kind=confirmation" class="cx-btn cx-btn--light">ใบยืนยันการจอง</a>
+                </div>
+            }
+        </section>
+
+        <aside class="mb-side">
+            @if (Model.MyCodes.Any())
+            {
+                <section class="mb-card mb-codes" aria-labelledby="mb-code-h">
+                    <h2 id="mb-code-h">รหัสและคูปองของคุณ</h2>
+                    <ul class="mb-codelist">
+                        @foreach (var c in Model.MyCodes)
+                        {
+                            <li>
+                                <div><code>@c.Code</code><b>ลด @c.Percent.ToString("0.##")%</b></div>
+                                <p>@c.Name<small>@c.Condition</small></p>
+                                <a asp-controller="Booking" asp-action="Create" asp-route-code="@c.Code" class="cx-btn cx-btn--small">จองพร้อมใช้รหัสนี้</a>
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
+            <section class="mb-card" aria-labelledby="mb-perk-h">
+                <h2 id="mb-perk-h">สิทธิ์ส่วนลดของคุณ</h2>
+                <p class="mb-muted"><a asp-controller="Promotions" asp-action="Index" asp-fragment="pm-claim">ดูคูปองเทศกาลที่เปิดให้เก็บ →</a></p>
+                @if (!Model.Perks.Any()) { <p class="mb-muted">ยังไม่มีโปรโมชั่นที่เปิดอยู่ตอนนี้</p> }
+                <ul class="mb-perks">
+                    @foreach (var p in Model.Perks)
+                    {
+                        <li class="@(p.Ready ? "" : "is-locked")">
+                            <b>@p.Percent.ToString("0.##")%</b>
+                            <span><strong>@p.Name</strong><small>@(p.Hint ?? p.Condition)</small></span>
+                        </li>
+                    }
+                </ul>
+                @if (!Model.HasBirthDate || !Model.HasAnniversary)
+                {
+                    <a asp-controller="Settings" asp-action="Index" class="mb-link">เพิ่มวันเกิด / วันครบรอบ →</a>
+                }
+                <p class="mb-muted">ระบบเลือกส่วนลดที่คุ้มที่สุดให้อัตโนมัติ 1 รายการต่อการจอง</p>
+                <a asp-controller="Promotions" asp-action="Index" class="mb-link">ดูรายละเอียดโปรโมชั่นทั้งหมด →</a>
+            </section>
+        </aside>
+    </div>
+
+    <div class="mb-grid mb-grid--3">
+        <section class="mb-card" aria-labelledby="mb-up-h">
+            <h2 id="mb-up-h">การจองอื่นที่กำลังจะมาถึง</h2>
+            @if (!Model.Upcoming.Any()) { <p class="mb-muted">ไม่มี</p> }
+            <ul class="mb-list">
+                @foreach (var b in Model.Upcoming)
+                {
+                    <li><a href="/Booking/Details/@b.BookingId"><b>@D(b.CheckIn)</b><span>#@b.BookingId · @(b.CheckOut.DayNumber - b.CheckIn.DayNumber) คืน</span></a><span class="cx-badge cx-badge--@b.Status">@ThaiLabels.BookingStatus(b.Status)</span></li>
+                }
+            </ul>
+            <a asp-controller="Booking" asp-action="MyBookings" class="mb-link">การจองทั้งหมด →</a>
+        </section>
+
+        <section class="mb-card" aria-labelledby="mb-rv-h">
+            <h2 id="mb-rv-h">เล่าประสบการณ์ของคุณ</h2>
+            @if (!Model.ToReview.Any()) { <p class="mb-muted">ไม่มีการเข้าพักที่รอรีวิว</p> }
+            <ul class="mb-list">
+                @foreach (var b in Model.ToReview)
+                {
+                    <li><span><b>@D(b.CheckIn)</b><span>#@b.BookingId</span></span><a asp-controller="Reviews" asp-action="Create" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">เขียนรีวิว</a></li>
+                }
+            </ul>
+            <p class="mb-muted">ยอดใช้จ่ายที่ชำระแล้วทั้งหมด @Model.Spent.ToString("N2") บาท</p>
+        </section>
+
+        <section class="mb-card" aria-labelledby="mb-nt-h">
+            <h2 id="mb-nt-h">การแจ้งเตือน @if (Model.Unread > 0) { <span class="mb-pill">ใหม่ @Model.Unread</span> }</h2>
+            @if (!Model.Notes.Any()) { <p class="mb-muted">ยังไม่มีการแจ้งเตือน</p> }
+            <ul class="mb-list mb-notes">
+                @foreach (var x in Model.Notes)
+                {
+                    <li class="@(x.Read ? "" : "is-new")"><span><b>@x.Title</b><span>@x.At.ToString("dd/MM/yyyy HH:mm")</span></span></li>
+                }
+            </ul>
+            <a data-no-instant asp-controller="Notifications" asp-action="Index" class="mb-link">ดูทั้งหมด →</a>
+        </section>
+    </div>
+</div>

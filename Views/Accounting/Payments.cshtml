@@ -1,0 +1,81 @@
+@model pameka_7033_l005.ViewModels.PaymentListViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = Model.Title;
+    Layout = "_Adminlayout";
+    var confirmAction = Model.Mode == "refund" ? "ApproveRefund" : "Confirm";
+    var rejectAction = Model.Mode == "refund" ? "RejectRefund" : "Reject";
+    var confirmLabel = Model.Mode == "refund" ? "อนุมัติคืนเงิน" : "ยืนยัน";
+}
+
+<div class="dashboard">
+    <h1>@Model.Title</h1>
+    <partial name="_Flash" />
+    <p>@Model.Description</p>
+
+    <div class="staff-card">
+        @if (!Model.Rows.Any())
+        {
+            <div class="cx-empty">
+                <b>@(Model.Mode switch { "refund" => "ไม่มีคำขอคืนเงินที่รอดำเนินการ", "history" => "ยังไม่มีประวัติการตรวจสอบ", _ => "ไม่มีการชำระเงินที่รอตรวจสอบ" })</b>
+                <span>@(Model.Mode == "history" ? "เมื่อยืนยันหรือปฏิเสธการชำระเงิน รายการจะแสดงที่นี่" : "งานเสร็จครบแล้ว รายการใหม่จะแสดงที่นี่เมื่อลูกค้าส่งเรื่องเข้ามา")</span>
+            </div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead>
+                        <tr>
+                            <th>การจอง</th><th>ลูกค้า</th><th>ห้อง</th><th>เข้าพัก</th><th>ยอด (บาท)</th><th>ช่องทาง / หลักฐาน</th>
+                            <th>สถานะ</th>
+                            @if (Model.Mode == "history") { <th>วันที่</th><th>ผู้ดำเนินการ</th> } else { <th>จัดการ</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var r in Model.Rows)
+                    {
+                        <tr>
+                            <td><a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@r.BookingId">#@r.BookingId</a></td>
+                            <td>@r.Customer<br /><small>@r.Phone</small></td>
+                            <td>@(string.IsNullOrWhiteSpace(r.Rooms) ? "—" : r.Rooms)</td>
+                            <td class="nowrap">@r.CheckIn.ToString("dd/MM/yy")<br />– @r.CheckOut.ToString("dd/MM/yy")</td>
+                            <td class="nowrap">@(r.Type == BookingWorkflow.PaymentType ? "" : "−")@r.Amount.ToString("N2")
+                                <br /><small class="acc-kind acc-kind--@(r.Type == BookingWorkflow.PaymentType ? "in" : "out")">@(r.Type == BookingWorkflow.PaymentType ? "รับชำระ" : "คืนเงิน")</small></td>
+                            <td>
+                                @ThaiLabels.PaymentMethod(r.Method)
+                                @if (r.HasSlip)
+                                {
+                                    <br /><a href="/Booking/Slip/@r.PaymentId" target="_blank" rel="noopener" class="acc-slip" @(r.SlipIsPdf ? "" : "data-zoom-link") data-zoom-title="สลิปการจอง #@r.BookingId · @r.Customer · ฿@r.Amount.ToString("N2")"><svg class="cx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>ดูสลิป</a>
+                                }
+                                @if (!string.IsNullOrEmpty(r.Reference)) { <br /><small>อ้างอิง: @r.Reference</small> }
+                            </td>
+                            <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.PaymentStatus(r.Type, r.Status)</span></td>
+                            @if (Model.Mode == "history")
+                            {
+                                <td class="nowrap">@(r.PaidAt?.ToString("dd/MM/yyyy"))<br /><small>@(r.PaidAt?.ToString("HH:mm"))</small></td>
+                                <td>@r.Handler</td>
+                            }
+                            else
+                            {
+                                <td>
+                                    <form asp-action="@confirmAction" method="post" class="staff-inline"
+                                          onsubmit="return confirm('@confirmLabel การจอง #@r.BookingId ยอด @r.Amount.ToString("N2") บาท ?');">
+                                        <input type="hidden" name="id" value="@r.PaymentId" />
+                                        <button type="submit" class="cx-btn cx-btn--small">@confirmLabel</button>
+                                    </form>
+                                    <form asp-action="@rejectAction" method="post" class="staff-inline"
+                                          onsubmit="return confirm('ปฏิเสธรายการของการจอง #@r.BookingId ?');">
+                                        <input type="hidden" name="id" value="@r.PaymentId" />
+                                        <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ปฏิเสธ</button>
+                                    </form>
+                                </td>
+                            }
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

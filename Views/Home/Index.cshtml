@@ -1,0 +1,275 @@
+@model pameka_7033_l005.ViewModels.HomePageViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Cfg
+@{
+    ViewData["Title"] = "หน้าแรก";
+    Layout = "_Homelayout";
+    var today = pameka_7033_l005.Helpers.AppClock.Today;
+    var hotel = pameka_7033_l005.Helpers.HotelInfo.From(Cfg);
+    var origin = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}";
+    // ข้อมูลโครงสร้างสำหรับเครื่องมือค้นหา (schema.org/Hotel) — ใส่เฉพาะค่าที่ตั้งไว้จริง
+    var ld = new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org", ["@type"] = "Hotel", ["name"] = hotel.Name, ["url"] = origin + "/",
+        ["image"] = origin + Url.Content("~/images/rooms/standard-double.jpg"),
+        ["checkinTime"] = hotel.CheckInTime, ["checkoutTime"] = hotel.CheckOutTime,
+        ["telephone"] = hotel.Phone, ["email"] = hotel.Email, ["address"] = hotel.Address
+    }.Where(kv => kv.Value != null).ToDictionary(kv => kv.Key, kv => kv.Value);
+    if (Model.MinPrice is { } minP) ld["priceRange"] = $"เริ่มต้น {minP:N0} บาท/คืน";
+    if (Model.ReviewCount > 0)
+        ld["aggregateRating"] = new Dictionary<string, object> { ["@type"] = "AggregateRating", ["ratingValue"] = Math.Round(Model.ReviewAverage, 1), ["reviewCount"] = Model.ReviewCount, ["bestRating"] = 5 };
+    string Stars(double v) => new string('★', (int)Math.Round(v)) + new string('☆', 5 - (int)Math.Round(v));
+}
+@section Head {
+    <script type="application/ld+json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(ld, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default }))</script>
+}
+
+<section class="cx-hero">
+    <div class="cx-wrap">
+        <div>
+            <p class="cx-eyebrow">Boutique Hotel · @hotel.Name</p>
+            <h1>ห้องพักที่พร้อม<br /><em>เมื่อคุณมาถึง</em></h1>
+            <p>ที่พักสไตล์บูทีคใจกลางเมือง เลือกวันที่ เลือกห้อง แล้วจองได้ในไม่กี่ขั้นตอน สมาชิกรับส่วนลดทุกการจอง</p>
+            @if (Model.MinPrice.HasValue || Model.ReviewCount > 0)
+            {
+                <ul class="hm-proof" aria-label="ข้อมูลสรุป">
+                    @if (Model.MinPrice is { } mp) { <li><b>฿@mp.ToString("N0")</b><span>เริ่มต้น / คืน</span></li> }
+                    @if (Model.ReviewCount > 0) { <li><b>@Model.ReviewAverage.ToString("0.0") <i aria-hidden="true">★</i></b><span>จาก @Model.ReviewCount รีวิวผู้เข้าพัก</span></li> }
+                    @if (Model.MemberPercent is { } m) { <li><b>-@m.ToString("0.##")%</b><span>ส่วนลดสมาชิกทุกการจอง</span></li> }
+                </ul>
+            }
+            <div class="cx-hero-actions">
+                <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--sun">ดูห้องพักทั้งหมด</a>
+                <a asp-controller="Services" asp-action="Index" class="cx-btn cx-btn--light">บริการเสริม</a>
+            </div>
+        </div>
+        <div class="cx-arch cx-hero-arch cx-arch--photo"><img src="~/images/rooms/standard-double.jpg" alt="ห้องพักแสงธรรมชาติของ AurelleStay" width="1200" height="800" fetchpriority="high" /></div>
+    </div>
+</section>
+
+<div class="cx-wrap hm-glass-zone">
+    <partial name="_Flash" />
+    <form method="get" asp-controller="Rooms" asp-action="Index" class="cx-booker" aria-label="ค้นหาห้องว่าง">
+        <label class="cx-field">เช็คอิน<input type="date" data-dp-in name="CheckIn" min="@today.ToString("yyyy-MM-dd")" value="@today.AddDays(1).ToString("yyyy-MM-dd")" /></label>
+        <label class="cx-field">เช็คเอาท์<input type="date" data-dp-out name="CheckOut" min="@today.AddDays(1).ToString("yyyy-MM-dd")" value="@today.AddDays(2).ToString("yyyy-MM-dd")" /></label>
+        <label class="cx-field">
+            จำนวนผู้เข้าพัก
+            <select name="Guests">
+                <option value="1">1 คน</option>
+                <option value="2" selected>2 คน</option>
+                <option value="3">3 คน</option>
+                <option value="4">4 คน</option>
+            </select>
+        </label>
+        <button type="submit" class="cx-btn">ค้นหาห้องว่าง</button>
+    </form>
+
+    <ul class="hm-perks" aria-label="จุดเด่นของการเข้าพัก">
+        <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+            <span><b>เช็คอิน @hotel.CheckInTime น.</b>เช็คเอาท์ @hotel.CheckOutTime น.</span>
+        </li>
+        <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12.5 12.5 20a1.4 1.4 0 0 1-2 0L4 13.5V4h9.5L20 10.5a1.4 1.4 0 0 1 0 2Z"/><circle cx="8.5" cy="8.5" r="1.3"/></svg>
+            <span><b>ส่วนลดอัตโนมัติ</b>ระบบเลือกโปรที่คุ้มที่สุดให้</span>
+        </li>
+        <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/></svg>
+            <span><b>ชำระผ่าน QR</b>ฝ่ายบัญชีตรวจสอบทุกรายการ</span>
+        </li>
+        <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10h14v3a7 7 0 0 1-14 0Z"/><path d="M19 11h1.5a2 2 0 0 1 0 4H18.5M9 3.5c0 1.5 1 1.5 1 3M13 3.5c0 1.5 1 1.5 1 3"/></svg>
+            <span><b>บริการถึงห้องพัก</b>อาหาร สปา และเตียงเสริม</span>
+        </li>
+    </ul>
+</div>
+
+@if (Model.Campaigns.Any())
+{
+    ViewData["Compact"] = true;
+    <section class="cx-section hm-camp" aria-labelledby="camp-h">
+        <div class="cx-wrap">
+            <div class="hm-head">
+                <div>
+                    <p class="cx-eyebrow">Festival Deals</p>
+                    <h2 id="camp-h">โปรเทศกาล &amp; คูปองกดเก็บ</h2>
+                </div>
+                <div class="hm-camp__nav">
+                    <button type="button" class="hm-camp__btn" data-slide="-1" aria-label="เลื่อนไปทางซ้าย">‹</button>
+                    <button type="button" class="hm-camp__btn" data-slide="1" aria-label="เลื่อนไปทางขวา">›</button>
+                    <a asp-controller="Promotions" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">ดูโปรทั้งหมด</a>
+                </div>
+            </div>
+            <div class="hm-camp__track" data-slider tabindex="0" aria-label="รายการโปรโมชั่น เลื่อนดูได้">
+                @foreach (var c in Model.Campaigns) { <partial name="_CouponCard" model="c" /> }
+            </div>
+        </div>
+    </section>
+    ViewData["Compact"] = null;
+}
+
+@if (Model.Types.Any())
+{
+    <section class="cx-section" aria-labelledby="types-h">
+        <div class="cx-wrap hm-glass-zone">
+            <div class="hm-head">
+                <div>
+                    <p class="cx-eyebrow">Accommodation</p>
+                    <h2 id="types-h">ห้องพักของเรา</h2>
+                    <p class="cx-lead">เลือกประเภทห้องที่เหมาะกับการเดินทางของคุณ ราคาต่อคืนก่อนส่วนลด</p>
+                </div>
+                <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">ดูห้องทั้งหมด</a>
+            </div>
+            <div class="hm-types">
+                @foreach (var t in Model.Types)
+                {
+                    <article class="hm-type">
+                        <a asp-controller="Rooms" asp-action="Index" asp-route-TypeId="@t.TypeId" class="hm-type__photo" tabindex="-1" aria-hidden="true">
+                            @if (!string.IsNullOrEmpty(t.ImageUrl))
+                            {
+                                <img src="@t.ImageUrl" alt="" loading="lazy" width="600" height="400" />
+                            }
+                            else
+                            {
+                                <span class="cx-arch cx-scene--dawn"></span>
+                            }
+                        </a>
+                        <div class="hm-type__body">
+                            <h3><a asp-controller="Rooms" asp-action="Index" asp-route-TypeId="@t.TypeId">@t.Name</a></h3>
+                            <p class="hm-type__meta">พักได้ @t.MaxGuests คน · @t.RoomCount ห้อง</p>
+                            <p class="hm-type__price">เริ่มต้น <b>฿@t.Price.ToString("N0")</b> / คืน</p>
+                        </div>
+                    </article>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@if (Model.Services.Any())
+{
+    <section class="cx-section hm-svc" aria-labelledby="svc-h">
+        <div class="cx-wrap">
+            <div class="hm-head">
+                <div>
+                    <p class="cx-eyebrow">During your stay</p>
+                    <h2 id="svc-h">เติมช่วงเวลาพักผ่อนให้สมบูรณ์</h2>
+                    <p class="cx-lead">เลือกเพิ่มได้ตอนจองห้อง ชำระรวมกับค่าห้องในครั้งเดียว</p>
+                </div>
+                <a asp-controller="Services" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">บริการทั้งหมด</a>
+            </div>
+            <div class="hm-svc__grid">
+                @foreach (var s in Model.Services)
+                {
+                    <a asp-controller="Services" asp-action="Index" class="hm-svc__card">
+                        @if (s.ImageUrl != null) { <img src="@s.ImageUrl" alt="" loading="lazy" width="400" height="300" /> }
+                        <span class="hm-svc__body"><b>@s.Name</b><span>@s.Price.ToString("N0") บาท / ห้อง</span></span>
+                    </a>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@if (Model.ReviewCount > 0)
+{
+    <section class="cx-section hm-rv" aria-labelledby="rv-h">
+        <div class="cx-wrap hm-rv__grid">
+            <div class="hm-rv__score">
+                <p class="cx-eyebrow">Guest reviews</p>
+                <h2 id="rv-h">ผู้เข้าพักพูดถึงเรา</h2>
+                <p class="hm-rv__big">@Model.ReviewAverage.ToString("0.0")<small>/5</small></p>
+                <p class="hm-rv__stars" aria-label="คะแนนเฉลี่ย @Model.ReviewAverage.ToString("0.0") จาก 5">@Stars(Model.ReviewAverage)</p>
+                <p class="hm-rv__count">จาก @Model.ReviewCount รีวิวของผู้ที่เข้าพักจริง</p>
+                <a asp-controller="Reviews" asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">อ่านรีวิวทั้งหมด</a>
+            </div>
+            <div class="hm-rv__list">
+                @foreach (var r in Model.TopReviews)
+                {
+                    <figure class="hm-rv__card">
+                        <p class="hm-rv__stars" aria-label="@r.Rating ดาว">@Stars(r.Rating)</p>
+                        <blockquote>@r.Comment</blockquote>
+                        <figcaption>— @r.Name · @r.CreatedAt.ToString("MM/yyyy")</figcaption>
+                    </figure>
+                }
+                @if (!Model.TopReviews.Any())
+                {
+                    <p class="cx-lead">อ่านความเห็นของผู้เข้าพักได้ที่หน้ารีวิว</p>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+<section class="cx-section hm-why" aria-labelledby="why-h">
+    <div class="cx-wrap">
+        <p class="cx-eyebrow">Book direct</p>
+        <h2 id="why-h">จองตรงกับโรงแรม ได้มากกว่า</h2>
+        <ul class="hm-why__grid">
+            <li>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12.5 12.5 20a1.4 1.4 0 0 1-2 0L4 13.5V4h9.5L20 10.5a1.4 1.4 0 0 1 0 2Z"/><circle cx="8.5" cy="8.5" r="1.3"/></svg>
+                <b>@(Model.BestPercent is { } bp ? $"ส่วนลดสูงสุด {bp:0.##}%" : "ราคาตรงจากโรงแรม")</b>
+                <span>ระบบเลือกโปรที่คุ้มที่สุดให้อัตโนมัติ @(Model.MemberPercent is { } mm ? $"สมาชิกลด {mm:0.##}% ทุกการจอง" : "")</span>
+            </li>
+            <li>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+                <b>เห็นห้องว่างจริง</b>
+                <span>ปฏิทินห้องว่างอัปเดตตามการจองจริง ไม่ต้องรอยืนยันว่ามีห้องไหม</span>
+            </li>
+            <li>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6Z"/><path d="m9 12 2 2 4-4"/></svg>
+                <b>ยกเลิกได้ ไม่เสียเปรียบ</b>
+                <span>ยังไม่ชำระ ยกเลิกเองได้ทันที · ชำระแล้วขอคืนเงินได้ก่อนเข้าพัก</span>
+            </li>
+            <li>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2z"/></svg>
+                <b>ชำระง่าย มีใบเสร็จ</b>
+                <span>สแกน QR แนบสลิป ได้ใบยืนยันและใบเสร็จ PDF ทันทีที่ตรวจสอบแล้ว</span>
+            </li>
+        </ul>
+    </div>
+</section>
+
+<section class="cx-section hm-faq" aria-labelledby="faq-h">
+    <div class="cx-wrap hm-faq__grid">
+        <div>
+            <p class="cx-eyebrow">FAQ</p>
+            <h2 id="faq-h">คำถามที่พบบ่อย</h2>
+            <p class="cx-lead">ไม่เจอคำตอบที่ต้องการ? <a asp-controller="Home" asp-action="About" asp-fragment="contact">ส่งข้อความถึงโรงแรม</a></p>
+        </div>
+        <div class="hm-faq__list">
+            <details>
+                <summary>เช็คอินและเช็คเอาท์กี่โมง?</summary>
+                <p>เช็คอินตั้งแต่ @hotel.CheckInTime น. และเช็คเอาท์ก่อน @hotel.CheckOutTime น. ของวันออก</p>
+            </details>
+            <details>
+                <summary>ชำระเงินอย่างไร?</summary>
+                <p>หลังกดยืนยันการจอง สแกน QR ในหน้าชำระเงินแล้วแนบสลิป ฝ่ายบัญชีตรวจสอบแล้วการจองจะยืนยันอัตโนมัติ และดาวน์โหลดใบเสร็จได้ทันที — ต้องชำระภายในเวลาที่แสดง มิฉะนั้นระบบยกเลิกให้อัตโนมัติ</p>
+            </details>
+            <details>
+                <summary>ยกเลิกหรือขอคืนเงินได้ไหม?</summary>
+                <p>การจองที่ยังไม่ชำระยกเลิกเองได้ในหน้า "การจองของฉัน" · การจองที่ชำระแล้วกด "ขอคืนเงิน" ได้ก่อนวันสิ้นสุดการเข้าพัก (ยังไม่เช็คอิน) ฝ่ายบัญชีจะตรวจสอบและคืนเงิน <a asp-controller="Home" asp-action="Policy">อ่านเงื่อนไขทั้งหมด</a></p>
+            </details>
+            <details>
+                <summary>ได้ส่วนลดอย่างไร?</summary>
+                <p>สมัครสมาชิกฟรีแล้วจองตามปกติ ระบบตรวจทุกโปรและเลือกส่วนลดที่คุ้มที่สุดให้ 1 รายการต่อการจอง เห็นยอดสุทธิก่อนยืนยัน · มีรหัสโปรโมชั่นกรอกได้ในหน้าสรุปการจอง</p>
+            </details>
+            <details>
+                <summary>จองหลายห้อง หรือเพิ่มเตียงเสริมได้ไหม?</summary>
+                <p>ได้ — เลือกได้หลายห้องในการจองเดียว และเพิ่มบริการเสริม เช่น อาหารเช้า เตียงเสริม สปา ได้ในขั้นตอนจอง ราคาบริการคิดต่อห้อง</p>
+            </details>
+        </div>
+    </div>
+</section>
+
+<section class="cx-section">
+    <div class="cx-wrap">
+        <p class="cx-eyebrow">How to book</p>
+        <h2>จองห้องใน 4 ขั้นตอน</h2>
+        <ol class="cx-steps">
+            <li><b>เลือกวันเข้าพัก</b><span>ดูเฉพาะห้องที่ว่างในวันที่คุณเลือก</span></li>
+            <li><b>เลือกห้องและบริการ</b><span>จองได้หลายห้อง เพิ่มอาหารเช้าหรือเตียงเสริมได้</span></li>
+            <li><b>ตรวจสอบราคา</b><span>เห็นส่วนลดและยอดสุทธิก่อนยืนยัน</span></li>
+            <li><b>ยืนยันและชำระเงิน</b><span>ติดตามสถานะในหน้า "การจองของฉัน"</span></li>
+        </ol>
+    </div>
+</section>

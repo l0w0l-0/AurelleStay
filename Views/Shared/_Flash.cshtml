@@ -1,0 +1,4 @@
+@if (TempData["Status"] is string status)
+{
+    <div class="cx-alert @(TempData["StatusError"] is true ? "cx-alert--error" : "cx-alert--ok")" role="status" data-toast>@status</div>
+}
