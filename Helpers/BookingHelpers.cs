@@ -29,7 +29,8 @@ public record PricingInput(
     DateOnly Today,
     bool IsMember, DateOnly? BirthDate, DateOnly? AnniversaryDate,
     IReadOnlyList<PromoRule> Promos,
-    string? EnteredCode = null);                  // รหัสโปรโมชั่นที่ลูกค้ากรอก (ถ้ามี)
+    string? EnteredCode = null,                   // รหัสโปรโมชั่นที่ลูกค้ากรอก (ถ้ามี)
+    IReadOnlyList<decimal>? RoomStayTotals = null); // ค่าห้องรวมทั้งช่วงพักของแต่ละห้อง (ผลรวมราคารายคืนจริง) — ถ้ามีใช้ค่านี้แทน ราคา/คืน × จำนวนคืน
 
 public record PricingResult(int Nights, decimal RoomsTotal, decimal ServicesTotal,
     decimal Subtotal, decimal Discount, decimal Net, PromoRule? Applied,
@@ -112,7 +113,8 @@ public static class PricingService
     public static PricingResult Calculate(PricingInput i)
     {
         var nights = Math.Max(0, i.CheckOut.DayNumber - i.CheckIn.DayNumber);
-        var rooms = i.RoomPricesPerNight.Sum() * nights;
+        // ใช้ผลรวมราคารายคืนจริงถ้ามี: ราคาเฉลี่ย/คืนถูกปัด 2 ตำแหน่ง × จำนวนคืน จะคลาดจากราคาที่ลูกค้าเห็นในปฏิทิน ±0.01 บาท
+        var rooms = i.RoomStayTotals is { Count: > 0 } exact ? exact.Sum() : i.RoomPricesPerNight.Sum() * nights;
         var subtotal = rooms + i.ServicesTotal;
 
         PromoRule? best = null;
@@ -596,10 +598,11 @@ public sealed class BookingBuilder
         // ราคาตามวัน: เฉลี่ยต่อคืนของแต่ละห้อง (คืนศุกร์/เสาร์ + ช่วงราคาพิเศษ)
         var seasons = await RatePlan.SeasonsAsync(_db, ci, co);
         var nightly = rooms.ToDictionary(r => r.RoomId, r => RatePlan.AveragePerNight(r.Type.BasePrice, r.Type.WeekendPrice, ci, co, seasons));
+        var stayTotals = rooms.Select(r => RatePlan.Breakdown(r.Type.BasePrice, r.Type.WeekendPrice, ci, co, seasons).Sum(n => n.Price)).ToList();
 
         var result = PricingService.Calculate(new PricingInput(
             rooms.Select(r => nightly[r.RoomId]).ToList(), ci, co, servicesTotal, Today,
-            user.IsMember, user.BirthDate, user.AnniversaryDate, promos, code));
+            user.IsMember, user.BirthDate, user.AnniversaryDate, promos, code, stayTotals));
         if (code != null && !result.CodeApplied && result.CodeMessage?.StartsWith("ไม่พบ") == true)
             PromoCodeGuard.Fail(userId == 0 ? "staff:" + vm.CustomerEmail : "u:" + userId);
         vm.PromoCode = code;
@@ -826,10 +829,16 @@ public static class BookingExpiry
             && ((b.BookedAt < bookedBefore && !b.Payments.Any(p => p.Status == "REJECTED" && p.PaidAt >= bookedBefore)) || b.CheckIn < today));
         if (userId.HasValue) q = q.Where(b => b.UserId == userId.Value);
 
-        var expired = await q.ToListAsync();
-        foreach (var b in expired)
+        var candidates = await q.AsNoTracking().Select(b => new { b.BookingId, b.UserId }).ToListAsync();
+        var expired = new List<int>();
+        foreach (var b in candidates)
         {
-            b.Status = "CANCELLED";
+            // ยกเลิกแบบมีเงื่อนไขในคำสั่งเดียว: ถ้าลูกค้าแนบสลิปเข้ามาระหว่างนั้น แถวจะไม่ตรงเงื่อนไขและไม่ถูกยกเลิก
+            var n = await db.Bookings.Where(x => x.BookingId == b.BookingId && x.Status == "PENDING"
+                    && !x.Payments.Any(p => p.PaymentType == BookingWorkflow.PaymentType && (p.Status == "PENDING" || p.Status == "PAID")))
+                .ExecuteUpdateAsync(set => set.SetProperty(x => x.Status, "CANCELLED"));
+            if (n == 0) continue;
+            expired.Add(b.BookingId);
             Notify.Add(db, b.UserId, $"การจอง #{b.BookingId} ถูกยกเลิกอัตโนมัติ",
                 "ไม่ได้รับหลักฐานการชำระเงินภายในเวลาที่กำหนด ห้องถูกคืนให้ผู้อื่นแล้ว จองใหม่ได้ตลอดเวลา", Notify.BookingLink(b.BookingId));
         }

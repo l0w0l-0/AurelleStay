@@ -35,6 +35,14 @@ public static class AppSetup
             o.Filters.Add<AuditFilter>();   // บันทึกกิจกรรมทุกคำสั่งที่เปลี่ยนข้อมูล (POST) ของผู้ใช้ที่ล็อกอิน
         });
         services.AddMemoryCache();
+        // บีบอัดหน้า HTML/JSON (Brotli/Gzip) ลดขนาดที่ส่ง ~70% — เฉพาะ http (ค่าเริ่มต้นไม่บีบอัดบน https เพื่อกัน BREACH; ไฟล์ static ถูกบีบอัดไว้ตอน build แล้ว)
+        services.AddResponseCompression(o =>
+        {
+            o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+            o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+        });
+        services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+        services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
         AppClock.Configure(config["App:TimeZone"]);
 
         // ส่งตัวอักษรไทยใน HTML ตรง ๆ (เดิม Razor แปลงเป็น &#xE2D; ทุกตัว ทำให้หน้าใหญ่ขึ้นหลายเท่า) — ยังเข้ารหัส < > & " ' ตามปกติ
@@ -76,7 +84,10 @@ public static class AppSetup
                 options.SlidingExpiration = true;
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = env.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;   // เครื่องจริงส่งคุกกี้ผ่าน https เท่านั้น
+                // เครื่องจริงส่งคุกกี้ผ่าน https เท่านั้น — ยกเว้นตั้ง App:HttpsOnlyCookies=false (เช่น Docker ที่เปิดผ่าน http://IP-ในวง-LAN:8088
+                // เบราว์เซอร์จะทิ้งคุกกี้ Secure ที่ได้มาทาง http ทำให้เข้าสู่ระบบไม่ได้จากเครื่องอื่น/มือถือ)
+                options.Cookie.SecurePolicy = env.IsDevelopment() || !config.GetValue("App:HttpsOnlyCookies", true)
+                    ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 
                 // ตรวจซ้ำทุกคำขอว่าผู้ใช้ยังมีอยู่และบทบาทในคุกกี้ตรงกับฐานข้อมูล
                 // (ถูกลบ/ถูกเปลี่ยนบทบาท = สิทธิ์เดิมใช้ไม่ได้ทันที ต้องล็อกอินใหม่)
@@ -478,6 +489,15 @@ public static class DbSetup
         ("promotions", "auto_key", "varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, ADD UNIQUE KEY `ux_promo_auto` (`auto_key`)"),
     };
 
+    /// <summary>ดัชนีเพื่อความเร็ว (เพิ่มอย่างเดียว): ค้นห้องว่างตามสถานะ+ช่วงวัน, การจองของลูกค้า, สถานะการชำระต่อการจอง</summary>
+    private static readonly (string Table, string Name, string Columns)[] Indexes =
+    {
+        ("bookings", "ix_booking_status_dates", "`status`, `check_in`, `check_out`"),
+        ("bookings", "ix_booking_user_booked", "`user_id`, `booked_at`"),
+        ("payments", "ix_payment_booking_type", "`booking_id`, `payment_type`, `status`"),
+        ("payments", "ix_payment_status", "`status`, `payment_type`"),
+    };
+
     private static readonly (string Name, string Category, string Image, string Description)[] SampleServices =
     {
         ("อาหารเช้า", "DINE", "/images/services/breakfast.jpg", "อาหารเช้าสำหรับผู้เข้าพัก เสิร์ฟทุกเช้าระหว่างการเข้าพัก"),
@@ -549,6 +569,8 @@ public static class DbSetup
                 var removed = await db.AuditLogs.Where(a => a.CreatedAt < cutoff).ExecuteDeleteAsync();
                 if (removed > 0) log.LogInformation("ลบบันทึกกิจกรรมเก่ากว่า {Days} วัน {Count} รายการ", keepDays, removed);
             }
+
+            await EnsureFirstAdminAsync(db, app.Configuration, log);
 
             if (app.Configuration.GetValue("Database:SeedSampleCatalog", true) && !await db.RoomTypes.AnyAsync())
                 await SeedCatalogAsync(db, app.Environment.ContentRootPath, log);
@@ -636,6 +658,16 @@ public static class DbSetup
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง audit_logs");
         }
 
+        var haveIdx = (await db.Database.SqlQueryRaw<string>(
+                "SELECT DISTINCT CONCAT(TABLE_NAME, '.', INDEX_NAME) AS Value FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE()").ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var (table, name, cols) in Indexes.Where(i => !haveIdx.Contains($"{i.Table}.{i.Name}")))
+        {
+            // ชื่อมาจากรายการคงที่ในโค้ด (ไม่ใช่ข้อมูลผู้ใช้)
+            await db.Database.ExecuteSqlRawAsync($"ALTER TABLE `{table}` ADD INDEX `{name}` ({cols})");
+            log.LogWarning("อัปเกรดฐานข้อมูล: เพิ่มดัชนี {Table}.{Index} (เพิ่มความเร็ว)", table, name);
+        }
+
         var statusType = (await db.Database.SqlQueryRaw<string>(
             "SELECT COLUMN_TYPE AS Value FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payments' AND COLUMN_NAME = 'status' LIMIT 1").ToListAsync()).FirstOrDefault();
         if (statusType != null && !statusType.Contains("REJECTED", StringComparison.OrdinalIgnoreCase))
@@ -659,6 +691,40 @@ public static class DbSetup
             await db.Database.ExecuteSqlRawAsync("ALTER TABLE `promotions` MODIFY COLUMN `promo_type` enum('MEMBER','MOTHERS_DAY','EARLY_BIRD','BIRTHDAY','ANNIVERSARY','SEASONAL','LONG_STAY','CODE') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL");
             log.LogWarning("อัปเกรดฐานข้อมูล: เพิ่มประเภทโปรโมชั่น SEASONAL / LONG_STAY / CODE");
         }
+    }
+
+    /// <summary>
+    /// ผู้จัดการคนแรก (รันครั้งเดียวจบ): ถ้าตั้ง Setup:AdminEmail + Setup:AdminPassword และระบบยังไม่มีผู้จัดการเลย → สร้างให้
+    /// มีผู้จัดการแล้วจะไม่ทำอะไร (ไม่ทับรหัสผ่านที่เปลี่ยนไปแล้ว) · ไม่ตั้งค่า = ข้าม (ใช้วิธีสมัครแล้ว docker.ps1 admin แบบเดิมได้)
+    /// </summary>
+    private static async Task EnsureFirstAdminAsync(Csi402dbContext db, IConfiguration cfg, ILogger log)
+    {
+        var email = cfg["Setup:AdminEmail"]?.Trim().ToLowerInvariant();
+        var password = cfg["Setup:AdminPassword"];
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password)) return;
+        if (!new EmailAddressAttribute().IsValid(email) || !PasswordPolicyAttribute.IsStrong(password))
+        {
+            log.LogWarning("Setup:AdminEmail/AdminPassword ไม่ถูกต้อง (รหัสผ่านต้องยาว ≥ 8 ตัว มีทั้งตัวอักษรและตัวเลข) — ข้ามการสร้างผู้จัดการคนแรก");
+            return;
+        }
+        if (await db.Users.AnyAsync(u => u.Role.RoleName == RoleNames.Admin)) return;
+        var role = await db.Roles.FirstAsync(r => r.RoleName == RoleNames.Admin);
+        var existing = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
+        if (existing != null) { existing.RoleId = role.RoleId; existing.RotateStamp(); }
+        else
+        {
+            // เบอร์โทรต้องไม่ซ้ำ: ใช้เลขสมมติที่ยังไม่มีใครใช้ (แก้ได้ในหน้าตั้งค่า)
+            var phone = "0000000000";
+            for (var i = 0; await db.Users.AnyAsync(u => u.Phone == phone); i++) phone = (9_000_000_000L + i).ToString("0000000000");
+            db.Users.Add(new User
+            {
+                FirstName = "ผู้จัดการ", LastName = "ระบบ", Email = email, Phone = phone,
+                PasswordHash = PasswordHelper.Hash(password), SecurityStamp = Guid.NewGuid().ToString("N"),
+                RoleId = role.RoleId, IsMember = false, CreatedAt = pameka_7033_l005.Helpers.AppClock.Now
+            });
+        }
+        await db.SaveChangesAsync();
+        log.LogWarning("สร้างผู้จัดการคนแรกแล้ว: {Email}", email);
     }
 
     private static async Task SeedCatalogAsync(Csi402dbContext db, string contentRoot, ILogger log)

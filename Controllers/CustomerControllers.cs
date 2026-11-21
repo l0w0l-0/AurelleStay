@@ -394,8 +394,11 @@ public class BookingController : AppController
             return RedirectToAction(nameof(MyBookings));
         }
 
-        booking.Status = "CANCELLED";
-        await _db.SaveChangesAsync();
+        // ยกเลิกแบบมีเงื่อนไข: ถ้าแนบสลิปเข้ามาพร้อมกัน (อีกแท็บ) จะไม่ยกเลิกรายการที่แจ้งชำระแล้ว
+        var n = await _db.Bookings.Where(x => x.BookingId == booking.BookingId && x.Status == booking.Status
+                && !x.Payments.Any(p => p.PaymentType == BookingWorkflow.PaymentType && (p.Status == "PENDING" || p.Status == "PAID")))
+            .ExecuteUpdateAsync(set => set.SetProperty(x => x.Status, "CANCELLED"));
+        if (n == 0) { Flash("รายการนี้เพิ่งแจ้งชำระเงินหรือเปลี่ยนสถานะแล้ว กรุณาตรวจสอบอีกครั้ง", true); return RedirectToAction(nameof(MyBookings)); }
         Flash("ยกเลิกการจองแล้ว");
         return RedirectToAction(nameof(MyBookings));
     }
@@ -456,10 +459,25 @@ public class BookingController : AppController
         var (file, error) = await UploadStore.SaveSlipAsync(slip);
         if (error != null) { Flash(error, true); return RedirectToAction(nameof(Pay), new { id }); }
 
-        b.Payments.Add(new Payment { Amount = b.NetTotal, PaymentType = BookingWorkflow.PaymentType, Method = "QR", Status = "PENDING",
-            SlipPath = file, Reference = string.IsNullOrEmpty(reference) ? null : reference });
-        try { await _db.SaveChangesAsync(); }
-        catch { UploadStore.DeleteSlip(file); throw; }
+        // ล็อกแถวการจองในธุรกรรม: กดส่งซ้ำ/สองแท็บ หรืองานยกเลิกอัตโนมัติที่ทำพร้อมกัน จะรอกันและตรวจสถานะล่าสุดอีกครั้ง
+        await using (var tx = await _db.Database.BeginTransactionAsync())
+        {
+            var stillPending = await _db.Bookings.Where(x => x.BookingId == b.BookingId && x.Status == "PENDING")
+                .ExecuteUpdateAsync(set => set.SetProperty(x => x.Status, "PENDING")) == 1;
+            var already = await _db.Payments.AnyAsync(p => p.BookingId == b.BookingId && p.PaymentType == BookingWorkflow.PaymentType
+                && (p.Status == "PENDING" || p.Status == "PAID"));
+            if (!stillPending || already)
+            {
+                await tx.RollbackAsync();
+                UploadStore.DeleteSlip(file);
+                Flash(!stillPending ? "การจองนี้ถูกยกเลิกหรือเปลี่ยนสถานะแล้ว กรุณาตรวจสอบอีกครั้ง" : "รายการนี้แจ้งชำระเงินไปแล้ว รอฝ่ายบัญชีตรวจสอบ", true);
+                return RedirectToAction(nameof(MyBookings));
+            }
+            b.Payments.Add(new Payment { Amount = b.NetTotal, PaymentType = BookingWorkflow.PaymentType, Method = "QR", Status = "PENDING",
+                SlipPath = file, Reference = string.IsNullOrEmpty(reference) ? null : reference });
+            try { await _db.SaveChangesAsync(); await tx.CommitAsync(); }
+            catch { UploadStore.DeleteSlip(file); throw; }
+        }
         Flash("แจ้งชำระเงินพร้อมสลิปแล้ว รอฝ่ายบัญชีตรวจสอบและยืนยันการจอง");
         return RedirectToAction(nameof(MyBookings));
     }

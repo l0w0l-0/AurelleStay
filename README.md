@@ -49,22 +49,26 @@ AurelleStay เป็นเว็บไซต์จองห้องพัก�
 | **Dashboard ผู้จัดการ** | **ฝ่ายบริการ (ฟรอนต์)** |
 | <img src="docs/screenshots/dashboard.jpg" width="100%"> | <img src="docs/screenshots/frontdesk.jpg" width="100%"> |
 
-## เริ่มใช้งาน (Docker — แนะนำ)
+## เริ่มใช้งาน — รันทีเดียวจบ (Docker — แนะนำ)
 
-ต้องมี [Docker Desktop](https://www.docker.com/products/docker-desktop/) เท่านั้น
+ต้องมี [Docker Desktop](https://www.docker.com/products/docker-desktop/) เท่านั้น (เปิดไว้ก่อน)
 
+**Windows** — ดับเบิลคลิก `run.bat` หรือพิมพ์
 ```powershell
-git clone https://github.com/l0w0l-0/AurelleStay.git
-cd AurelleStay
-powershell -ExecutionPolicy Bypass -File .\docker.ps1 up          # สร้าง .env (รหัสสุ่ม) + เว็บ + MySQL 8
+.\run.bat
+```
+**macOS / Linux**
+```bash
+./run.sh
 ```
 
-1. เปิด http://localhost:8088 แล้วสมัครสมาชิก 1 บัญชี
-2. ตั้งบัญชีนั้นเป็นผู้จัดการ: `powershell -ExecutionPolicy Bypass -File .\docker.ps1 admin อีเมลของคุณ`
-3. เข้าสู่ระบบใหม่ → สร้างบัญชีพนักงานที่เมนู **พนักงาน**
-4. (สาธิต) เมนู **สถานะระบบ / สำรองข้อมูล** → **สร้างข้อมูลตัวอย่าง** ได้ลูกค้า 30 คนพร้อมการจอง การชำระเงิน และรีวิว (`guest01`–`guest30@demo.aurellestay.local` รหัส `Demo@2026`) ลบออกได้ด้วยปุ่มเดียว
+สคริปต์ทำให้ครบในคำสั่งเดียว: สร้าง `.env` (รหัสผ่านสุ่ม) → build เว็บ + MySQL 8 → สร้างฐานข้อมูลและห้องตัวอย่าง → **สร้างบัญชีผู้จัดการคนแรกให้อัตโนมัติ** → รอจนพร้อม → แสดงอีเมล/รหัสผู้จัดการ → เปิดเบราว์เซอร์ที่ http://localhost:8088
 
-คำสั่งอื่น: `.\docker.ps1 status | logs | backup | down`
+- บัญชีผู้จัดการอยู่ใน `.env` (`ADMIN_EMAIL`, `ADMIN_PASSWORD`) ใช้ตอนเปิดครั้งแรกเท่านั้น — เข้าแล้วเปลี่ยนรหัสได้ที่หน้าตั้งค่า
+- (สาธิต) เมนู **สถานะระบบ / สำรองข้อมูล** → **สร้างข้อมูลตัวอย่าง** ได้ลูกค้า 30 คนพร้อมการจอง การชำระเงิน และรีวิว (`guest01`–`guest30@demo.aurellestay.local` รหัส `Demo@2026`) ลบออกได้ด้วยปุ่มเดียว
+- เปิดจากมือถือ/เครื่องอื่นในวง LAN ได้ที่ `http://IP-ของเครื่อง:8088`
+
+คำสั่งอื่น: `.\docker.ps1 status | logs | backup | down | admin อีเมล` · `./run.sh status | logs | down`
 ตั้งค่ารับเงินพร้อมเพย์ใน `.env`: `PROMPTPAY_ID`, `PAY_ACCOUNT_NAME`, `PAY_BANK_NAME`, `PAY_ACCOUNT_NO` (ดูตัวอย่างใน `.env.example`)
 
 ## เริ่มใช้งาน (ไม่ใช้ Docker)

@@ -43,6 +43,11 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: "server=db;port=3306;database=csi402db;user=aurelle;password=${DB_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True"
       TZ: Asia/Bangkok
+      # เปิดผ่าน http (เช่น http://IP-เครื่อง:8088 จากมือถือ) ต้องเป็น false ไม่งั้นเข้าสู่ระบบไม่ได้ · ถ้าวาง https ไว้ด้านหน้าให้ตั้ง true
+      App__HttpsOnlyCookies: ${HTTPS_ONLY_COOKIES:-false}
+      # ผู้จัดการคนแรก: สร้างให้อัตโนมัติถ้ายังไม่มีผู้จัดการเลย (run.bat / run.sh / docker.ps1 up สุ่มรหัสให้ใน .env)
+      Setup__AdminEmail: ${ADMIN_EMAIL:-}
+      Setup__AdminPassword: ${ADMIN_PASSWORD:-}
       Hotel__Name: ${HOTEL_NAME:-AurelleStay}
       Hotel__Phone: ${HOTEL_PHONE:-}
       Hotel__Email: ${HOTEL_EMAIL:-}

@@ -37,8 +37,15 @@ switch ($Command) {
             function NewPw { -join (1..24 | ForEach-Object { $chars | Get-Random }) }
             $text = (Get-Content (Join-Path $PSScriptRoot '.env.example') -Raw) `
                 -replace 'DB_ROOT_PASSWORD=.*', ("DB_ROOT_PASSWORD=" + (NewPw)) `
-                -replace 'DB_PASSWORD=.*', ("DB_PASSWORD=" + (NewPw))
+                -replace 'DB_PASSWORD=.*', ("DB_PASSWORD=" + (NewPw)) `
+                -replace 'ADMIN_PASSWORD=.*', ("ADMIN_PASSWORD=Adm1" + (NewPw).Substring(0, 12))
             [IO.File]::WriteAllText($envFile, $text, (New-Object Text.UTF8Encoding $false))
+        }
+        elseif (-not (EnvValue 'ADMIN_EMAIL')) {
+            # .env รุ่นเก่า: เพิ่มบัญชีผู้จัดการคนแรก (ใช้เฉพาะตอนที่ระบบยังไม่มีผู้จัดการ)
+            $chars = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+            $pwA = 'Adm1' + (-join (1..12 | ForEach-Object { $chars | Get-Random }))
+            Add-Content -Path $envFile -Encoding UTF8 -Value "`nHTTPS_ONLY_COOKIES=false`nADMIN_EMAIL=admin@aurellestay.local`nADMIN_PASSWORD=$pwA"
         }
         Step 'สร้าง image และเปิดระบบ (ครั้งแรกดาวน์โหลด .NET + MySQL ใช้เวลาหลายนาที)'
         Compose up -d --build
@@ -51,7 +58,9 @@ switch ($Command) {
         }
         if (-not $ok) { Compose logs --tail 40 web; Fail 'ระบบยังไม่ตอบ ดู log ด้านบน' }
         Write-Host "`nพร้อมใช้งาน: http://localhost:$port" -ForegroundColor Green
-        Write-Host "ยังไม่มีผู้จัดการ? สมัครสมาชิกในเว็บก่อน แล้วรัน: .\docker.ps1 admin อีเมลของคุณ"
+        Write-Host ("ผู้จัดการ: " + (EnvValue 'ADMIN_EMAIL') + "  รหัสผ่าน: " + (EnvValue 'ADMIN_PASSWORD') + "  (ดู/แก้ได้ในไฟล์ .env — ใช้ตอนเปิดครั้งแรกเท่านั้น)") -ForegroundColor Yellow
+        Write-Host "ตั้งบัญชีอื่นเป็นผู้จัดการ: .\docker.ps1 admin อีเมล"
+        if ($env:AURELLE_NO_BROWSER -ne '1') { try { Start-Process "http://localhost:$port" } catch { } }
     }
     'down' { Step 'ปิดระบบ (ข้อมูลยังอยู่ใน volume ไม่ถูกลบ)'; Compose down }
     'status' { Compose ps }

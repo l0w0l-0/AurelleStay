@@ -1751,7 +1751,7 @@ img.is-zoomable:focus-visible { outline: 3px solid var(--brass, #b08a35); outlin
 .hm-camp__btn:hover:not(:disabled) { border-color: var(--brass, #b08a35); color: var(--brass-2, #8a6a22); }
 .hm-camp__btn:disabled { opacity: .35; cursor: default; }
 .hm-camp.no-overflow .hm-camp__btn { display: none; }
-.hm-camp__track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(330px, calc((100% - 40px) / 3)); gap: 20px; overflow-x: auto; padding: 6px 4px 18px; scroll-snap-type: x mandatory; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.hm-camp__track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(330px, calc((100% - 40px) / 3)); gap: 20px; overflow-x: auto; padding: 6px 4px 18px; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
 .hm-camp__track > .cp-card { scroll-snap-align: start; }
 .hm-camp__track:focus-visible { outline: 3px solid var(--brass, #b08a35); outline-offset: 4px; border-radius: 22px; }
 @media (max-width: 900px) { .hm-camp__track { grid-auto-columns: minmax(300px, 82%); } }
@@ -1842,3 +1842,33 @@ img.is-zoomable:focus-visible { outline: 3px solid var(--brass, #b08a35); outlin
 .bd-pre__act { grid-column: 1 / -1; }
 .bd-request { white-space: pre-line; }
 @media (max-width: 640px) { .bd-pre__form { grid-template-columns: 1fr; } }
+
+/* =====================================================================
+   แถบเลื่อน (scrollbar) ธีมม่วง-ทอง — ทั้งหน้าเว็บ หลังบ้าน และกล่องที่เลื่อนได้
+   Chrome/Edge/Safari: ::-webkit-scrollbar (หัวจับไล่สีม่วง โค้งมน ชี้แล้วเป็นทอง)
+   Firefox: scrollbar-color (ใส่เฉพาะเบราว์เซอร์ที่ไม่รองรับ ::-webkit-scrollbar
+   เพราะ Chrome 121+ จะไม่ใช้ ::-webkit-scrollbar ถ้ามี scrollbar-color)
+   ===================================================================== */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: #ece6f4; }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #7a57a8, #45296b) padding-box;
+    border: 3px solid transparent; border-radius: 999px; min-height: 40px;
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #d1ac57, #8a6a22) padding-box; }
+::-webkit-scrollbar-thumb:active { background: linear-gradient(180deg, #b08a35, #6d5216) padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+/* กล่องย่อยที่เลื่อนได้ (ตาราง เมนู แถบการ์ด): บางกว่า พื้นโปร่ง */
+body *::-webkit-scrollbar { width: 8px; height: 8px; }
+body *::-webkit-scrollbar-track { background: transparent; }
+body *::-webkit-scrollbar-thumb { background: rgba(95, 61, 142, .5) padding-box; border-width: 2px; }
+body *::-webkit-scrollbar-thumb:hover { background: #b08a35 padding-box; }
+/* แถบข้างหลังบ้านพื้นเข้ม: โทนทองจาง */
+.admin-menu::-webkit-scrollbar-thumb { background: rgba(201, 162, 76, .45) padding-box; }
+.admin-menu::-webkit-scrollbar-thumb:hover { background: rgba(201, 162, 76, .85) padding-box; }
+
+@supports not selector(::-webkit-scrollbar) {
+    html { scrollbar-color: #5f3d8e #ece6f4; }
+    body * { scrollbar-width: thin; scrollbar-color: rgba(95, 61, 142, .5) transparent; }
+    .admin-menu { scrollbar-color: rgba(201, 162, 76, .55) transparent; }
+}

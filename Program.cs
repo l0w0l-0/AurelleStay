@@ -34,7 +34,8 @@ catch (MySqlConnector.MySqlException ex)
     return;
 }
 
-builder.Services.AddDbContext<Csi402dbContext>(options => options.UseMySql(connectionString, serverVersion,
+// DbContext pool: ใช้อ็อบเจกต์ซ้ำแทนสร้างใหม่ทุกคำขอ (ลดงาน GC/ตั้งค่า)
+builder.Services.AddDbContextPool<Csi402dbContext>(options => options.UseMySql(connectionString, serverVersion,
     // โหลดหลายคอลเลกชันในคำสั่งเดียวจะคูณแถวกัน (cartesian) — แยกเป็นหลายคำสั่งให้เร็วและไม่บวม
     o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
@@ -45,6 +46,7 @@ var app = builder.Build();
 await app.PrepareDatabaseAsync();
 
 app.UseForwardedHeaders();
+app.UseResponseCompression();
 
 if (!app.Environment.IsDevelopment())
 {
