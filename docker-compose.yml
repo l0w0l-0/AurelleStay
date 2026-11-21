@@ -55,6 +55,14 @@ services:
       Email__UseSsl: ${SMTP_SSL:-true}
       # ที่อยู่เว็บสำหรับลิงก์ในอีเมล (เช่น http://192.168.1.10:8088 หรือโดเมนจริง)
       App__PublicUrl: ${PUBLIC_URL:-http://localhost:8088}
+      # Part 53: บริการภายนอก (ว่าง = ปิด)
+      SlipOk__BranchId: ${SLIPOK_BRANCH_ID:-}
+      SlipOk__ApiKey: ${SLIPOK_API_KEY:-}
+      SlipOk__AutoApprove: ${SLIPOK_AUTO_APPROVE:-true}
+      Omise__SecretKey: ${OMISE_SECRET_KEY:-}
+      Line__ChannelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN:-}
+      Line__To: ${LINE_TO:-}
+      Hotel__MapQuery: ${HOTEL_MAP_QUERY:-}
       Setup__AdminEmail: ${ADMIN_EMAIL:-}
       Setup__AdminPassword: ${ADMIN_PASSWORD:-}
       Hotel__Name: ${HOTEL_NAME:-AurelleStay}

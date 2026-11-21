@@ -74,7 +74,7 @@
 
             <h2>ออกจากระบบอุปกรณ์อื่น</h2>
             <p>ถ้าเคยเข้าสู่ระบบไว้ที่เครื่องอื่น เช่น คอมพิวเตอร์สาธารณะ กดปุ่มนี้เพื่อตัดเซสชันอื่นทั้งหมดทันที เครื่องนี้ยังใช้งานต่อได้</p>
-            <form asp-action="SignOutOthers" method="post" data-msg="ออกจากระบบทุกอุปกรณ์อื่น?" onsubmit="return confirm(this.dataset.msg);">
+            <form asp-action="SignOutOthers" method="post" data-confirm="ออกจากระบบทุกอุปกรณ์อื่น?">
                 <button type="submit" class="cx-btn cx-btn--ghost">ออกจากระบบอุปกรณ์อื่นทั้งหมด</button>
             </form>
             <form asp-controller="Account" asp-action="Logout" method="post">
@@ -117,7 +117,7 @@
                     else
                     {
                         <p>การลบบัญชีทำย้อนกลับไม่ได้ กรอกรหัสผ่านเพื่อยืนยัน</p>
-                        <form asp-action="DeleteAccount" method="post" class="st-form" onsubmit="return confirm('ลบบัญชีนี้ถาวร ?');">
+                        <form asp-action="DeleteAccount" method="post" class="st-form" data-confirm="ลบบัญชีนี้ถาวร ?">
                             <label class="cx-field">รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required /></label>
                             <p><button type="submit" class="cx-btn cx-btn--danger">ลบบัญชีของฉัน</button></p>
                         </form>

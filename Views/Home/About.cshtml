@@ -1,4 +1,6 @@
 @model pameka_7033_l005.ViewModels.AboutPageViewModel
+@inject pameka_7033_l005.Helpers.EmailSettings Mail
+@inject pameka_7033_l005.Helpers.IntegrationSettings Integ
 @using pameka_7033_l005.Helpers
 @{
     var hotel = Model.Hotel;
@@ -36,7 +38,18 @@
             {
                 <p>สอบถามการจองได้ที่เคาน์เตอร์ต้อนรับของโรงแรม หรือส่งข้อความผ่านแบบฟอร์มนี้ เจ้าหน้าที่จะติดต่อกลับ</p>
             }
-            <p class="cx-hint">ลืมรหัสผ่าน? เลือกหัวข้อ "ลืมรหัสผ่าน" ในแบบฟอร์ม เจ้าหน้าที่จะตรวจสอบตัวตนแล้วออกรหัสผ่านใหม่ให้</p>
+            @if (Mail.Enabled)
+            {
+                <p class="cx-hint">ลืมรหัสผ่าน? <a asp-controller="Account" asp-action="ForgotPassword">รับลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล</a></p>
+            }
+            else
+            {
+                <p class="cx-hint">ลืมรหัสผ่าน? เลือกหัวข้อ "ลืมรหัสผ่าน" ในแบบฟอร์ม เจ้าหน้าที่จะตรวจสอบตัวตนแล้วออกรหัสผ่านใหม่ให้</p>
+            }
+            @if (Integ.MapEmbedUrl is { } map)
+            {
+                <iframe class="about-map" src="@map" title="แผนที่ @hotel.Name" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            }
         </div>
         <form asp-action="SendMessage" method="post" class="cx-box ct-form" novalidate>
             <h3>ส่งข้อความถึงโรงแรม</h3>

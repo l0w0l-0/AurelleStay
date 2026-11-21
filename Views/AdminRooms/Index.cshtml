@@ -53,7 +53,7 @@
                                 <input type="hidden" name="RoomId" value="@r.RoomId" />
                                 <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
                             </form>
-                            <form asp-action="DeleteRoom" method="post" class="staff-inline" onsubmit="return confirm('ลบห้อง @r.RoomNo ?');">
+                            <form asp-action="DeleteRoom" method="post" class="staff-inline" data-confirm="ลบห้อง @r.RoomNo ?">
                                 <input type="hidden" name="id" value="@r.RoomId" />
                                 <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
                             </form>
@@ -152,7 +152,7 @@
                                     <input type="hidden" name="id" value="@s.SeasonId" />
                                     <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">@(s.IsActive ? "ปิด" : "เปิด")</button>
                                 </form>
-                                <form asp-action="DeleteSeason" method="post" class="staff-inline" onsubmit="return confirm('@(FestivalPricing.IsAuto(s) ? $"ปิดเทศกาลอัตโนมัติ {s.SeasonName} ? (ระบบจะไม่สร้างซ้ำ)" : $"ลบช่วงราคา {s.SeasonName} ? (การจองเดิมไม่เปลี่ยน)")');">
+                                <form asp-action="DeleteSeason" method="post" class="staff-inline" data-confirm="@(FestivalPricing.IsAuto(s) ? $"ปิดเทศกาลอัตโนมัติ {s.SeasonName} ? (ระบบจะไม่สร้างซ้ำ)" : $"ลบช่วงราคา {s.SeasonName} ? (การจองเดิมไม่เปลี่ยน)")">
                                     <input type="hidden" name="id" value="@s.SeasonId" />
                                     <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ลบ</button>
                                 </form>

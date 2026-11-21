@@ -229,6 +229,12 @@ public partial class Payment
     /// <summary>เลขอ้างอิงธุรกรรมจากสลิปธนาคาร (ไม่บังคับ)</summary>
     public string? Reference { get; set; }
 
+    /// <summary>Part 53: ผลตรวจอัตโนมัติ (SlipOK / payment gateway) ให้ฝ่ายบัญชีเห็น</summary>
+    public string? VerifyNote { get; set; }
+
+    /// <summary>Part 53: เลขธุรกรรมจากสลิป (SlipOK) หรือ charge id ของ gateway — ใช้กันสลิป/รายการซ้ำ</summary>
+    public string? TransRef { get; set; }
+
     public virtual Booking Booking { get; set; } = null!;
 
     public virtual User? HandledByNavigation { get; set; }

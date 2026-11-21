@@ -1877,3 +1877,13 @@ body *::-webkit-scrollbar-thumb:hover { background: #b08a35 padding-box; }
 .auth-container--single { width: min(480px, 100%); min-height: 0; display: block; grid-template-columns: none; }
 .auth-container--single .auth-card { border-radius: var(--r-md, 8px); }
 .auth-title { font-family: var(--f-logo, inherit); font-size: 1.6rem; font-weight: 600; color: var(--pine); margin: 0 0 10px; }
+
+/* Part 53: ชำระผ่าน payment gateway / ผลตรวจสลิปอัตโนมัติ / แผนที่ */
+.py-gw { border: 1px solid var(--brass); background: linear-gradient(180deg, var(--brass-soft), var(--card)); }
+.py-gw__qr { display: block; width: min(260px, 100%); height: auto; margin: 8px auto 12px; background: #fff; padding: 8px; border-radius: var(--r-md); }
+.py-gw__status { text-align: center; font-weight: 600; color: var(--pine-2); }
+.py-gw__status.is-ok { color: var(--ok); }
+.py-gw__status.is-err { color: var(--clay); }
+.py-gw__or { text-align: center; color: var(--muted); margin: 14px 0; font-size: .9rem; }
+.acc-verify { color: var(--sky); }
+.about-map { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--r-md); margin-top: 12px; }

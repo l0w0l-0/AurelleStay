@@ -181,6 +181,8 @@ CREATE TABLE IF NOT EXISTS `payments` (
     `paid_at` datetime NULL,
     `slip_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
     `reference` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `verify_note` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `trans_ref` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
     PRIMARY KEY (`payment_id`),
     CONSTRAINT `payments_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`),
     CONSTRAINT `payments_ibfk_2` FOREIGN KEY (`handled_by`) REFERENCES `users` (`user_id`),

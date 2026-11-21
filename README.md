@@ -78,6 +78,15 @@ PUBLIC_URL=http://localhost:8088     (หรือ IP/โดเมนที่�
 ```
 ทดสอบได้ที่เมนู **สถานะระบบ** → **ส่งอีเมลทดสอบถึงฉัน** · ไม่ตั้งค่า = ระบบทำงานแบบเดิมครบทุกอย่าง
 
+**บริการภายนอกอื่น (ไม่บังคับ — ใส่ค่าใน `.env` แล้วรันใหม่ ตัวไหนว่าง = ปิด):**
+
+| บริการ | ค่าใน .env | ได้อะไร |
+|---|---|---|
+| SlipOK (ตรวจสลิป) | `SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY` | ลูกค้าแนบสลิป → ตรวจยอด/บัญชีผู้รับ/สลิปซ้ำ → ผ่านครบยืนยันการจองทันที (ไม่ผ่าน = ฝ่ายบัญชีตรวจเอง พร้อมเห็นผลตรวจ) |
+| Opn Payments (Omise) | `OMISE_SECRET_KEY` | ปุ่ม "ชำระทันที ยืนยันอัตโนมัติ" → QR พร้อมเพย์ เงินเข้าแล้วยืนยันเอง · webhook: `https://โดเมน/webhooks/omise` |
+| LINE Messaging API | `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_TO` | แจ้งเตือนพนักงานในกลุ่ม LINE: สลิปใหม่ ยืนยันอัตโนมัติ ข้อความติดต่อ คำขอคืนเงิน |
+| Google Maps | `HOTEL_MAP_QUERY` | แผนที่ในหน้าเกี่ยวกับเรา (ไม่ต้องใช้ key) |
+
 คำสั่งอื่น: `.\docker.ps1 status | logs | backup | down | admin อีเมล` · `./run.sh status | logs | down`
 ตั้งค่ารับเงินพร้อมเพย์ใน `.env`: `PROMPTPAY_ID`, `PAY_ACCOUNT_NAME`, `PAY_BANK_NAME`, `PAY_ACCOUNT_NO` (ดูตัวอย่างใน `.env.example`)
 

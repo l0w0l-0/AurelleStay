@@ -63,28 +63,28 @@
                             <td>
                                 @if (r.CanCheckIn)
                                 {
-                                    <form asp-action="CheckIn" method="post" class="staff-inline" onsubmit="return confirm('เช็คอินการจอง #@r.BookingId ?');">
+                                    <form asp-action="CheckIn" method="post" class="staff-inline" data-confirm="เช็คอินการจอง #@r.BookingId ?">
                                         <input type="hidden" name="id" value="@r.BookingId" />
                                         <button type="submit" class="cx-btn cx-btn--small">เช็คอิน</button>
                                     </form>
                                 }
                                 @if (r.CanCheckOut)
                                 {
-                                    <form asp-action="CheckOut" method="post" class="staff-inline" onsubmit="return confirm('เช็คเอาท์การจอง #@r.BookingId ?');">
+                                    <form asp-action="CheckOut" method="post" class="staff-inline" data-confirm="เช็คเอาท์การจอง #@r.BookingId ?">
                                         <input type="hidden" name="id" value="@r.BookingId" />
                                         <button type="submit" class="cx-btn cx-btn--small">เช็คเอาท์</button>
                                     </form>
                                 }
                                 @if (r.CanMarkNoShow)
                                 {
-                                    <form asp-action="MarkNoShow" method="post" class="staff-inline" onsubmit="return confirm('บันทึกว่าการจอง #@r.BookingId ไม่มาเข้าพัก ?\nห้องจะเปิดให้จองต่อทันที (เงินที่ชำระแล้วยังคงอยู่)');">
+                                    <form asp-action="MarkNoShow" method="post" class="staff-inline" data-confirm="บันทึกว่าการจอง #@r.BookingId ไม่มาเข้าพัก ?\nห้องจะเปิดให้จองต่อทันที (เงินที่ชำระแล้วยังคงอยู่)">
                                         <input type="hidden" name="id" value="@r.BookingId" />
                                         <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ไม่มาเข้าพัก</button>
                                     </form>
                                 }
                                 @if (r.CanUndoNoShow)
                                 {
-                                    <form asp-action="UndoNoShow" method="post" class="staff-inline" onsubmit="return confirm('ลูกค้ามาแล้ว / บันทึกผิด — คืนสถานะการจอง #@r.BookingId เป็นจองสำเร็จ ?');">
+                                    <form asp-action="UndoNoShow" method="post" class="staff-inline" data-confirm="ลูกค้ามาแล้ว / บันทึกผิด — คืนสถานะการจอง #@r.BookingId เป็นจองสำเร็จ ?">
                                         <input type="hidden" name="id" value="@r.BookingId" />
                                         <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ลูกค้ามาแล้ว (คืนสถานะ)</button>
                                     </form>

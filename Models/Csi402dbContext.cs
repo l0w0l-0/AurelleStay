@@ -412,6 +412,8 @@ public partial class Csi402dbContext : DbContext
                 .HasColumnName("paid_at");
             entity.Property(e => e.SlipPath).HasMaxLength(255).HasColumnName("slip_path");
             entity.Property(e => e.Reference).HasMaxLength(100).HasColumnName("reference");
+            entity.Property(e => e.VerifyNote).HasMaxLength(300).HasColumnName("verify_note");
+            entity.Property(e => e.TransRef).HasMaxLength(64).HasColumnName("trans_ref");
             entity.Property(e => e.PaymentType)
                 .HasDefaultValueSql("'PAYMENT'")
                 .HasColumnType("enum('PAYMENT','REFUND')")

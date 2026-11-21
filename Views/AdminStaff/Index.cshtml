@@ -89,14 +89,14 @@
                         </td>
                         <td>
                             <form asp-action="ResetPassword" method="post" class="staff-inline"
-                                  onsubmit="return confirm('ออกรหัสผ่านใหม่ให้ @s.FullName ? รหัสเดิมจะใช้ไม่ได้ทันที');">
+                                  data-confirm="ออกรหัสผ่านใหม่ให้ @s.FullName ? รหัสเดิมจะใช้ไม่ได้ทันที">
                                 <input type="hidden" name="userId" value="@s.UserId" />
                                 <button type="submit" class="cx-btn cx-btn--small">ออกรหัสใหม่</button>
                             </form>
                             @if (!isSelf)
                             {
                                 <form asp-action="Delete" method="post" class="staff-inline"
-                                      onsubmit="return confirm('ยืนยันลบพนักงาน @s.FullName ?');">
+                                      data-confirm="ยืนยันลบพนักงาน @s.FullName ?">
                                     <input type="hidden" name="userId" value="@s.UserId" />
                                     <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
                                 </form>

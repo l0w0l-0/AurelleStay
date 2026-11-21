@@ -58,7 +58,7 @@
                             {
                                 <a asp-action="EditUser" asp-route-userId="@item.UserId" class="cx-btn cx-btn--small">แก้ไข</a>
                                 <form asp-controller="AdminStaff" asp-action="ResetPassword" method="post" class="staff-inline"
-                                      data-msg="ออกรหัสผ่านใหม่ให้ @item.FullName ? รหัสเดิมจะใช้ไม่ได้ทันที" onsubmit="return confirm(this.dataset.msg);">
+                                      data-confirm="ออกรหัสผ่านใหม่ให้ @item.FullName ? รหัสเดิมจะใช้ไม่ได้ทันที">
                                     <input type="hidden" name="userId" value="@item.UserId" />
                                     <input type="hidden" name="back" value="users" />
                                     <button type="submit" class="cx-btn cx-btn--small">ออกรหัสใหม่</button>
@@ -66,7 +66,7 @@
                             }
                             @if (!RoleNames.IsStaff(item.RoleName))
                             {
-                                <form asp-action="DeleteUser" method="post" class="staff-inline" data-msg="ยืนยันลบผู้ใช้ @item.FullName ?" onsubmit="return confirm(this.dataset.msg);">
+                                <form asp-action="DeleteUser" method="post" class="staff-inline" data-confirm="ยืนยันลบผู้ใช้ @item.FullName ?">
                                     <input type="hidden" name="userId" value="@item.UserId" />
                                     <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
                                 </form>

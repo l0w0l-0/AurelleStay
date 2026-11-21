@@ -61,6 +61,16 @@ public static class AppSetup
         services.AddSingleton<EmailSender>();
         services.AddSingleton<EmailQueue>();
         services.AddHostedService<EmailWorker>();
+        // Part 53: บริการภายนอก (SlipOK / Opn Payments / LINE / Google Maps) — ปิดอยู่จนกว่าจะใส่ค่า
+        var integrations = IntegrationSettings.Load(config);
+        services.AddSingleton(integrations);
+        foreach (var name in new[] { "slipok", "omise", "line" })
+            services.AddHttpClient(name, c => c.Timeout = TimeSpan.FromSeconds(20));
+        services.AddSingleton<SlipVerifier>();
+        services.AddSingleton<OmiseGateway>();
+        services.AddSingleton<LineNotifier>();
+        services.AddHostedService<LineWorker>();
+        MapFrame = integrations.Map;
         services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
         // เก็บคีย์เข้ารหัสคุกกี้ลงดิสก์: รีสตาร์ท/deploy ใหม่แล้วผู้ใช้ไม่หลุดล็อกอิน และฟอร์มที่เปิดค้างไว้ยังส่งได้
@@ -123,6 +133,9 @@ public static class AppSetup
             });
     }
 
+    /// <summary>มีแผนที่ Google ฝังในหน้าเกี่ยวกับเรา → อนุญาต iframe จาก google.com</summary>
+    private static bool MapFrame;
+
     /// <summary>หัวความปลอดภัยพื้นฐาน (กัน clickjacking / MIME sniffing / ลดการรั่วของ referrer)</summary>
     /// <summary>รหัสสถานะ เช่น 404 แสดงหน้าภาษาไทยของเว็บ (แทนหน้าว่าง)</summary>
     public static void UseErrorPages(this WebApplication app) => app.UseStatusCodePagesWithReExecute("/Home/Error", "?code={0}");
@@ -141,7 +154,8 @@ public static class AppSetup
                 ctx.Response.Headers["Content-Security-Policy"] =
                     "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; " +
                     "font-src 'self'; script-src 'self' 'unsafe-inline'; object-src 'none'; " +
-                    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+                    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'" +
+                    (MapFrame ? "; frame-src https://www.google.com" : "");
             return Task.CompletedTask;
         });
         await next();
@@ -491,7 +505,9 @@ public static class DbSetup
         // Part 50: เช็คอินออนไลน์ล่วงหน้า — เวลาที่จะมาถึง + คำขอพิเศษ
         ("bookings", "arrival_time", "varchar(5) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("bookings", "guest_request", "varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
-        ("notifications", "emailed_at", "datetime NULL"),   // Part 52: ส่งเป็นอีเมลแล้วเมื่อไร
+        ("notifications", "emailed_at", "datetime NULL"),
+        ("payments", "verify_note", "varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),   // Part 53
+        ("payments", "trans_ref", "varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),   // Part 52: ส่งเป็นอีเมลแล้วเมื่อไร
         ("promotions", "auto_key", "varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, ADD UNIQUE KEY `ux_promo_auto` (`auto_key`)"),
     };
 
@@ -502,6 +518,7 @@ public static class DbSetup
         ("bookings", "ix_booking_user_booked", "`user_id`, `booked_at`"),
         ("payments", "ix_payment_booking_type", "`booking_id`, `payment_type`, `status`"),
         ("payments", "ix_payment_status", "`status`, `payment_type`"),
+        ("payments", "ix_payment_trans_ref", "`trans_ref`"),
     };
 
     private static readonly (string Name, string Category, string Image, string Description)[] SampleServices =

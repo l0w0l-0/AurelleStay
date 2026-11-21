@@ -82,14 +82,14 @@
                         }
                         @if (BookingWorkflow.CanCancelDirect(b.Status, b.Flags))
                         {
-                            <form asp-action="Cancel" method="post" onsubmit="return confirm('ยืนยันยกเลิกการจองนี้ ?');">
+                            <form asp-action="Cancel" method="post" data-confirm="ยืนยันยกเลิกการจองนี้ ?">
                                 <input type="hidden" name="id" value="@b.BookingId" />
                                 <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิกการจอง</button>
                             </form>
                         }
                         @if (BookingWorkflow.CanCustomerRequestRefund(b.Status, b.Flags, b.CheckOut, DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today)))
                         {
-                            <form asp-action="RequestRefund" method="post" onsubmit="return confirm('ขอยกเลิกและคืนเงินการจองนี้ ?');">
+                            <form asp-action="RequestRefund" method="post" data-confirm="ขอยกเลิกและคืนเงินการจองนี้ ?">
                                 <input type="hidden" name="id" value="@b.BookingId" />
                                 <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ขอคืนเงิน</button>
                             </form>

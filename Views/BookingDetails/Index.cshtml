@@ -134,14 +134,14 @@
             }
             @if (BookingWorkflow.CanCancelDirect(Model.Status, Model.Flags))
             {
-                <form asp-controller="Booking" asp-action="Cancel" method="post" onsubmit="return confirm('ยืนยันยกเลิกการจองนี้ ?');">
+                <form asp-controller="Booking" asp-action="Cancel" method="post" data-confirm="ยืนยันยกเลิกการจองนี้ ?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
                     <button type="submit" class="cx-btn cx-btn--danger">ยกเลิกการจอง</button>
                 </form>
             }
             @if (BookingWorkflow.CanCustomerRequestRefund(Model.Status, Model.Flags, Model.CheckOut, DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today)))
             {
-                <form asp-controller="Booking" asp-action="RequestRefund" method="post" onsubmit="return confirm('ขอยกเลิกและคืนเงินการจองนี้ ?');">
+                <form asp-controller="Booking" asp-action="RequestRefund" method="post" data-confirm="ขอยกเลิกและคืนเงินการจองนี้ ?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
                     <button type="submit" class="cx-btn cx-btn--danger">ขอยกเลิกและคืนเงิน</button>
                 </form>
@@ -150,7 +150,7 @@
         else if (isAdmin && (Model.Status == "PENDING" || BookingWorkflow.CanRequestRefund(Model.Status, Model.Flags)))
         {
             <form asp-controller="AdminBookings" asp-action="Cancel" method="post"
-                  onsubmit="return confirm('@(Model.Status == "PENDING" ? "ยกเลิกการจองนี้ ?" : "สร้างคำขอคืนเงินเต็มจำนวนให้ฝ่ายบัญชีอนุมัติ ?")');">
+                  data-confirm="@(Model.Status == "PENDING" ? "ยกเลิกการจองนี้ ?" : "สร้างคำขอคืนเงินเต็มจำนวนให้ฝ่ายบัญชีอนุมัติ ?")">
                 <input type="hidden" name="id" value="@Model.BookingId" />
                 <button type="submit" class="cx-btn cx-btn--danger">@(Model.Status == "PENDING" ? "ยกเลิกการจอง" : Model.Status == "NO_SHOW" ? "คืนเงินกรณีพิเศษ (ให้ฝ่ายบัญชีอนุมัติ)" : "ยกเลิกและขอคืนเงิน (ให้ฝ่ายบัญชีอนุมัติ)")</button>
             </form>

@@ -109,6 +109,25 @@
             }
             else
             {
+                @if (Model.GatewayEnabled)
+                {
+                    <section class="cx-box py-gw" aria-labelledby="pay-gw-h">
+                        <h2 id="pay-gw-h">ชำระทันที ยืนยันอัตโนมัติ</h2>
+                        @if (Model.GatewayCharge == null)
+                        {
+                            <p class="cx-hint">สแกน QR พร้อมเพย์ด้วยแอปธนาคาร ระบบยืนยันการจองให้ทันทีหลังเงินเข้า ไม่ต้องแนบสลิป</p>
+                            <form asp-action="GatewayStart" asp-route-id="@Model.BookingId" method="post">
+                                <button type="submit" class="cx-btn">สร้าง QR ชำระ ฿@Model.Net.ToString("N2")</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <img src="@Url.Action("GatewayQr", new { id = Model.BookingId, charge = Model.GatewayCharge })" alt="QR พร้อมเพย์สำหรับชำระ ฿@Model.Net.ToString("N2")" class="py-gw__qr" width="260" height="260" />
+                            <p class="py-gw__status" role="status" aria-live="polite" data-gw-status="@Url.Action("GatewayStatus", new { id = Model.BookingId, charge = Model.GatewayCharge })">กำลังรอการชำระเงิน… สแกนแล้วหน้านี้จะอัปเดตเอง</p>
+                        }
+                    </section>
+                    <p class="py-gw__or">หรือโอนเองแล้วแนบสลิป</p>
+                }
                 <section class="cx-box" aria-labelledby="pay-form-h">
                     <h2 id="pay-form-h">แจ้งชำระเงิน</h2>
                     <p class="cx-hint">ฝ่ายบัญชีจะตรวจสอบกับยอดเข้าบัญชีก่อนยืนยันการจอง</p>
@@ -152,6 +171,23 @@
                     g.fillText('@Model.Net.ToString("N2") THB · Booking #@Model.BookingId', size / 2, size + 36);
                     var a = document.createElement('a'); a.download = save.getAttribute('data-qr-save'); a.href = c.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove();
                 });
+            }
+            // Part 53: ถามผลการชำระผ่าน gateway ทุก 4 วินาที (ไม่เกิน 30 นาที)
+            var gw = document.querySelector('[data-gw-status]');
+            if (gw) {
+                var tries = 0;
+                var poll = function () {
+                    if (++tries > 450) { gw.textContent = 'หมดเวลารอ กรุณารีเฟรชหน้านี้'; return; }
+                    fetch(gw.getAttribute('data-gw-status'), { headers: { 'Accept': 'application/json' } })
+                        .then(function (r) { return r.ok ? r.json() : { status: 'pending' }; })
+                        .then(function (d) {
+                            if (d.status === 'paid') { gw.textContent = 'ชำระเงินสำเร็จ ยืนยันการจองแล้ว'; gw.classList.add('is-ok'); setTimeout(function () { location.href = '@Url.Action("MyBookings")'; }, 1500); }
+                            else if (d.status === 'failed') { gw.textContent = 'QR หมดอายุหรือชำระไม่สำเร็จ กรุณาสร้าง QR ใหม่'; gw.classList.add('is-err'); }
+                            else if (d.status === 'mismatch') { gw.textContent = 'ได้รับเงินแล้ว แต่ต้องให้เจ้าหน้าที่ตรวจสอบ เราจะติดต่อกลับ'; gw.classList.add('is-err'); }
+                            else setTimeout(poll, 4000);
+                        }).catch(function () { setTimeout(poll, 6000); });
+                };
+                setTimeout(poll, 3000);
             }
             // แท็บ QR / โอนเข้าบัญชี
             var tabs = document.querySelectorAll('.py-tabs [role=tab]');

@@ -70,7 +70,7 @@
             else
             {
                 <a asp-controller="Account" asp-action="UserList" asp-route-q="demo.aurellestay" class="cx-btn cx-btn--ghost">ดูรายชื่อลูกค้าตัวอย่าง</a>
-                <form asp-action="RemoveDemo" method="post" onsubmit="return confirm('ลบลูกค้าตัวอย่างทั้งหมดพร้อมการจองของบัญชีเหล่านั้น ? (ข้อมูลจริงไม่ถูกลบ)');"><button type="submit" class="cx-btn cx-btn--danger">ลบข้อมูลตัวอย่าง</button></form>
+                <form asp-action="RemoveDemo" method="post" data-confirm="ลบลูกค้าตัวอย่างทั้งหมดพร้อมการจองของบัญชีเหล่านั้น ? (ข้อมูลจริงไม่ถูกลบ)"><button type="submit" class="cx-btn cx-btn--danger">ลบข้อมูลตัวอย่าง</button></form>
             }
         </div>
     </section>

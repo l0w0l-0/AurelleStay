@@ -407,6 +407,9 @@ public class PayPageViewModel
     // ---- Part 49: QR พร้อมเพย์แบบระบุยอด + บัญชีธนาคาร ----
     public string? QrPayload { get; set; }
     public pameka_7033_l005.Helpers.PaymentInfo Payment { get; set; } = new(null, null, null, null);
+    // ---- Part 53: payment gateway (Opn Payments) ----
+    public bool GatewayEnabled { get; set; }
+    public string? GatewayCharge { get; set; }
 }
 
 // ======================================================================
@@ -526,6 +529,7 @@ public class PaymentRowViewModel
     public bool HasSlip { get; set; }
     public bool SlipIsPdf { get; set; }   // Part 48: สลิปรูปภาพเปิดดูเต็มจอในหน้าเดิม (GLightbox) · PDF เปิดแท็บใหม่
     public string? Reference { get; set; }
+    public string? VerifyNote { get; set; }   // Part 53: ผลตรวจสลิปอัตโนมัติ / gateway
 }
 
 /// <summary>Mode: verify = รอตรวจสอบชำระเงิน, refund = คำขอคืนเงิน, history = ประวัติ</summary>

@@ -48,13 +48,7 @@ public class AccountingController : AppController
             return RedirectToAction(nameof(Index));
         }
 
-        p.Status = "PAID";
-        p.PaidAt = pameka_7033_l005.Helpers.AppClock.Now;
-        p.HandledBy = CurrentUserId;
-        p.Booking.Status = "CONFIRMED";
-        p.Booking.ConfirmedBy = CurrentUserId;
-        Notify.Add(_db, p.Booking.UserId, $"ยืนยันการชำระเงินแล้ว · การจอง #{p.BookingId}",
-            $"ได้รับยอด {p.Amount:N2} บาท การจองของคุณได้รับการยืนยันแล้ว เข้าพัก {p.Booking.CheckIn:dd/MM/yyyy}", Notify.BookingLink(p.BookingId));
+        PaymentConfirm.Apply(_db, p, CurrentUserId);
         await _db.SaveChangesAsync();
         Flash($"ยืนยันการชำระเงินของการจอง #{p.BookingId} แล้ว");
         return RedirectToAction(nameof(Index));
@@ -184,7 +178,7 @@ public class AccountingController : AppController
                 p.PaymentId, p.BookingId, p.Booking.CheckIn, p.Booking.CheckOut,
                 Customer = p.Booking.User.FirstName + " " + p.Booking.User.LastName,
                 Phone = p.Booking.User.Phone,
-                p.Amount, p.PaymentType, p.Method, p.Status, p.PaidAt, HasSlip = p.SlipPath != null, SlipPdf = p.SlipPath != null && p.SlipPath.EndsWith(".pdf"), p.Reference,
+                p.Amount, p.PaymentType, p.Method, p.Status, p.PaidAt, HasSlip = p.SlipPath != null, SlipPdf = p.SlipPath != null && p.SlipPath.EndsWith(".pdf"), p.Reference, p.VerifyNote,
                 Handler = p.HandledByNavigation != null ? p.HandledByNavigation.FirstName : null,
                 Rooms = p.Booking.BookingRooms.Select(r => r.Room.RoomNo).ToList()
             }).ToListAsync();
@@ -197,7 +191,7 @@ public class AccountingController : AppController
                 PaymentId = r.PaymentId, BookingId = r.BookingId, Customer = r.Customer, Phone = r.Phone,
                 Rooms = string.Join(", ", r.Rooms), CheckIn = r.CheckIn, CheckOut = r.CheckOut,
                 Amount = r.Amount, Type = r.PaymentType, Method = r.Method, Status = r.Status,
-                PaidAt = r.PaidAt, Handler = r.Handler, HasSlip = r.HasSlip, SlipIsPdf = r.SlipPdf, Reference = r.Reference
+                PaidAt = r.PaidAt, Handler = r.Handler, HasSlip = r.HasSlip, SlipIsPdf = r.SlipPdf, Reference = r.Reference, VerifyNote = r.VerifyNote
             }).ToList()
         });
     }

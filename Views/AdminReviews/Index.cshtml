@@ -31,7 +31,7 @@
                         <td>@ThaiLabels.Stars(r.Rating)</td>
                         <td>@r.Comment</td>
                         <td>
-                            <form asp-action="Delete" method="post" class="staff-inline" onsubmit="return confirm('ลบรีวิวนี้ ?');">
+                            <form asp-action="Delete" method="post" class="staff-inline" data-confirm="ลบรีวิวนี้ ?">
                                 <input type="hidden" name="id" value="@r.Id" />
                                 <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
                             </form>

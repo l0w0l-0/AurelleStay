@@ -49,6 +49,7 @@
                                     <br /><a href="/Booking/Slip/@r.PaymentId" target="_blank" rel="noopener" class="acc-slip" @(r.SlipIsPdf ? "" : "data-zoom-link") data-zoom-title="สลิปการจอง #@r.BookingId · @r.Customer · ฿@r.Amount.ToString("N2")"><svg class="cx-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6"/></svg>ดูสลิป</a>
                                 }
                                 @if (!string.IsNullOrEmpty(r.Reference)) { <br /><small>อ้างอิง: @r.Reference</small> }
+                                @if (!string.IsNullOrEmpty(r.VerifyNote)) { <br /><small class="acc-verify">@r.VerifyNote</small> }
                             </td>
                             <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.PaymentStatus(r.Type, r.Status)</span></td>
                             @if (Model.Mode == "history")
@@ -60,12 +61,12 @@
                             {
                                 <td>
                                     <form asp-action="@confirmAction" method="post" class="staff-inline"
-                                          onsubmit="return confirm('@confirmLabel การจอง #@r.BookingId ยอด @r.Amount.ToString("N2") บาท ?');">
+                                          data-confirm="@confirmLabel การจอง #@r.BookingId ยอด @r.Amount.ToString("N2") บาท ?">
                                         <input type="hidden" name="id" value="@r.PaymentId" />
                                         <button type="submit" class="cx-btn cx-btn--small">@confirmLabel</button>
                                     </form>
                                     <form asp-action="@rejectAction" method="post" class="staff-inline"
-                                          onsubmit="return confirm('ปฏิเสธรายการของการจอง #@r.BookingId ?');">
+                                          data-confirm="ปฏิเสธรายการของการจอง #@r.BookingId ?">
                                         <input type="hidden" name="id" value="@r.PaymentId" />
                                         <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ปฏิเสธ</button>
                                     </form>

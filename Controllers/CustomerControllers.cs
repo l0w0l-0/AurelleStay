@@ -105,6 +105,7 @@ public class HomeController : Controller
             Topic = f.Topic!.ToUpperInvariant(), Message = f.Message.Trim(), Ip = ip, Status = "NEW", CreatedAt = pameka_7033_l005.Helpers.AppClock.Now
         });
         await _db.SaveChangesAsync();
+        HttpContext.RequestServices.GetRequiredService<LineNotifier>().Post($"✉️ ข้อความใหม่จาก {f.Name.Trim()} ({ContactInbox.TopicLabel(f.Topic)}): {(f.Message.Trim().Length > 200 ? f.Message.Trim()[..200] + "…" : f.Message.Trim())}");
         TempData["Status"] = f.Topic!.Equals("PASSWORD", StringComparison.OrdinalIgnoreCase)
             ? "ส่งคำขอแล้ว เจ้าหน้าที่จะตรวจสอบตัวตนและติดต่อกลับทางอีเมล/โทรศัพท์ที่ให้ไว้"
             : "ส่งข้อความแล้ว เจ้าหน้าที่จะติดต่อกลับโดยเร็ว";
@@ -405,7 +406,7 @@ public class BookingController : AppController
 
     // ---------------------------------------------------------------- ชำระเงิน (QR) / ขอคืนเงิน
     [HttpGet]
-    public async Task<IActionResult> Pay(int id)
+    public async Task<IActionResult> Pay(int id, string? charge)
     {
         var uid = CurrentUserId ?? 0;
         await BookingExpiry.RunAsync(_db, pameka_7033_l005.Helpers.AppClock.Now, uid);
@@ -435,8 +436,67 @@ public class BookingController : AppController
             PromoName = b.Promo, Rooms = b.Rooms, PendingPayment = flags.PendingPayment,
             PayBy = BookingExpiry.Deadline(b.BookedAt, b.CheckIn, b.Pays.Where(p => p.Status == "REJECTED").Max(p => p.PaidAt)),
             Rejected = !flags.PendingPayment && b.Pays.Any(p => p.Status == "REJECTED"),
-            QrUrl = System.IO.File.Exists(qrFile) ? "~/images/payment-qr.png" : null
+            QrUrl = System.IO.File.Exists(qrFile) ? "~/images/payment-qr.png" : null,
+            GatewayEnabled = HttpContext.RequestServices.GetRequiredService<IntegrationSettings>().Omise,
+            GatewayCharge = OmiseGateway.IsChargeId(charge) ? charge : null
         });
+    }
+
+    // ---------------------------------------------------------------- Part 53: ชำระผ่าน payment gateway (Opn Payments / PromptPay)
+    /// <summary>สร้าง QR พร้อมเพย์ของ gateway สำหรับยอดของการจองนี้ (ยอดอ่านจากฐานข้อมูล) แล้วกลับไปหน้าชำระเงินเพื่อแสดง QR</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> GatewayStart(int id, [FromServices] OmiseGateway gw, [FromServices] IntegrationSettings integ)
+    {
+        if (!integ.Omise) return RedirectToAction(nameof(Pay), new { id });
+        await BookingExpiry.RunAsync(_db, pameka_7033_l005.Helpers.AppClock.Now, CurrentUserId ?? 0);
+        var b = await LoadOwnBooking(id);
+        if (b == null) return Stale(nameof(MyBookings));
+        if (b.Status != "PENDING" || FlagsOf(b).Paid)
+        {
+            Flash("การจองนี้ไม่อยู่ในขั้นตอนชำระเงินแล้ว", true);
+            return RedirectToAction(nameof(MyBookings));
+        }
+        var deadline = BookingExpiry.Deadline(b.BookedAt, b.CheckIn, b.Payments.Where(p => p.Status == "REJECTED").Max(p => p.PaidAt));
+        if (deadline < pameka_7033_l005.Helpers.AppClock.Now.AddMinutes(15)) deadline = pameka_7033_l005.Helpers.AppClock.Now.AddMinutes(15);
+        try
+        {
+            var c = await gw.CreatePromptPayAsync(b.BookingId, b.NetTotal, deadline, HttpContext.RequestAborted);
+            return RedirectToAction(nameof(Pay), new { id, charge = c.Id });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<BookingController>>().LogWarning(ex, "สร้าง QR gateway ไม่สำเร็จ");
+            Flash("สร้าง QR ชำระเงินอัตโนมัติไม่สำเร็จ กรุณาโอนผ่าน QR พร้อมเพย์ด้านล่างแล้วแนบสลิปแทน", true);
+            return RedirectToAction(nameof(Pay), new { id });
+        }
+    }
+
+    /// <summary>หน้าชำระเงินถามผลทุกไม่กี่วินาที — เซิร์ฟเวอร์ถาม Omise เอง (ไม่ต้องรอ webhook, ใช้ได้แม้รันในเครื่อง)</summary>
+    [HttpGet]
+    public async Task<IActionResult> GatewayStatus(int id, string? charge, [FromServices] OmiseGateway gw, [FromServices] IntegrationSettings integ, [FromServices] LineNotifier line)
+    {
+        var uid = CurrentUserId ?? 0;
+        if (!integ.Omise || !OmiseGateway.IsChargeId(charge) || !await _db.Bookings.AnyAsync(b => b.BookingId == id && b.UserId == uid)) return NotFound();
+        try { return Json(new { status = await gw.ApplyAsync(_db, charge!, id, line, HttpContext.RequestAborted) }); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { return Json(new { status = "pending" }); }
+    }
+
+    /// <summary>รูป QR ของ gateway (ดึงผ่านเซิร์ฟเวอร์ เฉพาะเจ้าของการจอง)</summary>
+    [HttpGet]
+    public async Task<IActionResult> GatewayQr(int id, string? charge, [FromServices] OmiseGateway gw, [FromServices] IntegrationSettings integ)
+    {
+        var uid = CurrentUserId ?? 0;
+        if (!integ.Omise || !OmiseGateway.IsChargeId(charge) || !await _db.Bookings.AnyAsync(b => b.BookingId == id && b.UserId == uid)) return NotFound();
+        try
+        {
+            var c = await gw.GetAsync(charge!, HttpContext.RequestAborted);
+            if (c.BookingId != id || c.QrUri == null) return NotFound();
+            if (await gw.DownloadQrAsync(c.QrUri, HttpContext.RequestAborted) is not { } img) return NotFound();
+            Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'";   // รูป SVG ห้ามรันสคริปต์
+            Response.Headers.CacheControl = "private, max-age=600";
+            return File(img.Bytes, img.ContentType);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { return NotFound(); }
     }
 
     /// <summary>ลูกค้ากด "ฉันชำระเงินแล้ว" → สร้างรายการรอตรวจสอบให้ฝ่ายบัญชี (ยอดอ่านจากการจองในฐานข้อมูล ไม่เชื่อค่าจากฟอร์ม)</summary>
@@ -478,6 +538,30 @@ public class BookingController : AppController
             try { await _db.SaveChangesAsync(); await tx.CommitAsync(); }
             catch { UploadStore.DeleteSlip(file); throw; }
         }
+
+        // Part 53: ตรวจสลิปอัตโนมัติด้วย SlipOK (ถ้าตั้งค่าไว้) — ผ่านครบ = ยืนยันทันที, ไม่ผ่าน/ระบบตรวจล่ม = ฝ่ายบัญชีตรวจเองเหมือนเดิม
+        var svc = HttpContext.RequestServices;
+        var integ = svc.GetRequiredService<IntegrationSettings>();
+        var line = svc.GetRequiredService<LineNotifier>();
+        var paymentId = b.Payments.Where(x => x.SlipPath == file).Select(x => x.PaymentId).FirstOrDefault();
+        if (integ.SlipOk && paymentId > 0)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+            cts.CancelAfter(TimeSpan.FromSeconds(25));
+            try
+            {
+                var (approved, msg) = await svc.GetRequiredService<SlipVerifier>().VerifyPaymentAsync(_db, paymentId, cts.Token);
+                line.Post(approved ? $"✅ การจอง #{b.BookingId} ตรวจสลิปอัตโนมัติผ่าน {b.NetTotal:N2} บาท — ยืนยันการจองแล้ว"
+                                   : $"🧾 การจอง #{b.BookingId} แนบสลิป {b.NetTotal:N2} บาท — ตรวจอัตโนมัติไม่ผ่าน รอฝ่ายบัญชีตรวจ");
+                Flash(msg);
+                return RedirectToAction(nameof(MyBookings));
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or DbUpdateException)
+            {
+                _db.ChangeTracker.Clear();   // ตรวจไม่ทัน/ชนกัน: สลิปบันทึกแล้ว ฝ่ายบัญชีตรวจต่อ
+            }
+        }
+        else line.Post($"🧾 การจอง #{b.BookingId} แนบสลิป {b.NetTotal:N2} บาท — รอฝ่ายบัญชีตรวจ");
         Flash("แจ้งชำระเงินพร้อมสลิปแล้ว รอฝ่ายบัญชีตรวจสอบและยืนยันการจอง");
         return RedirectToAction(nameof(MyBookings));
     }
@@ -498,6 +582,7 @@ public class BookingController : AppController
         var paid = b.Payments.First(p => p.PaymentType == BookingWorkflow.PaymentType && p.Status == "PAID");
         b.Payments.Add(new Payment { Amount = paid.Amount, PaymentType = BookingWorkflow.RefundType, Method = paid.Method, Status = "PENDING" });
         await _db.SaveChangesAsync();
+        HttpContext.RequestServices.GetRequiredService<LineNotifier>().Post($"↩️ การจอง #{b.BookingId} ขอคืนเงิน {paid.Amount:N2} บาท — รอฝ่ายบัญชีอนุมัติ");
         Flash("ส่งคำขอคืนเงินแล้ว รอฝ่ายบัญชีอนุมัติ");
         return RedirectToAction(nameof(MyBookings));
     }
@@ -865,5 +950,43 @@ public class ReviewsController : AppController
             BookingId = b.BookingId, Rating = 5,
             Summary = $"การจอง #{b.BookingId} · {b.CheckIn:dd/MM/yyyy} – {b.CheckOut:dd/MM/yyyy} · ห้อง {string.Join(", ", b.Rooms)}"
         };
+    }
+}
+
+// ======================================================================
+// Part 53: Webhook จาก Opn Payments (Omise) — แจ้งว่า charge เปลี่ยนสถานะ
+// ไม่เชื่อข้อมูลใน webhook: ใช้แค่ id แล้วถาม Omise ด้วย secret key อีกครั้ง (คนปลอม webhook ก็ทำให้ยืนยันการจองไม่ได้)
+// ตั้งใน Opn Dashboard → Webhooks: https://โดเมนของคุณ/webhooks/omise
+// ======================================================================
+[AllowAnonymous, IgnoreAntiforgeryToken]
+public class WebhooksController : Controller
+{
+    [HttpPost("/webhooks/omise")]
+    [RequestSizeLimit(256 * 1024)]
+    public async Task<IActionResult> Omise([FromServices] Csi402dbContext db, [FromServices] OmiseGateway gw,
+        [FromServices] IntegrationSettings integ, [FromServices] LineNotifier line, [FromServices] ILogger<WebhooksController> log)
+    {
+        if (!integ.Omise) return NotFound();
+        string? chargeId = null;
+        try
+        {
+            using var doc = await System.Text.Json.JsonDocument.ParseAsync(Request.Body);
+            if (doc.RootElement.TryGetProperty("data", out var d) && d.ValueKind == System.Text.Json.JsonValueKind.Object
+                && d.TryGetProperty("object", out var o) && o.GetString() == "charge" && d.TryGetProperty("id", out var i))
+                chargeId = i.GetString();
+        }
+        catch (System.Text.Json.JsonException) { return BadRequest(); }
+        if (!OmiseGateway.IsChargeId(chargeId)) return Ok();   // เหตุการณ์อื่นที่ไม่เกี่ยว: ตอบรับไว้
+        try
+        {
+            var result = await gw.ApplyAsync(db, chargeId!, null, line, HttpContext.RequestAborted);
+            log.LogInformation("Omise webhook {Charge}: {Result}", chargeId, result);
+            return Ok();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            log.LogWarning(ex, "Omise webhook {Charge} ทำไม่สำเร็จ (Omise จะส่งซ้ำ)", chargeId);
+            return StatusCode(503);
+        }
     }
 }
