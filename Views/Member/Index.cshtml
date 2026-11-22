@@ -154,6 +154,56 @@
         </section>
     </div>
 
+    @if (Model.StayBookingId is int stayId)
+    {
+        <section class="mb-card mb-req" id="mb-req" aria-labelledby="mb-req-h">
+            <h2 id="mb-req-h">ขอของใช้เพิ่ม <span class="mb-pill">ฟรี ระหว่างเข้าพัก</span></h2>
+            <form method="post" asp-controller="Member" asp-action="RequestItem" class="mb-req__form">
+                <input type="hidden" name="bookingId" value="@stayId" />
+                <label>รายการ
+                    <select name="item" class="form-select" required>
+                        @foreach (var (code, name) in RoomRequests.Items) { <option value="@code">@name</option> }
+                    </select>
+                </label>
+                <label>ห้อง
+                    <select name="roomId" class="form-select" required>
+                        @foreach (var (rid, rno) in Model.StayRooms) { <option value="@rid">@rno</option> }
+                    </select>
+                </label>
+                <label>จำนวน
+                    <input type="number" name="qty" value="1" min="1" max="@RoomRequests.MaxQty" class="form-control" required />
+                </label>
+                <label class="mb-req__note">หมายเหตุ (ถ้ามี)
+                    <input type="text" name="note" maxlength="200" class="form-control" placeholder="เช่น ขอหมอนนุ่ม, วางไว้หน้าห้อง" />
+                </label>
+                <label class="mb-req__urgent"><input type="checkbox" name="urgent" value="true" /> ด่วน</label>
+                <button type="submit" class="cx-btn">ส่งคำขอ</button>
+            </form>
+            @if (Model.Requests.Any())
+            {
+                <ul class="mb-list mb-req__list">
+                    @foreach (var r in Model.Requests)
+                    {
+                        <li>
+                            <span><b>@r.What · ห้อง @r.RoomNo @if (r.Urgent) { <span class="mb-pill">ด่วน</span> }</b>
+                                <span>ขอเมื่อ @r.CreatedAt.ToString("dd/MM HH:mm")@(r.DoneAt is { } d ? " · ส่งเมื่อ " + d.ToString("HH:mm") : "")@(r.Note != null ? " · " + r.Note : "")</span></span>
+                            <span class="mb-wait__act">
+                                <span class="cx-badge cx-badge--@r.Status">@RoomRequests.StatusLabel(r.Status, r.Missed)</span>
+                                @if (r.Status == "PENDING")
+                                {
+                                    <form method="post" asp-controller="Member" asp-action="CancelRequest" asp-route-id="@r.Id" class="d-inline" onsubmit="return confirm('ยกเลิกคำขอนี้?')">
+                                        <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิก</button>
+                                    </form>
+                                }
+                            </span>
+                        </li>
+                    }
+                </ul>
+            }
+            <p class="mb-muted">สถานะ: รอรับงาน → กำลังนำส่ง → ส่งแล้ว · เมื่อส่งถึงห้องจะมีการแจ้งเตือน</p>
+        </section>
+    }
+
     @if (Model.Waiting.Any())
     {
         <section class="mb-card mb-wait" aria-labelledby="mb-wait-h">

@@ -161,6 +161,10 @@ CREATE TABLE IF NOT EXISTS `housekeeping_tasks` (
     `assigned_to` int NULL,
     `status` enum('PENDING','CLEANING','DONE') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
     `done_at` datetime NULL,
+    `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+    `picked_at` datetime NULL,
+    `urgent` tinyint(1) NOT NULL DEFAULT 0,
+    `missed` tinyint unsigned NOT NULL DEFAULT 0,
     PRIMARY KEY (`task_id`),
     CONSTRAINT `housekeeping_tasks_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`),
     CONSTRAINT `housekeeping_tasks_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`),
@@ -315,6 +319,75 @@ CREATE TABLE IF NOT EXISTS `room_waitlist` (
     CONSTRAINT `room_waitlist_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
     CONSTRAINT `room_waitlist_ibfk_2` FOREIGN KEY (`type_id`) REFERENCES `room_types` (`type_id`) ON DELETE CASCADE,
     CONSTRAINT `chk_wait_dates` CHECK (`check_out` > `check_in`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Part 52: กิจกรรมของโรงแรม (รอบเวลาประจำวัน + ที่นั่งต่อรอบ) และการจองกิจกรรมของผู้เข้าพัก — ระบบใส่กิจกรรมตัวอย่างให้ตอนเริ่มครั้งแรก
+CREATE TABLE IF NOT EXISTS `activities` (
+    `activity_id` int NOT NULL AUTO_INCREMENT,
+    `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `category` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CULTURE',
+    `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `price` decimal(10,2) NOT NULL DEFAULT 0,
+    `duration_min` smallint NOT NULL DEFAULT 60,
+    `capacity` smallint NOT NULL DEFAULT 10,
+    `times` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '09:00',
+    `days` varchar(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0123456',
+    `location` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`activity_id`),
+    UNIQUE KEY `ux_activity_name` (`name`),
+    CONSTRAINT `chk_activity_price` CHECK (`price` >= 0),
+    CONSTRAINT `chk_activity_capacity` CHECK (`capacity` BETWEEN 1 AND 200),
+    CONSTRAINT `chk_activity_duration` CHECK (`duration_min` BETWEEN 15 AND 720)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `activity_bookings` (
+    `ab_id` int NOT NULL AUTO_INCREMENT,
+    `activity_id` int NOT NULL,
+    `user_id` int NOT NULL,
+    `booking_id` int NULL,
+    `act_date` date NOT NULL,
+    `start_time` char(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `people` tinyint unsigned NOT NULL DEFAULT 1,
+    `total` decimal(10,2) NOT NULL DEFAULT 0,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CONFIRMED',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `cancelled_at` datetime NULL,
+    PRIMARY KEY (`ab_id`),
+    KEY `ix_ab_slot` (`activity_id`, `act_date`, `start_time`),
+    KEY `ix_ab_user` (`user_id`),
+    KEY `ix_ab_booking` (`booking_id`),
+    CONSTRAINT `activity_bookings_ibfk_1` FOREIGN KEY (`activity_id`) REFERENCES `activities` (`activity_id`),
+    CONSTRAINT `activity_bookings_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `activity_bookings_ibfk_3` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `chk_ab_people` CHECK (`people` BETWEEN 1 AND 20)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Part 53: ของใช้ที่ผู้เข้าพักขอเพิ่มระหว่างเข้าพัก (คิวฝ่ายส่งของ)
+CREATE TABLE IF NOT EXISTS `item_requests` (
+    `request_id` int NOT NULL AUTO_INCREMENT,
+    `booking_id` int NOT NULL,
+    `user_id` int NOT NULL,
+    `room_id` int NOT NULL,
+    `item` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `qty` tinyint unsigned NOT NULL DEFAULT 1,
+    `note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `urgent` tinyint(1) NOT NULL DEFAULT 0,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+    `assigned_to` int NULL,
+    `missed` tinyint unsigned NOT NULL DEFAULT 0,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `picked_at` datetime NULL,
+    `done_at` datetime NULL,
+    PRIMARY KEY (`request_id`),
+    KEY `ix_ir_status` (`status`, `created_at`),
+    KEY `ix_ir_booking` (`booking_id`),
+    CONSTRAINT `item_requests_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `item_requests_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `item_requests_ibfk_3` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`),
+    CONSTRAINT `item_requests_ibfk_4` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_ir_qty` CHECK (`qty` BETWEEN 1 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ข้อความติดต่อโรงแรมจากหน้า "ติดต่อเรา" (Part 30) รวมคำขอรีเซ็ตรหัสผ่าน — ผู้ส่งที่มีบัญชีผูก user_id (ลบบัญชีแล้วข้อความยังอยู่)

@@ -20,16 +20,26 @@
             <div class="staff-table-wrap">
                 <table class="table table-bordered staff-table">
                     <thead>
-                        <tr><th>ห้อง</th><th>รายละเอียด</th><th>สถานะ</th>
+                        <tr><th>ห้อง</th><th>รายละเอียด</th><th>สถานะ</th>@if (Model.Delivery) { <th>@(Model.ShowDone ? "ใช้เวลา" : "รอมาแล้ว")</th> }
                             @if (Model.ShowDone) { <th>ผู้ทำ</th><th>เสร็จเมื่อ</th> } else { <th>จัดการ</th> }</tr>
                     </thead>
                     <tbody>
                     @foreach (var r in Model.Rows)
                     {
-                        <tr>
+                        <tr class="@(r.Late ? "dv-late" : "") @(r.Urgent ? "dv-urgent" : "")">
                             <td>@r.RoomNo</td>
-                            <td>@r.Detail</td>
-                            <td><span class="cx-badge cx-badge--@r.Status">@ThaiLabels.TaskStatus(r.Status)</span></td>
+                            <td>
+                                @if (r.Urgent) { <span class="dv-tag dv-tag--urgent">ด่วน</span> }
+                                @r.Detail
+                                @if (r.Source != null) { <small class="dv-sub">@r.Source@(r.Guest != null ? " · คุณ" + r.Guest : "")</small> }
+                                @if (!string.IsNullOrEmpty(r.Note)) { <small class="dv-sub">หมายเหตุ: @r.Note</small> }
+                                @if (r.Missed > 0) { <small class="dv-sub dv-sub--warn">ไม่พบผู้เข้าพัก @r.Missed ครั้ง</small> }
+                            </td>
+                            <td><span class="cx-badge cx-badge--@r.Status">@(r.StatusText ?? ThaiLabels.TaskStatus(r.Status))</span></td>
+                            @if (Model.Delivery)
+                            {
+                                <td class="dv-time">@(r.Minutes is int m ? (m >= 60 ? $"{m / 60} ชม. {m % 60} นาที" : $"{m} นาที") : "–")</td>
+                            }
                             @if (Model.ShowDone)
                             {
                                 <td>@r.Assignee</td>
@@ -42,6 +52,7 @@
                                     {
                                         <form asp-action="Take" method="post" class="staff-inline">
                                             <input type="hidden" name="id" value="@r.TaskId" />
+                                            @if (Model.Delivery) { <input type="hidden" name="kind" value="@r.Kind" /> }
                                             <button type="submit" class="cx-btn cx-btn--small">@Model.TakeLabel</button>
                                         </form>
                                     }
@@ -49,7 +60,22 @@
                                     {
                                         <form asp-action="Finish" method="post" class="staff-inline">
                                             <input type="hidden" name="id" value="@r.TaskId" />
+                                            @if (Model.Delivery) { <input type="hidden" name="kind" value="@r.Kind" /> }
                                             <button type="submit" class="cx-btn cx-btn--small">@Model.FinishLabel</button>
+                                        </form>
+                                        @if (Model.Delivery)
+                                        {
+                                            <form asp-action="NotHome" method="post" class="staff-inline">
+                                                <input type="hidden" name="id" value="@r.TaskId" /><input type="hidden" name="kind" value="@r.Kind" />
+                                                <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ไม่พบผู้เข้าพัก</button>
+                                            </form>
+                                        }
+                                    }
+                                    @if (Model.Delivery)
+                                    {
+                                        <form asp-action="Urgent" method="post" class="staff-inline">
+                                            <input type="hidden" name="id" value="@r.TaskId" /><input type="hidden" name="kind" value="@r.Kind" />
+                                            <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">@(r.Urgent ? "ยกเลิกด่วน" : "ตั้งเป็นด่วน")</button>
                                         </form>
                                     }
                                 </td>

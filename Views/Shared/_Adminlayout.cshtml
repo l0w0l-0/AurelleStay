@@ -17,10 +17,10 @@
     var adminMenu = new[]
     {
         ("DASHBOARD", new[] { ("Admin", "Index", "Dashboard") }),
-        ("HOTEL MANAGEMENT", new[] { ("AdminRooms", "Index", "จัดการห้องพัก"), ("AdminBookings", "Index", "การจองห้องพัก"), ("FrontDesk", "WalkIn", "จองห้องให้ลูกค้า"), ("Rooms", "Availability", "ปฏิทินห้องว่าง"), ("Account", "UserList", "ลูกค้า / ผู้ใช้"), ("Account", "LoginHistory", "ประวัติเข้าสู่ระบบ") }),
-        ("SERVICES", new[] { ("AdminServices", "Index", "บริการเสริม / อาหาร"), ("AdminPromotions", "Index", "โปรโมชั่น"), ("AdminReviews", "Index", "รีวิวจากลูกค้า"), ("AdminMessages", "Index", "ข้อความจากลูกค้า") }),
+        ("HOTEL MANAGEMENT", new[] { ("AdminRooms", "Index", "จัดการห้องพัก"), ("AdminBookings", "Index", "การจองห้องพัก"), ("FrontDesk", "WalkIn", "จองห้องให้ลูกค้า"), ("FrontDesk", "Activities", "กิจกรรมวันนี้"), ("Rooms", "Availability", "ปฏิทินห้องว่าง"), ("Account", "UserList", "ลูกค้า / ผู้ใช้"), ("Account", "LoginHistory", "ประวัติเข้าสู่ระบบ") }),
+        ("SERVICES", new[] { ("AdminServices", "Index", "บริการเสริม / อาหาร"), ("AdminActivities", "Index", "กิจกรรม"), ("AdminPromotions", "Index", "โปรโมชั่น"), ("AdminReviews", "Index", "รีวิวจากลูกค้า"), ("AdminMessages", "Index", "ข้อความจากลูกค้า") }),
         ("STAFF", new[] { ("AdminStaff", "Index", "จัดการพนักงาน") }),
-        ("SYSTEM", new[] { ("AdminReports", "Index", "รายงาน"), ("AdminAudit", "Index", "บันทึกกิจกรรม"), ("AdminAudit", "SystemStatus", "สถานะระบบ / สำรองข้อมูล") })
+        ("SYSTEM", new[] { ("AdminReports", "Index", "รายงาน"), ("AdminReports", "Delivery", "สถิติฝ่ายส่งของ"), ("AdminAudit", "Index", "บันทึกกิจกรรม"), ("AdminAudit", "SystemStatus", "สถานะระบบ / สำรองข้อมูล") })
     };
 
     // ไอคอนเส้นบาง (SVG path) ตามเมนู — key = Controller.Action
@@ -30,6 +30,8 @@
         ["AdminRooms.Index"] = "M3 18V8m0 6h18v4M21 18v-6a3 3 0 0 0-3-3h-7v5M7 11.5a1.5 1.5 0 1 0 0-.01",
         ["AdminBookings.Index"] = "M5 4h14v17l-3.5-2-3.5 2-3.5-2L5 21zM9 9h6M9 13h6",
         ["FrontDesk.WalkIn"] = "M12 5v14M5 12h14",
+        ["FrontDesk.Activities"] = "M4 6h16v14H4zM4 10h16M9 3v4M15 3v4M8 14h3v3H8z",
+        ["AdminActivities.Index"] = "M12 3l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.3l5-.7z",
         ["Rooms.Availability"] = "M4 6h16v14H4zM4 10h16M9 3v4M15 3v4",
         ["FrontDesk.Availability"] = "M4 6h16v14H4zM4 10h16M9 3v4M15 3v4",
         ["Account.UserList"] = "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14a5 5 0 0 1 3 6",
@@ -40,6 +42,7 @@
         ["AdminReviews.Index"] = "M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4l-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z",
         ["AdminStaff.Index"] = "M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5 20a7 7 0 0 1 14 0M12 14l1 2-1 3-1-3z",
         ["AdminReports.Index"] = "M4 20V10M10 20V4M16 20v-7M22 20H2",
+        ["AdminReports.Delivery"] = "M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-.01M17 19a2 2 0 1 0 0-.01",
         ["AdminAudit.Index"] = "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6zM9 12l2 2 4-4",
         ["AdminAudit.SystemStatus"] = "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
         ["Accounting.Index"] = "M4 6h16v12H4zM4 10h16M8 15h3",

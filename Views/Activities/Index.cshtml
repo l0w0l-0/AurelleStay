@@ -1,0 +1,152 @@
+@model pameka_7033_l005.ViewModels.ActivitiesPageViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "กิจกรรม";
+    ViewData["Description"] = "กิจกรรมของโรงแรม AurelleStay คลาสทำอาหารไทย โยคะ ทัวร์ตลาดน้ำ และกิจกรรมครอบครัว จองรอบเวลาออนไลน์ได้สำหรับผู้เข้าพัก";
+    Layout = "_Homelayout";
+    var th = new System.Globalization.CultureInfo("th-TH");
+    string DShort(DateOnly d) => d.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM", th);
+    var cards = Model.Category == null ? Model.Cards : Model.Cards.Where(c => c.Category == Model.Category).ToList();
+    var cats = HotelActivities.Categories.Where(c => Model.Cards.Any(x => x.Category == c.Key)).ToList();
+    var signedIn = User.Identity?.IsAuthenticated == true;
+}
+
+<section class="sv-hero">
+    <div class="sv-hero__bg" aria-hidden="true"><img src="~/images/services/thai-massage.jpg" alt="" width="1200" height="800" fetchpriority="high" /></div>
+    <div class="cx-wrap sv-hero__grid">
+        <div class="sv-hero__copy">
+            <p class="cx-eyebrow">Experiences</p>
+            <h1>กิจกรรม<br /><em>ระหว่างเข้าพัก</em></h1>
+            <p class="sv-hero__lead">เรียนทำอาหารไทย โยคะยามเช้า ทัวร์ตลาดน้ำ และกิจกรรมครอบครัว จองรอบเวลาได้ทันทีสำหรับผู้เข้าพัก ชำระค่ากิจกรรมที่เคาน์เตอร์</p>
+            <dl class="sv-stats">
+                <div><dt>กิจกรรม</dt><dd>@Model.Cards.Count.ToString("00")</dd></div>
+                <div><dt>ฟรี</dt><dd>@Model.Cards.Count(c => c.Price == 0).ToString("00")</dd></div>
+                <div><dt>รอบใน 7 วัน</dt><dd>@Model.Cards.Sum(c => c.Sessions.Count)</dd></div>
+            </dl>
+        </div>
+        <aside class="sv-how" aria-labelledby="ac-how-h">
+            <p class="sv-how__kicker">How it works</p>
+            <h2 id="ac-how-h">จองกิจกรรมใน 3 ขั้น</h2>
+            <ol>
+                <li><b>จองห้องพักให้เรียบร้อย</b><span>กิจกรรมเปิดให้ผู้เข้าพักที่ยืนยันการจองแล้ว</span></li>
+                <li><b>เลือกวันและรอบเวลา</b><span>ระบบแสดงที่นั่งคงเหลือแบบเรียลไทม์</span></li>
+                <li><b>มาตามเวลาที่จุดนัดพบ</b><span>ยกเลิกได้ก่อนเริ่ม @HotelActivities.CancelBeforeHours ชั่วโมง</span></li>
+            </ol>
+            @if (!signedIn) { <a asp-controller="Account" asp-action="Login" asp-route-returnUrl="/Activities" class="cx-btn cx-btn--sun">เข้าสู่ระบบเพื่อจอง</a> }
+            else if (Model.IsCustomer && !Model.HasStay) { <a asp-controller="Rooms" asp-action="Index" class="cx-btn cx-btn--sun">จองห้องพักก่อน</a> }
+            else if (Model.IsCustomer) { <a href="#mine" class="cx-btn cx-btn--sun">กิจกรรมที่จองไว้</a> }
+        </aside>
+    </div>
+</section>
+
+<div class="sv-body">
+    <div class="cx-wrap">
+        <partial name="_Flash" />
+
+        @if (Model.IsCustomer)
+        {
+            <section class="ac-mine" id="mine" aria-labelledby="ac-mine-h">
+                <h2 id="ac-mine-h">กิจกรรมที่จองไว้</h2>
+                @if (!Model.Mine.Any())
+                {
+                    <p class="ac-muted">ยังไม่มี @(Model.HasStay ? "— เลือกกิจกรรมด้านล่างแล้วกดจอง" : "— กิจกรรมเปิดให้ผู้เข้าพักที่มีการจองห้องยืนยันแล้ว")</p>
+                }
+                else
+                {
+                    <ul class="ac-mine__list">
+                        @foreach (var m in Model.Mine)
+                        {
+                            <li class="ac-mine__item is-@m.Status.ToLowerInvariant()">
+                                <div class="ac-mine__when"><b>@DShort(m.Date)</b><span>@m.Time น.</span></div>
+                                <div class="ac-mine__what"><b>@m.ActivityName</b><span>@m.People คน · @(m.Total > 0 ? m.Total.ToString("N0") + " บาท" : "ฟรี")@(m.Location != null ? " · " + m.Location : "")</span></div>
+                                <span class="cx-badge cx-badge--@(m.Status == "ATTENDED" ? "PAID" : m.Status == "CONFIRMED" ? "CONFIRMED" : "CANCELLED")">@HotelActivities.StatusLabel(m.Status)</span>
+                                @if (m.CanCancel)
+                                {
+                                    <form asp-action="Cancel" method="post" onsubmit="return confirm('ยกเลิกกิจกรรม @m.ActivityName วันที่ @DShort(m.Date) ?');">
+                                        <input type="hidden" name="id" value="@m.AbId" />
+                                        <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิก</button>
+                                    </form>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+
+        @if (cats.Count > 1)
+        {
+            <nav class="sv-jump" aria-label="หมวดกิจกรรม">
+                <a href="/Activities" aria-current="@(Model.Category == null ? "page" : null)">ทั้งหมด</a>
+                @foreach (var c in cats) { <a href="/Activities?cat=@c.Key" aria-current="@(Model.Category == c.Key ? "page" : null)">@c.Label</a> }
+            </nav>
+        }
+
+        @if (!cards.Any())
+        {
+            <div class="cx-empty cx-empty--page"><b>ยังไม่มีกิจกรรมที่เปิดรับจอง</b><span>สอบถามกิจกรรมระหว่างเข้าพักได้ที่เคาน์เตอร์ต้อนรับ</span></div>
+        }
+        <div class="ac-grid">
+            @foreach (var a in cards)
+            {
+                <article class="ac-card" id="act-@a.Id" aria-labelledby="act-@a.Id-h">
+                    <header class="ac-card__head">
+                        <span class="ac-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@HotelActivities.CategoryIcon(a.Category)" /></svg></span>
+                        <div>
+                            <span class="ac-cat">@HotelActivities.CategoryLabel(a.Category)</span>
+                            <h3 id="act-@a.Id-h">@a.Name</h3>
+                        </div>
+                        <b class="ac-price">@(a.Price > 0 ? "฿" + a.Price.ToString("N0") : "ฟรี")@if (a.Price > 0) { <small>/ คน</small> }</b>
+                    </header>
+                    @if (a.Description != null) { <p class="ac-desc">@a.Description</p> }
+                    <ul class="ac-facts">
+                        <li><span>ระยะเวลา</span>@(a.DurationMin >= 60 ? $"{a.DurationMin / 60} ชม.{(a.DurationMin % 60 > 0 ? $" {a.DurationMin % 60} นาที" : "")}" : $"{a.DurationMin} นาที")</li>
+                        <li><span>รอบ</span>@string.Join(" · ", a.Times) น.</li>
+                        <li><span>เปิด</span>@HotelActivities.DaysLabel(a.Days)</li>
+                        <li><span>รับ</span>@a.Capacity ที่ / รอบ</li>
+                        @if (a.Location != null) { <li><span>จุดนัดพบ</span>@a.Location</li> }
+                    </ul>
+                    @if (a.Sessions.Any())
+                    {
+                        <div class="ac-slots" aria-label="ที่นั่งคงเหลือ 7 วันข้างหน้า">
+                            @foreach (var s in a.Sessions.Take(8))
+                            {
+                                <span class="ac-slot @(s.Left == 0 ? "is-full" : s.Left <= 3 ? "is-low" : "")" title="@DShort(s.Date) @s.Time น.">@DShort(s.Date) @s.Time<b>@(s.Left == 0 ? "เต็ม" : $"เหลือ {s.Left}")</b></span>
+                            }
+                        </div>
+                    }
+                    <div class="ac-book">
+                        @if (!signedIn)
+                        {
+                            <a class="cx-btn cx-btn--small" asp-controller="Account" asp-action="Login" asp-route-returnUrl="/Activities#act-@a.Id">เข้าสู่ระบบเพื่อจอง</a>
+                        }
+                        else if (!Model.IsCustomer)
+                        {
+                            <span class="ac-muted">การจองกิจกรรมสำหรับลูกค้าที่เข้าพัก</span>
+                        }
+                        else if (!a.BookableDates.Any())
+                        {
+                            <span class="ac-muted">@(Model.HasStay ? "ไม่มีรอบที่ตรงกับช่วงเข้าพักของคุณ" : "จองห้องพักก่อน แล้วจึงจองกิจกรรมได้")</span>
+                        }
+                        else
+                        {
+                            <form asp-action="Book" method="post" class="ac-form">
+                                <input type="hidden" name="activityId" value="@a.Id" />
+                                <label>วันที่
+                                    <select name="date" required>
+                                        @foreach (var d in a.BookableDates) { <option value="@d.ToString("yyyy-MM-dd")">@DShort(d)</option> }
+                                    </select>
+                                </label>
+                                <label>รอบ
+                                    <select name="time" required>@foreach (var t in a.Times) { <option value="@t">@t น.</option> }</select>
+                                </label>
+                                <label>จำนวนคน <input type="number" name="people" min="1" max="@Math.Min(HotelActivities.MaxPeople, a.Capacity)" value="1" required /></label>
+                                <button type="submit" class="cx-btn cx-btn--small">จองกิจกรรม</button>
+                            </form>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    </div>
+</div>

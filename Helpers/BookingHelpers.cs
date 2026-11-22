@@ -407,9 +407,11 @@ public static class BookingQueries
                     break;
                 case RoleNames.FrontDesk:   // ต้องเช็คอินวันนี้ (ยืนยันแล้ว ถึงวันเข้าพัก) + ต้องเช็คเอาท์ (ถึง/เลยวันออก)
                     c["Index"] = await db.Bookings.CountAsync(b => (b.Status == "CONFIRMED" && b.CheckIn <= today && b.CheckOut > today) || (b.Status == "CHECKED_IN" && b.CheckOut <= today));
+                    c["Activities"] = await db.ActivityBookings.CountAsync(b => b.ActDate == today && b.Status == "CONFIRMED");
                     break;
                 case RoleNames.Delivery:
-                    c["Index"] = await db.DeliveryTasks.CountAsync(t => t.Status != "DONE");
+                    c["Index"] = await db.DeliveryTasks.CountAsync(t => t.Status != "DONE")
+                               + await db.ItemRequests.CountAsync(r => r.Status == "PENDING" || r.Status == "DELIVERING");
                     break;
                 case RoleNames.Housekeeping:
                     c["Index"] = await db.HousekeepingTasks.CountAsync(t => t.Status != "DONE");
@@ -784,7 +786,8 @@ public static partial class ThaiLabels
     public static string TaskStatus(string? s) => s switch
     {
         "PENDING" => "รอรับงาน",
-        "DELIVERING" => "กำลังส่ง",
+        "DELIVERING" => "กำลังนำส่ง",
+        "CANCELLED" => "ยกเลิกแล้ว",
         "CLEANING" => "กำลังทำความสะอาด",
         "DONE" => "เสร็จแล้ว",
         _ => s ?? ""
@@ -1371,7 +1374,36 @@ public static class DemoData
                 StaffNote = i < 2 ? null : "ตอบกลับลูกค้าทางโทรศัพท์แล้ว", HandledAt = i < 2 ? null : now.AddDays(-i), CreatedAt = now.AddDays(-i - 1).AddHours(-rnd.Next(12)) });
         }
         await db.SaveChangesAsync();
-        return $"สร้างลูกค้าตัวอย่าง {users.Count} คน · การจอง {bookings} รายการ · รีวิว {reviews} รายการ · ข้อความ {Messages.Length} รายการ (รหัสผ่านทุกบัญชี {Password})";
+
+        // Part 52: จองกิจกรรมตัวอย่าง — ผู้เข้าพักที่ยืนยัน/เข้าพักอยู่ในอีก 14 วันข้างหน้า (ไม่เกินที่นั่ง)
+        var acts = await db.Activities.AsNoTracking().Where(a => a.IsActive).ToListAsync();
+        var acts_n = 0;
+        if (acts.Count > 0)
+        {
+            var uids = users.Select(u => u.UserId).ToList();
+            var aToday = DateOnly.FromDateTime(now);
+            var stays = await db.Bookings.AsNoTracking().Where(b => uids.Contains(b.UserId) && (b.Status == "CONFIRMED" || b.Status == "CHECKED_IN")
+                && b.CheckOut >= aToday && b.CheckIn <= aToday.AddDays(14)).ToListAsync();
+            var aTaken = await HotelActivities.TakenAsync(db, aToday, aToday.AddDays(15));
+            foreach (var b in stays)
+            {
+                var d = b.CheckIn < aToday.AddDays(1) ? aToday.AddDays(1) : b.CheckIn;
+                if (d > b.CheckOut) continue;
+                var a = acts[rnd.Next(acts.Count)];
+                if (!HotelActivities.OpenOn(a, d)) continue;
+                var t = HotelActivities.ParseTimes(a.Times).FirstOrDefault();
+                if (t == null) continue;
+                var ppl = 1 + rnd.Next(2);
+                var key = (a.ActivityId, d, t);
+                if (aTaken.GetValueOrDefault(key) + ppl > a.Capacity) continue;
+                aTaken[key] = aTaken.GetValueOrDefault(key) + ppl;
+                db.ActivityBookings.Add(new ActivityBooking { ActivityId = a.ActivityId, UserId = b.UserId, BookingId = b.BookingId, ActDate = d, StartTime = t,
+                    People = (byte)ppl, Total = a.Price * ppl, Status = "CONFIRMED", CreatedAt = now.AddHours(-rnd.Next(1, 48)) });
+                acts_n++;
+            }
+            await db.SaveChangesAsync();
+        }
+        return $"สร้างลูกค้าตัวอย่าง {users.Count} คน · การจอง {bookings} รายการ · รีวิว {reviews} รายการ · ข้อความ {Messages.Length} รายการ" + (acts_n > 0 ? $" · จองกิจกรรม {acts_n} รายการ" : "") + $" (รหัสผ่านทุกบัญชี {Password})";
     }
 
     /// <summary>ลบเฉพาะข้อมูลตัวอย่าง (บัญชี @demo.aurellestay.local และทุกอย่างที่ผูกกับบัญชีนั้น)</summary>
@@ -1466,4 +1498,226 @@ public static class Waitlist
         if (expired.Count > 0 || n > 0) await db.SaveChangesAsync();
         return n;
     }
+}
+
+// ======================================================================
+// Part 52: กิจกรรมของโรงแรม
+// ======================================================================
+public static class HotelActivities
+{
+    public const string ActivitiesTableSql = @"CREATE TABLE IF NOT EXISTS `activities` (
+    `activity_id` int NOT NULL AUTO_INCREMENT,
+    `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `category` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CULTURE',
+    `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `price` decimal(10,2) NOT NULL DEFAULT 0,
+    `duration_min` smallint NOT NULL DEFAULT 60,
+    `capacity` smallint NOT NULL DEFAULT 10,
+    `times` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '09:00',
+    `days` varchar(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0123456',
+    `location` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`activity_id`),
+    UNIQUE KEY `ux_activity_name` (`name`),
+    CONSTRAINT `chk_activity_price` CHECK (`price` >= 0),
+    CONSTRAINT `chk_activity_capacity` CHECK (`capacity` BETWEEN 1 AND 200),
+    CONSTRAINT `chk_activity_duration` CHECK (`duration_min` BETWEEN 15 AND 720)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public const string BookingsTableSql = @"CREATE TABLE IF NOT EXISTS `activity_bookings` (
+    `ab_id` int NOT NULL AUTO_INCREMENT,
+    `activity_id` int NOT NULL,
+    `user_id` int NOT NULL,
+    `booking_id` int NULL,
+    `act_date` date NOT NULL,
+    `start_time` char(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `people` tinyint unsigned NOT NULL DEFAULT 1,
+    `total` decimal(10,2) NOT NULL DEFAULT 0,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CONFIRMED',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `cancelled_at` datetime NULL,
+    PRIMARY KEY (`ab_id`),
+    KEY `ix_ab_slot` (`activity_id`, `act_date`, `start_time`),
+    KEY `ix_ab_user` (`user_id`),
+    KEY `ix_ab_booking` (`booking_id`),
+    CONSTRAINT `activity_bookings_ibfk_1` FOREIGN KEY (`activity_id`) REFERENCES `activities` (`activity_id`),
+    CONSTRAINT `activity_bookings_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `activity_bookings_ibfk_3` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `chk_ab_people` CHECK (`people` BETWEEN 1 AND 20)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public static readonly (string Key, string Label, string Icon)[] Categories =
+    {
+        ("CULTURE", "วัฒนธรรมไทย", "M4 21h16M6 21V10l6-6 6 6v11M10 21v-6h4v6"),
+        ("FOOD", "อาหาร", "M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9"),
+        ("WELLNESS", "สุขภาพ / โยคะ", "M12 6a2 2 0 1 0 0-.01M5 21l4-7 3 2 3-2 4 7M7 10h10"),
+        ("TOUR", "ทัวร์ / นอกสถานที่", "M3 18h18M5 18l2-8h10l2 8M9 10V6h6v4"),
+        ("KIDS", "ครอบครัว / เด็ก", "M9 7a2 2 0 1 0 0-.01M15 9a1.6 1.6 0 1 0 0-.01M6 21v-6l3-4 3 4v6M13 21v-5l2-3 2 3v5"),
+    };
+    public static bool IsCategory(string? k) => Categories.Any(c => c.Key == k);
+    public static string CategoryLabel(string? k) => Categories.FirstOrDefault(c => c.Key == k).Label ?? "อื่น ๆ";
+    public static string CategoryIcon(string? k) => Categories.FirstOrDefault(c => c.Key == k).Icon ?? Categories[0].Icon;
+
+    public const int MaxPeople = 10;
+    public const int CancelBeforeHours = 2;
+    public const int BookAheadDays = 60;
+
+    public static readonly string[] DayNames = { "อา", "จ", "อ", "พ", "พฤ", "ศ", "ส" };
+
+    /// <summary>รอบเวลาที่ถูกต้อง (HH:mm) เรียงจากเช้าไปเย็น ตัดค่าที่ผิดรูปแบบ/ซ้ำทิ้ง</summary>
+    public static List<string> ParseTimes(string? times) =>
+        (times ?? "").Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => TimeOnly.TryParseExact(t.Trim(), "H:mm", out var x) ? x.ToString("HH:mm") : null)
+            .Where(t => t != null).Select(t => t!).Distinct().OrderBy(t => t).ToList();
+
+    public static string NormalizeDays(string? days) =>
+        new string((days ?? "").Where(c => c is >= '0' and <= '6').Distinct().OrderBy(c => c).ToArray());
+
+    public static bool OpenOn(Activity a, DateOnly d) => a.Days.Contains((char)('0' + (int)d.DayOfWeek));
+
+    public static string DaysLabel(string days) => days.Length == 7 ? "ทุกวัน" : string.Join(" ", days.Select(c => DayNames[c - '0']));
+
+    /// <summary>ที่นั่งที่ถูกจองแล้วของแต่ละรอบ (กิจกรรม, วันที่, เวลา) → จำนวนคน</summary>
+    public static async Task<Dictionary<(int, DateOnly, string), int>> TakenAsync(Csi402dbContext db, DateOnly from, DateOnly to, int? activityId = null) =>
+        (await db.ActivityBookings.Where(b => b.ActDate >= from && b.ActDate <= to && (b.Status == "CONFIRMED" || b.Status == "ATTENDED")
+                && (activityId == null || b.ActivityId == activityId))
+            .GroupBy(b => new { b.ActivityId, b.ActDate, b.StartTime }).Select(g => new { g.Key.ActivityId, g.Key.ActDate, g.Key.StartTime, N = g.Sum(x => (int)x.People) })
+            .ToListAsync()).ToDictionary(x => (x.ActivityId, x.ActDate, x.StartTime), x => x.N);
+
+    /// <summary>การจองห้องที่ทำให้ลูกค้ามีสิทธิ์ร่วมกิจกรรมในวันนั้น (ยืนยันแล้ว/เข้าพักอยู่ · วันเข้าพัก ≤ วันนั้น ≤ วันออก)</summary>
+    public static Task<Booking?> StayOnAsync(Csi402dbContext db, int userId, DateOnly d) =>
+        db.Bookings.Where(b => b.UserId == userId && (b.Status == "CONFIRMED" || b.Status == "CHECKED_IN") && b.CheckIn <= d && b.CheckOut >= d)
+            .OrderBy(b => b.CheckIn).FirstOrDefaultAsync();
+
+    /// <summary>จองกิจกรรม: ตรวจรอบ วัน เวลา สิทธิ์การเข้าพัก และที่นั่ง (ล็อกแถวกิจกรรมกันจองเกินพร้อมกัน)</summary>
+    public static async Task<(bool Ok, string Message, int? Id)> BookAsync(Csi402dbContext db, int userId, int activityId, DateOnly? date, string? time, int people, DateTime now)
+    {
+        var today = DateOnly.FromDateTime(now);
+        if (date is not { } d) return (false, "กรุณาเลือกวันที่", null);
+        if (d < today || d > today.AddDays(BookAheadDays)) return (false, $"เลือกวันที่ได้ตั้งแต่วันนี้ถึง {BookAheadDays} วันข้างหน้า", null);
+        if (people < 1 || people > MaxPeople) return (false, $"จำนวนผู้ร่วมกิจกรรม 1–{MaxPeople} คน", null);
+        var a = await db.Activities.AsNoTracking().FirstOrDefaultAsync(x => x.ActivityId == activityId && x.IsActive);
+        if (a == null) return (false, "ไม่พบกิจกรรมนี้ หรือปิดรับจองแล้ว", null);
+        if (!OpenOn(a, d)) return (false, $"กิจกรรมนี้เปิดเฉพาะวัน {DaysLabel(a.Days)}", null);
+        if (time == null || !ParseTimes(a.Times).Contains(time)) return (false, "กรุณาเลือกรอบเวลาที่มีในตาราง", null);
+        var start = d.ToDateTime(TimeOnly.ParseExact(time, "HH:mm"));
+        if (start <= now.AddMinutes(30)) return (false, "รอบนี้เริ่มแล้วหรือใกล้เริ่ม (ต้องจองล่วงหน้าอย่างน้อย 30 นาที)", null);
+        var stay = await StayOnAsync(db, userId, d);
+        if (stay == null) return (false, "กิจกรรมสำหรับผู้เข้าพัก: ต้องมีการจองห้องที่ยืนยันแล้วซึ่งครอบคลุมวันที่เลือก", null);
+        if (await db.ActivityBookings.AnyAsync(b => b.UserId == userId && b.ActivityId == activityId && b.ActDate == d && b.StartTime == time && b.Status == "CONFIRMED"))
+            return (false, "คุณจองรอบนี้ไว้แล้ว (เพิ่มจำนวนคนได้โดยยกเลิกแล้วจองใหม่)", null);
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT activity_id FROM activities WHERE activity_id = {0} FOR UPDATE", activityId);
+        var taken = await db.ActivityBookings.Where(b => b.ActivityId == activityId && b.ActDate == d && b.StartTime == time && (b.Status == "CONFIRMED" || b.Status == "ATTENDED"))
+            .SumAsync(b => (int?)b.People) ?? 0;
+        var left = a.Capacity - taken;
+        if (people > left) return (false, left <= 0 ? "รอบนี้เต็มแล้ว ลองรอบอื่น" : $"รอบนี้เหลือที่นั่ง {left} ที่", null);
+        var ab = new ActivityBooking
+        {
+            ActivityId = activityId, UserId = userId, BookingId = stay.BookingId, ActDate = d, StartTime = time,
+            People = (byte)people, Total = a.Price * people, Status = "CONFIRMED", CreatedAt = now
+        };
+        db.ActivityBookings.Add(ab);
+        await db.SaveChangesAsync();
+        Notify.Add(db, userId, $"จองกิจกรรมแล้ว: {a.Name}",
+            $"{d:dd/MM/yyyy} เวลา {time} น. · {people} คน" + (a.Price > 0 ? $" · ค่ากิจกรรม {ab.Total:N0} บาท (ชำระที่เคาน์เตอร์หรือรวมในบิลตอนเช็คเอาท์)" : " · ฟรีสำหรับผู้เข้าพัก")
+            + (a.Location is { Length: > 0 } loc ? $" · จุดนัดพบ {loc}" : ""), "/Activities");
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return (true, $"จอง \"{a.Name}\" วันที่ {d:dd/MM/yyyy} เวลา {time} น. แล้ว", ab.AbId);
+    }
+
+    public static bool CanCancel(ActivityBooking b, DateTime now) =>
+        b.Status == "CONFIRMED" && b.ActDate.ToDateTime(TimeOnly.ParseExact(b.StartTime, "HH:mm")) > now.AddHours(CancelBeforeHours);
+
+    public static string StatusLabel(string? s) => s switch
+    {
+        "CONFIRMED" => "จองแล้ว", "CANCELLED" => "ยกเลิก", "ATTENDED" => "เข้าร่วมแล้ว", "NO_SHOW" => "ไม่มาร่วม", _ => s ?? ""
+    };
+
+    /// <summary>กิจกรรมตัวอย่าง (ใส่ครั้งแรกเมื่อยังไม่มีกิจกรรมเลย แก้/ปิดได้ที่หน้าผู้จัดการ)</summary>
+    public static async Task<int> SeedAsync(Csi402dbContext db)
+    {
+        if (await db.Activities.AnyAsync()) return 0;
+        var now = AppClock.Now;
+        var list = new[]
+        {
+            new Activity { Name = "คลาสทำอาหารไทย", Category = "FOOD", Price = 890, DurationMin = 150, Capacity = 10, Times = "10:00,15:00", Days = "0123456", Location = "ครัวสาธิต ชั้น 1",
+                Description = "เรียนทำต้มยำกุ้ง แกงเขียวหวาน และมะม่วงข้าวเหนียวกับเชฟของโรงแรม พร้อมทานอาหารที่ทำเองและสูตรกลับบ้าน" },
+            new Activity { Name = "โยคะยามเช้าริมสระ", Category = "WELLNESS", Price = 0, DurationMin = 60, Capacity = 15, Times = "07:00", Days = "0123456", Location = "ลานริมสระว่ายน้ำ",
+                Description = "โยคะเบา ๆ เหมาะทุกระดับ มีเสื่อและน้ำดื่มให้ ฟรีสำหรับผู้เข้าพัก" },
+            new Activity { Name = "ทัวร์ตลาดน้ำครึ่งวัน", Category = "TOUR", Price = 1200, DurationMin = 300, Capacity = 12, Times = "07:30", Days = "0156", Location = "ล็อบบี้ (รถรับ-ส่ง)",
+                Description = "นั่งเรือชมตลาดน้ำ ชิมขนมไทย พร้อมไกด์และรถรับ-ส่งจากโรงแรม (เปิด ศุกร์–จันทร์)" },
+            new Activity { Name = "เวิร์กช็อปพวงมาลัยและดอกไม้ไทย", Category = "CULTURE", Price = 450, DurationMin = 90, Capacity = 8, Times = "14:00", Days = "23456", Location = "ห้องกิจกรรม ชั้น 2",
+                Description = "ร้อยพวงมาลัยและจับดอกไม้แบบไทยกับครูช่าง ได้ผลงานกลับบ้าน" },
+            new Activity { Name = "ปั่นจักรยานชมเมืองเก่า", Category = "TOUR", Price = 650, DurationMin = 180, Capacity = 10, Times = "16:00", Days = "0246", Location = "ล็อบบี้",
+                Description = "ปั่นชมย่านเมืองเก่า วัด และร้านอาหารท้องถิ่น พร้อมจักรยาน หมวกกันน็อก และไกด์" },
+            new Activity { Name = "ศิลปะเด็กวันหยุด", Category = "KIDS", Price = 250, DurationMin = 90, Capacity = 12, Times = "10:00,14:00", Days = "06", Location = "Kids Corner ชั้น 2",
+                Description = "ระบายสีร่มกระดาษและงานประดิษฐ์ไทยสำหรับเด็ก 4–12 ปี มีพี่เลี้ยงดูแล (เสาร์–อาทิตย์)" },
+        };
+        foreach (var a in list) { a.IsActive = true; a.CreatedAt = now; }
+        db.Activities.AddRange(list);
+        await db.SaveChangesAsync();
+        return list.Length;
+    }
+}
+
+// ======================================================================
+// Part 53: ฝ่ายส่งของ — ของใช้ที่ลูกค้าขอเพิ่ม · สถานะละเอียด · งานด่วน/จับเวลา · สถิติ
+// ======================================================================
+public static class RoomRequests
+{
+    public const string TableSql = @"CREATE TABLE IF NOT EXISTS `item_requests` (
+    `request_id` int NOT NULL AUTO_INCREMENT,
+    `booking_id` int NOT NULL,
+    `user_id` int NOT NULL,
+    `room_id` int NOT NULL,
+    `item` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `qty` tinyint unsigned NOT NULL DEFAULT 1,
+    `note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `urgent` tinyint(1) NOT NULL DEFAULT 0,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+    `assigned_to` int NULL,
+    `missed` tinyint unsigned NOT NULL DEFAULT 0,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `picked_at` datetime NULL,
+    `done_at` datetime NULL,
+    PRIMARY KEY (`request_id`),
+    KEY `ix_ir_status` (`status`, `created_at`),
+    KEY `ix_ir_booking` (`booking_id`),
+    CONSTRAINT `item_requests_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `item_requests_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `item_requests_ibfk_3` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`),
+    CONSTRAINT `item_requests_ibfk_4` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_ir_qty` CHECK (`qty` BETWEEN 1 AND 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /// <summary>ของที่ขอได้ (ไม่มีค่าใช้จ่าย) — รหัส → ชื่อที่แสดง</summary>
+    public static readonly (string Code, string Name)[] Items =
+    {
+        ("TOWEL", "ผ้าเช็ดตัว"), ("WATER", "น้ำดื่ม"), ("PILLOW", "หมอน"), ("BLANKET", "ผ้าห่ม"),
+        ("TOILETRY", "ชุดของใช้ในห้องน้ำ"), ("SLIPPER", "รองเท้าแตะ"), ("COFFEE", "ชา/กาแฟ"), ("OTHER", "อื่น ๆ (ระบุในหมายเหตุ)")
+    };
+    public const int MaxQty = 5;
+    public const int MaxOpenPerBooking = 5;
+    /// <summary>รอเกินกี่นาทีถือว่าช้า (แสดงสีแดงในคิวงาน)</summary>
+    public const int LateMinutes = 30;
+
+    public static string ItemName(string? code) => Items.FirstOrDefault(i => i.Code == code).Name ?? code ?? "";
+    public static bool IsItem(string? code) => Items.Any(i => i.Code == code);
+
+    public static string StatusLabel(string s, byte missed) => s switch
+    {
+        "PENDING" when missed > 0 => "รอนำส่งใหม่",
+        "PENDING" => "รอรับงาน",
+        "DELIVERING" => "กำลังนำส่ง",
+        "DONE" => "ส่งแล้ว",
+        "CANCELLED" => "ยกเลิกแล้ว",
+        _ => s
+    };
+
+    /// <summary>นาทีที่ผ่านไปนับจากเข้าคิว (ไม่มีเวลาเข้าคิว = null)</summary>
+    public static int? Minutes(DateTime? from, DateTime now) => from is { } f ? Math.Max(0, (int)(now - f).TotalMinutes) : null;
 }

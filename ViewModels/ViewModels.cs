@@ -361,6 +361,44 @@ public class MemberDashboardViewModel
     public bool HasAnniversary { get; set; }
     public List<(string Code, string Name, decimal Percent, string Condition)> MyCodes { get; set; } = new();
     public List<WaitlistItemViewModel> Waiting { get; set; } = new();   // Part 51: รายชื่อรอห้องว่าง
+    // Part 53: ขอของใช้เพิ่มระหว่างเข้าพัก
+    public int? StayBookingId { get; set; }
+    public List<(int RoomId, string RoomNo)> StayRooms { get; set; } = new();
+    public List<ItemRequestRowViewModel> Requests { get; set; } = new();
+}
+
+public class ItemRequestRowViewModel
+{
+    public int Id { get; set; }
+    public string What { get; set; } = "";
+    public string RoomNo { get; set; } = "";
+    public string? Note { get; set; }
+    public bool Urgent { get; set; }
+    public string Status { get; set; } = "";
+    public byte Missed { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? DoneAt { get; set; }
+}
+
+public class DeliveryStatsViewModel
+{
+    public DateOnly From { get; set; }
+    public DateOnly To { get; set; }
+    public int OpenNow { get; set; }
+    public int LateNow { get; set; }
+    public int UrgentNow { get; set; }
+    public List<DeliveryStaffStat> Staff { get; set; } = new();
+    public List<(string Item, int Count)> TopItems { get; set; } = new();
+}
+
+public class DeliveryStaffStat
+{
+    public string Name { get; set; } = "";
+    public int Done { get; set; }
+    public int Requests { get; set; }
+    public double? AvgWait { get; set; }    // นาที: เข้าคิว → รับงาน
+    public double? AvgTotal { get; set; }   // นาที: เข้าคิว → ส่งแล้ว
+    public int Late { get; set; }           // ใช้เวลารวมเกินเกณฑ์
 }
 
 public class PayPageViewModel
@@ -562,6 +600,18 @@ public class TaskRowViewModel
     public DateTime? DoneAt { get; set; }
     public bool CanTake { get; set; }
     public bool CanFinish { get; set; }
+    // Part 53: ฝ่ายส่งของ
+    public string Kind { get; set; } = "";          // S = บริการเสริม · R = ของใช้ที่ลูกค้าขอเพิ่ม
+    public string? StatusText { get; set; }
+    public string? Source { get; set; }
+    public string? Guest { get; set; }
+    public string? Note { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? PickedAt { get; set; }
+    public bool Urgent { get; set; }
+    public byte Missed { get; set; }
+    public int? Minutes { get; set; }
+    public bool Late { get; set; }
 }
 
 public class TaskListViewModel
@@ -572,6 +622,7 @@ public class TaskListViewModel
     public string TakeLabel { get; set; } = "รับงาน";
     public string FinishLabel { get; set; } = "เสร็จแล้ว";
     public bool ShowDone { get; set; }
+    public bool Delivery { get; set; }   // Part 53: แสดงคอลัมน์/ปุ่มของฝ่ายส่งของ
     public List<TaskRowViewModel> Rows { get; set; } = new();
 }
 
@@ -1065,4 +1116,80 @@ public class WaitlistItemViewModel
     public int Guests { get; set; }
     public string Status { get; set; } = "";
     public DateTime CreatedAt { get; set; }
+}
+
+// ---------------- Part 52: กิจกรรมของโรงแรม
+public class ActivityCardViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string? Description { get; set; }
+    public decimal Price { get; set; }
+    public int DurationMin { get; set; }
+    public int Capacity { get; set; }
+    public List<string> Times { get; set; } = new();
+    public string Days { get; set; } = "";
+    public string? Location { get; set; }
+    /// <summary>รอบใน 7 วันข้างหน้า (วันที่, เวลา, ที่นั่งเหลือ)</summary>
+    public List<(DateOnly Date, string Time, int Left)> Sessions { get; set; } = new();
+    /// <summary>วันที่ลูกค้าจองได้ (อยู่ในช่วงเข้าพัก + เปิดวันนั้น)</summary>
+    public List<DateOnly> BookableDates { get; set; } = new();
+}
+
+public class ActivityBookingRowViewModel
+{
+    public int AbId { get; set; }
+    public int ActivityId { get; set; }
+    public string ActivityName { get; set; } = "";
+    public string? Location { get; set; }
+    public DateOnly Date { get; set; }
+    public string Time { get; set; } = "";
+    public int People { get; set; }
+    public decimal Total { get; set; }
+    public string Status { get; set; } = "";
+    public bool CanCancel { get; set; }
+    public string GuestName { get; set; } = "";
+    public string? Phone { get; set; }
+    public string? Rooms { get; set; }
+}
+
+public class ActivitiesPageViewModel
+{
+    public DateOnly Today { get; set; }
+    public bool IsCustomer { get; set; }
+    public bool HasStay { get; set; }
+    public string? Category { get; set; }
+    public List<ActivityCardViewModel> Cards { get; set; } = new();
+    public List<ActivityBookingRowViewModel> Mine { get; set; } = new();
+}
+
+public class ActivityEditViewModel
+{
+    public int ActivityId { get; set; }
+    [Required(ErrorMessage = "กรุณากรอกชื่อกิจกรรม"), StringLength(100, ErrorMessage = "ชื่อกิจกรรมยาวไม่เกิน 100 ตัวอักษร")]
+    public string Name { get; set; } = "";
+    [Required] public string Category { get; set; } = "CULTURE";
+    [StringLength(500, ErrorMessage = "คำอธิบายยาวไม่เกิน 500 ตัวอักษร")]
+    public string? Description { get; set; }
+    [Range(0, 100000, ErrorMessage = "ราคา 0–100,000 บาท")]
+    public decimal Price { get; set; }
+    [Range(15, 720, ErrorMessage = "ระยะเวลา 15–720 นาที")]
+    public int DurationMin { get; set; } = 60;
+    [Range(1, 200, ErrorMessage = "ที่นั่งต่อรอบ 1–200")]
+    public int Capacity { get; set; } = 10;
+    [Required(ErrorMessage = "กรุณาระบุรอบเวลา เช่น 09:00,14:00"), StringLength(60)]
+    public string Times { get; set; } = "09:00";
+    public List<int> Days { get; set; } = new();
+    [StringLength(100)]
+    public string? Location { get; set; }
+    public bool IsActive { get; set; } = true;
+    public int Upcoming { get; set; }
+    public int TotalBooked { get; set; }
+}
+
+public class ActivityRosterViewModel
+{
+    public DateOnly Date { get; set; }
+    public List<(int ActivityId, string Name, string Time, string? Location, int Capacity, List<ActivityBookingRowViewModel> People)> Sessions { get; set; } = new();
 }

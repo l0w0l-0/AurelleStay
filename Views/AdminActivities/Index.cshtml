@@ -1,0 +1,74 @@
+@model List<pameka_7033_l005.ViewModels.ActivityEditViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "กิจกรรมของโรงแรม";
+    Layout = "_Adminlayout";
+    async Task Fields(pameka_7033_l005.ViewModels.ActivityEditViewModel a, string idp)
+    {
+        <label class="sva-f sva-f--wide"><span id="@idp-n">ชื่อกิจกรรม</span><input name="Name" value="@a.Name" maxlength="100" required placeholder="เช่น คลาสทำอาหารไทย" /></label>
+        <label class="sva-f">หมวด
+            <select name="Category">@foreach (var c in HotelActivities.Categories) { <option value="@c.Key" selected="@(a.Category == c.Key)">@c.Label</option> }</select>
+        </label>
+        <label class="sva-f">ราคา (บาท / คน · 0 = ฟรี)<input name="Price" type="number" min="0" max="100000" step="1" value="@a.Price.ToString("0.##")" required /></label>
+        <label class="sva-f">ระยะเวลา (นาที)<input name="DurationMin" type="number" min="15" max="720" value="@a.DurationMin" required /></label>
+        <label class="sva-f">ที่นั่งต่อรอบ<input name="Capacity" type="number" min="1" max="200" value="@a.Capacity" required /></label>
+        <label class="sva-f">รอบเวลา (คั่นด้วย ,)<input name="Times" value="@a.Times" maxlength="60" required placeholder="09:00,14:00" pattern="^\s*\d{1,2}:\d{2}(\s*,\s*\d{1,2}:\d{2})*\s*$" title="รูปแบบ HH:mm คั่นด้วยจุลภาค" /></label>
+        <label class="sva-f">จุดนัดพบ<input name="Location" value="@a.Location" maxlength="100" placeholder="เช่น ล็อบบี้" /></label>
+        <fieldset class="sva-f sva-f--wide aca-days"><legend>วันที่เปิด</legend>
+            @for (var d = 0; d < 7; d++) { <label><input type="checkbox" name="Days" value="@d" checked="@(a.Days.Contains(d))" /> @HotelActivities.DayNames[d]</label> }
+        </fieldset>
+        <label class="sva-f sva-f--wide">คำอธิบาย (ไม่เกิน 500 ตัวอักษร)<textarea name="Description" maxlength="500" rows="2">@a.Description</textarea></label>
+        <label class="sva-check"><input type="checkbox" name="IsActive" value="true" checked="@a.IsActive" /> เปิดรับจอง</label>
+        <input type="hidden" name="IsActive" value="false" />
+        await Task.CompletedTask;
+    }
+}
+
+<div class="dashboard">
+    <h1>กิจกรรมของโรงแรม</h1>
+    <partial name="_Flash" />
+    <p>กิจกรรมที่ "เปิดรับจอง" แสดงในหน้ากิจกรรม ผู้เข้าพักที่มีการจองห้องยืนยันแล้วจองรอบเวลาได้ (ค่ากิจกรรมชำระที่เคาน์เตอร์) · รายชื่อผู้ร่วมแต่ละรอบดูได้ที่ <a asp-controller="FrontDesk" asp-action="Activities">กิจกรรมวันนี้</a>
+        · <a asp-controller="Activities" asp-action="Index" target="_blank" rel="noopener">ดูหน้าที่ลูกค้าเห็น</a></p>
+
+    <details class="staff-card sva-new" @(Model.Count == 0 ? "open" : null)>
+        <summary><h2>เพิ่มกิจกรรมใหม่</h2></summary>
+        <form asp-action="Save" method="post" class="sva-form">
+            <input type="hidden" name="ActivityId" value="0" />
+            @{ await Fields(new pameka_7033_l005.ViewModels.ActivityEditViewModel { Days = new() { 0, 1, 2, 3, 4, 5, 6 } }, "new"); }
+            <div class="sva-actions"><button type="submit" class="cx-btn">เพิ่มกิจกรรม</button></div>
+        </form>
+    </details>
+
+    <h2 class="sva-h">กิจกรรมทั้งหมด (@Model.Count)</h2>
+    @if (!Model.Any())
+    {
+        <div class="staff-card"><div class="cx-empty"><b>ยังไม่มีกิจกรรม</b><span>เพิ่มกิจกรรมแรกได้จากแบบฟอร์มด้านบน</span></div></div>
+    }
+    <div class="sva-grid">
+        @foreach (var a in Model)
+        {
+            <article class="staff-card sva-card @(a.IsActive ? "" : "is-off")" aria-labelledby="aca-@a.ActivityId-n">
+                <div class="aca-head">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@HotelActivities.CategoryIcon(a.Category)" /></svg>
+                    <span class="sva-tag">@HotelActivities.CategoryLabel(a.Category)</span>
+                    @if (!a.IsActive) { <span class="sva-off">ปิดรับจอง</span> }
+                </div>
+                <form asp-action="Save" method="post" class="sva-form">
+                    <input type="hidden" name="ActivityId" value="@a.ActivityId" />
+                    @{ await Fields(a, "aca-" + a.ActivityId); }
+                    <div class="sva-actions">
+                        <small>จองแล้ว @a.TotalBooked ครั้ง · กำลังจะถึง @a.Upcoming</small>
+                        <button type="submit" class="cx-btn cx-btn--small">บันทึก</button>
+                    </div>
+                </form>
+                @if (a.TotalBooked == 0)
+                {
+                    <form asp-action="Delete" method="post" class="sva-del" onsubmit="return confirm('ลบกิจกรรม @a.Name ?');">
+                        <input type="hidden" name="id" value="@a.ActivityId" />
+                        <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบกิจกรรม</button>
+                    </form>
+                }
+            </article>
+        }
+    </div>
+</div>

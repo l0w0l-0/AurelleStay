@@ -29,7 +29,7 @@
 }
 .admin-avatar.small { width: 34px; height: 34px; font-size: 1.05rem; }
 
-.admin-menu { flex: 1; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: thin; scrollbar-color: #3b2a52 transparent; }
+.admin-menu { flex: 1; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: none; }
 .menu-title { margin: 22px 12px 8px; font-size: .64rem; font-weight: 600; letter-spacing: .2em; color: #85799a; text-transform: uppercase; }
 .admin-menu-item {
     position: relative; display: flex; align-items: center; gap: 12px;
@@ -743,3 +743,37 @@ tr.is-off td { opacity: .62; }
 .sys-mail__body p { margin: 0 0 6px; word-break: break-word; }
 .sys-mailhead { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sys-mailhead > div { flex: 1 1 420px; }
+
+/* Part 52: กิจกรรม (หลังบ้าน) */
+.aca-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.aca-head svg { width: 30px; height: 30px; fill: none; stroke: var(--pine, #2d1b47); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.aca-days { display: flex; flex-wrap: wrap; gap: 4px 12px; border: 0; padding: 0; margin: 0; }
+.aca-days legend { font-size: inherit; margin-bottom: 4px; }
+.aca-days label { display: inline-flex; gap: 4px; align-items: center; font-weight: 400; }
+.aca-datebar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0 16px; }
+.aca-datebar label { display: inline-flex; gap: 6px; align-items: center; }
+.aca-datebar input { padding: 6px 10px; border: 1px solid #d5cce0; border-radius: 10px; }
+.aca-session { margin-bottom: 14px; }
+.aca-session__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; }
+.aca-time { font-size: 1.1rem; color: var(--pine, #2d1b47); margin-right: 6px; }
+.aca-muted { color: #6b6478; }
+.aca-acts { white-space: nowrap; }
+.aca-acts form { margin-right: 4px; }
+
+/* ===================== Part 53: ฝ่ายส่งของ — งานด่วน / รอนาน ===================== */
+.dv-sub { display: block; color: #6b6478; font-size: .82rem; margin-top: 2px; }
+.dv-sub--warn { color: #a3541b; }
+.dv-tag { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; }
+.dv-tag--urgent { background: #b4232c; color: #fff; }
+.dv-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.dv-urgent > td:first-child { box-shadow: inset 4px 0 0 #b4232c; }
+tr.dv-late .dv-time { color: #b4232c; font-weight: 700; }
+tr.dv-late > td { background: #fdf1f1; }
+.dvs-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.dvs-kpi { background: #fff; border: 1px solid #e8e2f0; border-radius: 14px; padding: 14px 16px; }
+.dvs-kpi b { display: block; font-size: 1.6rem; color: #3b2a52; }
+.dvs-kpi span { color: #6b6478; font-size: .88rem; }
+.dvs-kpi--bad b { color: #b4232c; }
+.dvs-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 16px; }
+.dvs-form label { display: grid; gap: 4px; font-size: .88rem; }
+

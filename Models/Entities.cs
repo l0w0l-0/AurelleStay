@@ -120,6 +120,12 @@ public partial class DeliveryTask
 
     public DateTime? DoneAt { get; set; }
 
+    // Part 53: เวลาเข้าคิว/เวลารับงาน · งานด่วน · จำนวนครั้งที่ไปแล้วไม่พบผู้เข้าพัก
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? PickedAt { get; set; }
+    public bool Urgent { get; set; }
+    public byte Missed { get; set; }
+
     public virtual User? AssignedToNavigation { get; set; }
 
     public virtual BookingService Bs { get; set; } = null!;
@@ -586,4 +592,60 @@ public class WaitlistEntry
     public DateTime? NotifiedAt { get; set; }
     public virtual User User { get; set; } = null!;
     public virtual RoomType? Type { get; set; }
+}
+
+/// <summary>Part 52: กิจกรรมของโรงแรม (คลาสทำอาหาร โยคะ ทัวร์ ฯลฯ) — มีรอบเวลาประจำวันและจำนวนที่นั่งต่อรอบ</summary>
+public class Activity
+{
+    public int ActivityId { get; set; }
+    public string Name { get; set; } = "";
+    public string Category { get; set; } = "CULTURE";
+    public string? Description { get; set; }
+    public decimal Price { get; set; }            // ต่อคน (0 = ฟรีสำหรับผู้เข้าพัก)
+    public short DurationMin { get; set; } = 60;
+    public short Capacity { get; set; } = 10;     // ที่นั่งต่อรอบ
+    public string Times { get; set; } = "09:00";  // รอบเวลา คั่นด้วย , เช่น 09:00,14:00
+    public string Days { get; set; } = "0123456"; // วันที่เปิด (0 = อาทิตย์ ... 6 = เสาร์)
+    public string? Location { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>Part 52: การจองกิจกรรมของผู้เข้าพัก (ผูกกับการจองห้องที่พักอยู่ในวันนั้น)</summary>
+public class ActivityBooking
+{
+    public int AbId { get; set; }
+    public int ActivityId { get; set; }
+    public int UserId { get; set; }
+    public int? BookingId { get; set; }
+    public DateOnly ActDate { get; set; }
+    public string StartTime { get; set; } = "";
+    public byte People { get; set; } = 1;
+    public decimal Total { get; set; }
+    public string Status { get; set; } = "CONFIRMED";   // CONFIRMED | CANCELLED | ATTENDED | NO_SHOW
+    public DateTime CreatedAt { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public virtual Activity Activity { get; set; } = null!;
+    public virtual User User { get; set; } = null!;
+}
+
+/// <summary>Part 53: ผู้เข้าพักขอของใช้เพิ่มระหว่างเข้าพัก (ผ้าเช็ดตัว น้ำดื่ม หมอน ฯลฯ) → เข้าคิวฝ่ายส่งของทันที</summary>
+public class ItemRequest
+{
+    public int RequestId { get; set; }
+    public int BookingId { get; set; }
+    public int UserId { get; set; }
+    public int RoomId { get; set; }
+    public string Item { get; set; } = "";
+    public byte Qty { get; set; } = 1;
+    public string? Note { get; set; }
+    public bool Urgent { get; set; }
+    public string Status { get; set; } = "PENDING";   // PENDING / DELIVERING / DONE / CANCELLED
+    public int? AssignedTo { get; set; }
+    public byte Missed { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? PickedAt { get; set; }
+    public DateTime? DoneAt { get; set; }
+    public virtual Room Room { get; set; } = null!;
+    public virtual User? AssignedToNavigation { get; set; }
 }

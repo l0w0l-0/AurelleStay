@@ -187,7 +187,7 @@ public static class RoleNames
     public static IReadOnlyList<(string Action, string Label)> Menu(string? role) => role?.ToLowerInvariant() switch
     {
         Accounting => [("Index", "ตรวจสอบการชำระเงิน"), ("Refunds", "คำขอคืนเงิน"), ("History", "ประวัติการเงิน"), ("Expenses", "รายจ่าย / กำไร")],
-        FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง")],
+        FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Activities", "กิจกรรมวันนี้"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง")],
         Delivery => [("Index", "ห้องที่ต้องส่ง"), ("Done", "ห้องที่ส่งสำเร็จ")],
         Housekeeping => [("Index", "ห้องที่ต้องทำความสะอาด"), ("Done", "ห้องที่ทำไปแล้ว")],
         _ => []
@@ -451,6 +451,11 @@ public static class DbSetup
     private static readonly (string Table, string Column, string Ddl)[] Columns =
     {
         ("room_types", "description", "text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        // Part 53: ฝ่ายส่งของ — เวลาเข้าคิว/รับงาน งานด่วน และจำนวนครั้งที่ไม่พบผู้เข้าพัก
+        ("delivery_tasks", "created_at", "datetime NULL DEFAULT CURRENT_TIMESTAMP"),
+        ("delivery_tasks", "picked_at", "datetime NULL"),
+        ("delivery_tasks", "urgent", "tinyint(1) NOT NULL DEFAULT 0"),
+        ("delivery_tasks", "missed", "tinyint unsigned NOT NULL DEFAULT 0"),
         ("room_types", "amenities", "varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("room_types", "image_url", "varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("room_types", "weekend_price", "decimal(10,2) NULL"),
@@ -553,6 +558,9 @@ public static class DbSetup
 
             if (app.Configuration.GetValue("Database:SeedSampleCatalog", true) && !await db.RoomTypes.AnyAsync())
                 await SeedCatalogAsync(db, app.Environment.ContentRootPath, log);
+            // Part 52: กิจกรรมตัวอย่าง (ครั้งแรกเท่านั้น)
+            if (app.Configuration.GetValue("Database:SeedSampleCatalog", true) && await HotelActivities.SeedAsync(db) is > 0 and var na)
+                log.LogInformation("เพิ่มกิจกรรมตัวอย่าง {Count} รายการ", na);
         }
         catch (Exception ex)
         {
@@ -646,6 +654,25 @@ public static class DbSetup
         {
             await db.Database.ExecuteSqlRawAsync(Waitlist.TableSql);
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง room_waitlist");
+        }
+
+        // Part 52: กิจกรรมของโรงแรม
+        if (!have.Contains("activities.activity_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(HotelActivities.ActivitiesTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง activities");
+        }
+        if (!have.Contains("activity_bookings.ab_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(HotelActivities.BookingsTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง activity_bookings");
+        }
+
+        // Part 53: ของใช้ที่ผู้เข้าพักขอเพิ่ม
+        if (!have.Contains("item_requests.request_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(RoomRequests.TableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง item_requests");
         }
 
         if (!have.Contains("audit_logs.audit_id"))
@@ -812,7 +839,10 @@ public static class AuditTrail
         ["AdminAudit.Backup"] = ("ดาวน์โหลดไฟล์สำรองฐานข้อมูล", ""), ["AdminAudit.SeedDemo"] = ("สร้างข้อมูลลูกค้าตัวอย่าง", ""),
         ["AdminAudit.RemoveDemo"] = ("ลบข้อมูลลูกค้าตัวอย่าง", ""), ["BookingDetails.PreArrival"] = ("แจ้งเช็คอินล่วงหน้า", "การจอง"),
         ["Account.ForgotPassword"] = ("ขอลิงก์ตั้งรหัสผ่านใหม่", "ผู้ใช้"), ["Account.ResetPassword"] = ("ตั้งรหัสผ่านใหม่ผ่านอีเมล", "ผู้ใช้"),
-        ["Rooms.Waitlist"] = ("ลงชื่อรอห้องว่าง", "ประเภทห้อง"), ["AdminAudit.TestEmail"] = ("ส่งอีเมลทดสอบ", ""),
+        ["Rooms.Waitlist"] = ("ลงชื่อรอห้องว่าง", "ประเภทห้อง"), ["Activities.Book"] = ("จองกิจกรรม", "การจองกิจกรรม"), ["Activities.Cancel"] = ("ยกเลิกกิจกรรม", "การจองกิจกรรม"),
+        ["FrontDesk.MarkActivity"] = ("บันทึกการเข้าร่วมกิจกรรม", "การจองกิจกรรม"), ["AdminActivities.Save"] = ("บันทึกกิจกรรม", "กิจกรรม"), ["AdminActivities.Delete"] = ("ลบกิจกรรม", "กิจกรรม"), ["AdminAudit.TestEmail"] = ("ส่งอีเมลทดสอบ", ""),
+        ["Member.RequestItem"] = ("ขอของใช้เพิ่ม", "การจอง"), ["Member.CancelRequest"] = ("ยกเลิกคำขอของใช้", "คำขอของใช้"),
+        ["Delivery.NotHome"] = ("แจ้งไม่พบผู้เข้าพัก", "งานส่งของ"), ["Delivery.Urgent"] = ("ตั้ง/ยกเลิกงานด่วน", "งานส่งของ"),
         ["Booking.RequestRefund"] = ("ขอคืนเงิน", "การจอง"), ["Reviews.Create"] = ("เขียนรีวิว", "การจอง"),
         ["Accounting.Confirm"] = ("ยืนยันการชำระเงิน", "การชำระ"), ["Accounting.Reject"] = ("ปฏิเสธหลักฐานการชำระเงิน", "การชำระ"),
         ["Accounting.ApproveRefund"] = ("อนุมัติคืนเงิน", "การชำระ"), ["Accounting.RejectRefund"] = ("ปฏิเสธคำขอคืนเงิน", "การชำระ"),

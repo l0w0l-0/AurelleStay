@@ -1751,7 +1751,7 @@ img.is-zoomable:focus-visible { outline: 3px solid var(--brass, #b08a35); outlin
 .hm-camp__btn:hover:not(:disabled) { border-color: var(--brass, #b08a35); color: var(--brass-2, #8a6a22); }
 .hm-camp__btn:disabled { opacity: .35; cursor: default; }
 .hm-camp.no-overflow .hm-camp__btn { display: none; }
-.hm-camp__track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(330px, calc((100% - 40px) / 3)); gap: 20px; overflow-x: auto; padding: 6px 4px 18px; scroll-snap-type: x mandatory; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.hm-camp__track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(330px, calc((100% - 40px) / 3)); gap: 20px; overflow-x: auto; padding: 6px 4px 18px; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
 .hm-camp__track > .cp-card { scroll-snap-align: start; }
 .hm-camp__track:focus-visible { outline: 3px solid var(--brass, #b08a35); outline-offset: 4px; border-radius: 22px; }
 @media (max-width: 900px) { .hm-camp__track { grid-auto-columns: minmax(300px, 82%); } }
@@ -1857,3 +1857,53 @@ img.is-zoomable:focus-visible { outline: 3px solid var(--brass, #b08a35); outlin
 .rl-wait p { margin: 0; flex: 1 1 320px; }
 .mb-wait { margin-top: 18px; }
 .mb-wait__act { display: inline-flex; gap: 8px; align-items: center; }
+
+/* ===================== Part 52: กิจกรรมของโรงแรม ===================== */
+.ac-muted { color: var(--muted); font-size: .92rem; }
+.ac-mine { margin: 6px 0 28px; padding: 20px 22px; border-radius: 18px; background: var(--glass-strong, #fff); border: 1px solid var(--line); box-shadow: var(--shadow-1); }
+.ac-mine h2 { margin: 0 0 10px; font-size: 1.25rem; color: var(--pine); }
+.ac-mine__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ac-mine__item { display: grid; grid-template-columns: 120px 1fr auto auto; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-2); }
+.ac-mine__item.is-cancelled { opacity: .6; }
+.ac-mine__when b, .ac-mine__what b { display: block; color: var(--ink); }
+.ac-mine__when span, .ac-mine__what span { font-size: .85rem; color: var(--muted); }
+.ac-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 20px; margin-top: 18px; }
+.ac-card { display: flex; flex-direction: column; gap: 12px; padding: 22px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-1); scroll-margin-top: 90px; }
+.ac-card:target { outline: 2px solid var(--brass); outline-offset: 2px; }
+.ac-card__head { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.ac-card__head h3 { margin: 2px 0 0; font-size: 1.15rem; color: var(--pine); }
+.ac-ico { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(160deg, #2d1b47, #5f3d8e); color: #f3e3b8; }
+.ac-ico svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ac-cat { font-size: .75rem; letter-spacing: .04em; color: var(--brass-2); font-weight: 600; }
+.ac-price { font-size: 1.2rem; color: var(--pine); white-space: nowrap; }
+.ac-price small { font-size: .75rem; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.ac-desc { margin: 0; color: var(--ink-2); font-size: .95rem; }
+.ac-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .88rem; color: var(--ink); }
+.ac-facts span { color: var(--muted); margin-right: 5px; font-size: .8rem; }
+.ac-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.ac-slot { display: inline-flex; flex-direction: column; padding: 5px 9px; border-radius: 10px; font-size: .75rem; color: var(--ink-2); background: var(--pine-soft); line-height: 1.3; }
+.ac-slot b { color: var(--ok); font-size: .78rem; }
+.ac-slot.is-low b { color: var(--warn); }
+.ac-slot.is-full { opacity: .6; }
+.ac-slot.is-full b { color: var(--clay); }
+.ac-book { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line-2); }
+.ac-form { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-end; }
+.ac-form label { display: flex; flex-direction: column; gap: 3px; font-size: .8rem; color: var(--ink-2); }
+.ac-form select, .ac-form input { padding: 7px 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; min-width: 0; }
+.ac-form input[type=number] { width: 70px; }
+@media (max-width: 640px) {
+    .ac-grid { grid-template-columns: 1fr; }
+    .ac-mine__item { grid-template-columns: 1fr auto; }
+    .ac-mine__item form { grid-column: 1 / -1; }
+}
+
+/* ===================== ซ่อนแถบเลื่อน (scrollbar) ทั้งเว็บ — ยังเลื่อนด้วยล้อเมาส์/ทัชแพด/นิ้ว/คีย์บอร์ดได้ตามปกติ ===================== */
+html, * { scrollbar-width: none; -ms-overflow-style: none; }
+::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ===================== Part 53: ขอของใช้เพิ่มระหว่างเข้าพัก ===================== */
+.mb-req { margin-top: 20px; }
+.mb-req__form { display: grid; grid-template-columns: 1.4fr 0.8fr 0.6fr 2fr auto auto; gap: 10px; align-items: end; margin-bottom: 14px; }
+.mb-req__form label { display: grid; gap: 4px; font-size: .88rem; color: #5c5468; }
+.mb-req__urgent { display: flex !important; align-items: center; gap: 6px; padding-bottom: 8px; }
+@media (max-width: 860px) { .mb-req__form { grid-template-columns: 1fr 1fr; } .mb-req__note { grid-column: 1 / -1; } }

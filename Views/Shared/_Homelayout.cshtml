@@ -67,6 +67,7 @@
                 <a asp-controller="Home" asp-action="Index" aria-current="@Cur("Home", "Index")">หน้าแรก</a>
                 <a asp-controller="Rooms" asp-action="Index" aria-current="@Cur("Rooms")">ห้องพัก</a>
                 <a asp-controller="Services" asp-action="Index" aria-current="@Cur("Services")">บริการ</a>
+                <a asp-controller="Activities" asp-action="Index" aria-current="@Cur("Activities")">กิจกรรม</a>
                 <a asp-controller="Reviews" asp-action="Index" aria-current="@Cur("Reviews")">รีวิว</a>
                 <a asp-controller="Home" asp-action="About" aria-current="@Cur("Home", "About")">ติดต่อเรา</a>
             </div>
@@ -104,6 +105,7 @@
                             <div class="nav-acct__menu">
                                 <a asp-controller="Member" asp-action="Index">ภาพรวมสมาชิก</a>
                                 <a asp-controller="Booking" asp-action="MyBookings">การจองของฉัน</a>
+                                <a href="/Activities#mine">กิจกรรมของฉัน</a>
                                 <a asp-controller="Member" asp-action="Messages">ข้อความของฉัน</a>
                                 <a asp-controller="Member" asp-action="Reviews">รีวิวของฉัน</a>
                                 <a data-no-instant asp-controller="Notifications" asp-action="Index">การแจ้งเตือน@(unread > 0 ? $" ({unread})" : "")</a>
@@ -175,6 +177,7 @@
                 <a asp-controller="Rooms" asp-action="Index">ห้องพัก</a>
                 <a asp-controller="Rooms" asp-action="Availability">ปฏิทินห้องว่าง</a>
                 <a asp-controller="Services" asp-action="Index">บริการเสริม</a>
+                <a asp-controller="Activities" asp-action="Index">กิจกรรม</a>
                 <a asp-controller="Reviews" asp-action="Index">รีวิว</a>
                 <a asp-controller="Home" asp-action="Policy">เงื่อนไขการจองและความเป็นส่วนตัว</a>
             </nav>

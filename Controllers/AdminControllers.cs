@@ -683,6 +683,43 @@ public class AdminReportsController : AdminAreaController
     [HttpGet]
     public async Task<IActionResult> Index(DateOnly? from, DateOnly? to) => View(await BuildAsync(from, to));
 
+    /// <summary>Part 53: สถิติฝ่ายส่งของ — จำนวนงาน เวลาเฉลี่ย งานล่าช้า แยกตามพนักงาน</summary>
+    [HttpGet]
+    public async Task<IActionResult> Delivery(DateOnly? from, DateOnly? to)
+    {
+        var today = DateOnly.FromDateTime(AppClock.Today);
+        var t = to ?? today; var f = from ?? t.AddDays(-29);
+        if (f > t) (f, t) = (t, f);
+        if (t.DayNumber - f.DayNumber > 366) f = t.AddDays(-366);
+        var start = f.ToDateTime(TimeOnly.MinValue); var end = t.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var now = AppClock.Now; var late = RoomRequests.LateMinutes;
+
+        var svc = await Db.DeliveryTasks.AsNoTracking().Where(x => x.Status == "DONE" && x.DoneAt >= start && x.DoneAt < end && x.AssignedTo != null)
+            .Select(x => new { Who = x.AssignedToNavigation!.FirstName + " " + x.AssignedToNavigation.LastName, x.CreatedAt, x.PickedAt, x.DoneAt, Req = false, Item = (string?)null }).ToListAsync();
+        var req = await Db.ItemRequests.AsNoTracking().Where(x => x.Status == "DONE" && x.DoneAt >= start && x.DoneAt < end && x.AssignedTo != null)
+            .Select(x => new { Who = x.AssignedToNavigation!.FirstName + " " + x.AssignedToNavigation.LastName, CreatedAt = (DateTime?)x.CreatedAt, x.PickedAt, x.DoneAt, Req = true, Item = (string?)x.Item }).ToListAsync();
+        var all = svc.Concat(req).ToList();
+        static double? Avg(IEnumerable<double> v) { var l = v.ToList(); return l.Count == 0 ? null : Math.Round(l.Average(), 1); }
+
+        var openS = await Db.DeliveryTasks.AsNoTracking().Where(x => x.Status != "DONE").Select(x => new { x.CreatedAt, x.Urgent }).ToListAsync();
+        var openR = await Db.ItemRequests.AsNoTracking().Where(x => x.Status == "PENDING" || x.Status == "DELIVERING").Select(x => new { CreatedAt = (DateTime?)x.CreatedAt, x.Urgent }).ToListAsync();
+        var open = openS.Concat(openR).ToList();
+
+        return View(new DeliveryStatsViewModel
+        {
+            From = f, To = t, OpenNow = open.Count, UrgentNow = open.Count(o => o.Urgent),
+            LateNow = open.Count(o => o.CreatedAt is { } c && (now - c).TotalMinutes > late),
+            Staff = all.GroupBy(x => x.Who).Select(g => new DeliveryStaffStat
+            {
+                Name = g.Key, Done = g.Count(), Requests = g.Count(x => x.Req),
+                AvgWait = Avg(g.Where(x => x.CreatedAt != null && x.PickedAt != null).Select(x => (x.PickedAt!.Value - x.CreatedAt!.Value).TotalMinutes)),
+                AvgTotal = Avg(g.Where(x => x.CreatedAt != null).Select(x => (x.DoneAt!.Value - x.CreatedAt!.Value).TotalMinutes)),
+                Late = g.Count(x => x.CreatedAt != null && (x.DoneAt!.Value - x.CreatedAt!.Value).TotalMinutes > late)
+            }).OrderByDescending(x => x.Done).ToList(),
+            TopItems = req.GroupBy(x => x.Item).Select(g => (RoomRequests.ItemName(g.Key), g.Count())).OrderByDescending(x => x.Item2).Take(8).ToList()
+        });
+    }
+
     /// <summary>ส่งออกรายงานช่วงวันที่เดียวกับหน้าจอเป็น CSV (UTF-8 มี BOM เพื่อให้ Excel อ่านภาษาไทยถูก)</summary>
     [HttpGet]
     public async Task<IActionResult> Export(DateOnly? from, DateOnly? to)
@@ -1278,6 +1315,74 @@ public class AdminStaffController : AppController
         }
 
         Flash("ลบพนักงานสำเร็จ");
+        return RedirectToAction(nameof(Index));
+    }
+}
+
+// ======================================================================
+// Part 52: AdminActivitiesController — จัดการกิจกรรมของโรงแรม
+// ======================================================================
+public class AdminActivitiesController : AdminAreaController
+{
+    public AdminActivitiesController(Csi402dbContext db) : base(db) { }
+
+    [HttpGet]
+    public async Task<IActionResult> Index()
+    {
+        var today = DateOnly.FromDateTime(AppClock.Today);
+        var stats = await Db.ActivityBookings.Where(b => b.Status != "CANCELLED")
+            .GroupBy(b => b.ActivityId).Select(g => new { g.Key, Total = g.Count(), Up = g.Count(b => b.ActDate >= today && b.Status == "CONFIRMED") })
+            .ToDictionaryAsync(x => x.Key);
+        var list = (await Db.Activities.AsNoTracking().OrderBy(a => a.Category).ThenBy(a => a.Name).ToListAsync())
+            .Select(a => new ActivityEditViewModel
+            {
+                ActivityId = a.ActivityId, Name = a.Name, Category = a.Category, Description = a.Description, Price = a.Price, DurationMin = a.DurationMin,
+                Capacity = a.Capacity, Times = a.Times, Days = a.Days.Select(c => c - '0').ToList(), Location = a.Location, IsActive = a.IsActive,
+                TotalBooked = stats.TryGetValue(a.ActivityId, out var s) ? s.Total : 0, Upcoming = stats.TryGetValue(a.ActivityId, out var s2) ? s2.Up : 0
+            }).ToList();
+        return View(list);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Save(ActivityEditViewModel f)
+    {
+        var times = HotelActivities.ParseTimes(f.Times);
+        var days = HotelActivities.NormalizeDays(string.Concat(f.Days.Where(d => d is >= 0 and <= 6)));
+        if (!HotelActivities.IsCategory(f.Category)) ModelState.AddModelError(nameof(f.Category), "หมวดกิจกรรมไม่ถูกต้อง");
+        if (times.Count == 0) ModelState.AddModelError(nameof(f.Times), "รอบเวลาต้องเป็นรูปแบบ HH:mm คั่นด้วยจุลภาค เช่น 09:00,14:00");
+        if (times.Count > 6) ModelState.AddModelError(nameof(f.Times), "กำหนดได้ไม่เกิน 6 รอบต่อวัน");
+        if (days.Length == 0) ModelState.AddModelError(nameof(f.Days), "เลือกวันที่เปิดกิจกรรมอย่างน้อย 1 วัน");
+        if (!ModelState.IsValid) { FlashModelErrors(); return RedirectToAction(nameof(Index)); }
+
+        Activity? a;
+        if (f.ActivityId == 0) { a = new Activity { CreatedAt = AppClock.Now }; Db.Activities.Add(a); }
+        else if ((a = await Db.Activities.FindAsync(f.ActivityId)) == null) return Stale(nameof(Index));
+        a.Name = f.Name.Trim(); a.Category = f.Category; a.Price = f.Price; a.DurationMin = (short)f.DurationMin; a.Capacity = (short)f.Capacity;
+        a.Times = string.Join(",", times); a.Days = days; a.IsActive = f.IsActive;
+        a.Description = string.IsNullOrWhiteSpace(f.Description) ? null : f.Description.Trim();
+        a.Location = string.IsNullOrWhiteSpace(f.Location) ? null : f.Location.Trim();
+        try { await Db.SaveChangesAsync(); }
+        catch (DbUpdateException) { Flash("บันทึกไม่สำเร็จ (ชื่อกิจกรรมอาจซ้ำกับรายการเดิม)", true); return RedirectToAction(nameof(Index)); }
+        await AuditTrail.WriteAsync(HttpContext, "AdminActivities.Save", a.ActivityId, true, a.Name);
+        Flash($"บันทึกกิจกรรม \"{a.Name}\" แล้ว");
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>ลบได้เฉพาะกิจกรรมที่ยังไม่เคยมีคนจอง (มีประวัติแล้วให้ปิดใช้งานแทน)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var a = await Db.Activities.FirstOrDefaultAsync(x => x.ActivityId == id);
+        if (a == null) return Stale();
+        if (await Db.ActivityBookings.AnyAsync(b => b.ActivityId == id))
+        {
+            Flash($"ลบ \"{a.Name}\" ไม่ได้ เพราะมีประวัติการจองแล้ว (ให้ปิดการใช้งานแทน)", true);
+            return RedirectToAction(nameof(Index));
+        }
+        Db.Activities.Remove(a);
+        await Db.SaveChangesAsync();
+        await AuditTrail.WriteAsync(HttpContext, "AdminActivities.Delete", id, true, a.Name);
+        Flash($"ลบกิจกรรม \"{a.Name}\" แล้ว");
         return RedirectToAction(nameof(Index));
     }
 }

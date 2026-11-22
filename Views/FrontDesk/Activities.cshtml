@@ -1,0 +1,76 @@
+@model pameka_7033_l005.ViewModels.ActivityRosterViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "กิจกรรมวันนี้";
+    Layout = "_Adminlayout";
+    var th = new System.Globalization.CultureInfo("th-TH");
+    var canMark = User.IsInRole(RoleNames.FrontDesk);
+    var today = DateOnly.FromDateTime(AppClock.Today);
+}
+<div class="dashboard">
+    <h1>กิจกรรม · @Model.Date.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM yyyy", th)</h1>
+    <partial name="_Flash" />
+    <form method="get" class="aca-datebar">
+        <a class="cx-btn cx-btn--ghost cx-btn--small" asp-action="Activities" asp-route-date="@Model.Date.AddDays(-1).ToString("yyyy-MM-dd")">« วันก่อน</a>
+        <label>วันที่ <input type="date" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" /></label>
+        <button type="submit" class="cx-btn cx-btn--small">ดู</button>
+        <a class="cx-btn cx-btn--ghost cx-btn--small" asp-action="Activities" asp-route-date="@Model.Date.AddDays(1).ToString("yyyy-MM-dd")">วันถัดไป »</a>
+        @if (Model.Date != today) { <a asp-action="Activities">กลับไปวันนี้</a> }
+    </form>
+
+    @if (!Model.Sessions.Any())
+    {
+        <div class="staff-card"><div class="cx-empty"><b>ไม่มีรอบกิจกรรมในวันนี้</b><span>ดูวันอื่นได้จากแถบด้านบน</span></div></div>
+    }
+    @foreach (var s in Model.Sessions)
+    {
+        var booked = s.People.Where(p => p.Status != "CANCELLED").Sum(p => p.People);
+        <section class="staff-card aca-session" aria-label="@s.Name @s.Time">
+            <header class="aca-session__head">
+                <div><b class="aca-time">@s.Time น.</b> <b>@s.Name</b>@if (s.Location != null) { <span class="aca-muted"> · @s.Location</span> }</div>
+                <span class="cx-badge @(booked >= s.Capacity ? "cx-badge--CANCELLED" : booked > 0 ? "cx-badge--CONFIRMED" : "cx-badge--PENDING")">@booked / @s.Capacity คน</span>
+            </header>
+            @if (!s.People.Any())
+            {
+                <p class="aca-muted">ยังไม่มีผู้จอง</p>
+            }
+            else
+            {
+                <div class="staff-table-wrap">
+                    <table class="table table-bordered staff-table">
+                        <thead><tr><th scope="col">ผู้เข้าพัก</th><th scope="col">ห้อง</th><th scope="col" class="num">จำนวน</th><th scope="col" class="num">ค่ากิจกรรม</th><th scope="col">สถานะ</th>@if (canMark) { <th scope="col">บันทึกการเข้าร่วม</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var p in s.People)
+                            {
+                                <tr>
+                                    <td>@p.GuestName<br /><small class="aca-muted">@p.Phone</small></td>
+                                    <td>@(p.Rooms ?? "-")</td>
+                                    <td class="num">@p.People</td>
+                                    <td class="num">@(p.Total > 0 ? p.Total.ToString("N0") + " ฿" : "ฟรี")</td>
+                                    <td><span class="cx-badge cx-badge--@(p.Status == "ATTENDED" ? "PAID" : p.Status == "NO_SHOW" ? "REJECTED" : "CONFIRMED")">@HotelActivities.StatusLabel(p.Status)</span></td>
+                                    @if (canMark)
+                                    {
+                                        <td class="aca-acts">
+                                            @if (Model.Date <= today)
+                                            {
+                                                @foreach (var (st, lb) in new[] { ("ATTENDED", "มาร่วมแล้ว"), ("NO_SHOW", "ไม่มา"), ("CONFIRMED", "ล้าง") })
+                                                {
+                                                    if (st == p.Status || (st == "CONFIRMED" && p.Status == "CONFIRMED")) continue;
+                                                    <form asp-action="MarkActivity" method="post" class="d-inline">
+                                                        <input type="hidden" name="id" value="@p.AbId" /><input type="hidden" name="status" value="@st" />
+                                                        <button type="submit" class="cx-btn cx-btn--small @(st == "ATTENDED" ? "" : "cx-btn--ghost")">@lb</button>
+                                                    </form>
+                                                }
+                                            }
+                                            else { <span class="aca-muted">บันทึกได้ในวันกิจกรรม</span> }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>

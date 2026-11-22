@@ -1,0 +1,59 @@
+@model pameka_7033_l005.ViewModels.DeliveryStatsViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "สถิติฝ่ายส่งของ";
+    Layout = "_Adminlayout";
+    string M(double? v) => v is double d ? (d >= 60 ? $"{(int)d / 60} ชม. {(int)d % 60} นาที" : $"{d:0.#} นาที") : "–";
+}
+<div class="dashboard">
+    <h1>สถิติฝ่ายส่งของ</h1>
+    <p>งานที่ส่งสำเร็จระหว่าง @Model.From.ToString("dd/MM/yyyy") – @Model.To.ToString("dd/MM/yyyy") ทั้งบริการเสริมและของใช้ที่ลูกค้าขอเพิ่ม · ล่าช้า = ใช้เวลารวมเกิน @RoomRequests.LateMinutes นาที</p>
+
+    <form method="get" class="dvs-form">
+        <label>ตั้งแต่ <input type="date" name="from" value="@Model.From.ToString("yyyy-MM-dd")" class="form-control" /></label>
+        <label>ถึง <input type="date" name="to" value="@Model.To.ToString("yyyy-MM-dd")" class="form-control" /></label>
+        <button type="submit" class="cx-btn cx-btn--small">ดูสถิติ</button>
+    </form>
+
+    <div class="dvs-kpis">
+        <div class="dvs-kpi"><b>@Model.Staff.Sum(s => s.Done)</b><span>ส่งสำเร็จในช่วงนี้</span></div>
+        <div class="dvs-kpi"><b>@Model.OpenNow</b><span>งานค้างตอนนี้</span></div>
+        <div class="dvs-kpi @(Model.UrgentNow > 0 ? "dvs-kpi--bad" : "")"><b>@Model.UrgentNow</b><span>งานด่วนค้าง</span></div>
+        <div class="dvs-kpi @(Model.LateNow > 0 ? "dvs-kpi--bad" : "")"><b>@Model.LateNow</b><span>รอเกิน @RoomRequests.LateMinutes นาที</span></div>
+    </div>
+
+    <div class="staff-card">
+        <h2 class="h5">แยกตามพนักงาน</h2>
+        @if (!Model.Staff.Any())
+        {
+            <div class="cx-empty"><b>ยังไม่มีงานที่ส่งสำเร็จในช่วงนี้</b><span>ลองเลือกช่วงวันที่ให้กว้างขึ้น</span></div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>พนักงาน</th><th>ส่งสำเร็จ</th><th>ของที่ลูกค้าขอ</th><th>รอรับงานเฉลี่ย</th><th>ใช้เวลารวมเฉลี่ย</th><th>ล่าช้า</th></tr></thead>
+                    <tbody>
+                    @foreach (var s in Model.Staff)
+                    {
+                        <tr><td>@s.Name</td><td>@s.Done</td><td>@s.Requests</td><td>@M(s.AvgWait)</td><td>@M(s.AvgTotal)</td><td>@s.Late</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @if (Model.TopItems.Any())
+    {
+        <div class="staff-card">
+            <h2 class="h5">ของที่ลูกค้าขอบ่อย</h2>
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>รายการ</th><th>จำนวนครั้ง</th></tr></thead>
+                    <tbody>@foreach (var (item, n) in Model.TopItems) { <tr><td>@item</td><td>@n</td></tr> }</tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>

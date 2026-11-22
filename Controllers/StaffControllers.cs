@@ -516,7 +516,7 @@ public class FrontDeskController : AppController
         }
 
         foreach (var s in items)
-            _db.DeliveryTasks.Add(new DeliveryTask { BsId = s.BsId, RoomId = s.RoomId, Status = "PENDING" });
+            _db.DeliveryTasks.Add(new DeliveryTask { BsId = s.BsId, RoomId = s.RoomId, Status = "PENDING", CreatedAt = pameka_7033_l005.Helpers.AppClock.Now });
         await _db.SaveChangesAsync();
         Flash($"ส่งงานให้ฝ่ายส่งของ {items.Count} รายการแล้ว");
         return RedirectToAction(nameof(Index));
@@ -595,17 +595,62 @@ public class FrontDeskController : AppController
         var rooms = await _db.Rooms.Where(r => roomIds.Contains(r.RoomId)).ToListAsync();
         return (b, rooms);
     }
+
+    // ---------------------------------------------------------------- Part 52: กิจกรรมวันนี้ (รายชื่อผู้ร่วมแต่ละรอบ)
+    [HttpGet]
+    public async Task<IActionResult> Activities(DateOnly? date)
+    {
+        var d = date ?? Today;
+        var acts = await _db.Activities.AsNoTracking().Where(a => a.IsActive || _db.ActivityBookings.Any(b => b.ActivityId == a.ActivityId && b.ActDate == d))
+            .OrderBy(a => a.Name).ToListAsync();
+        var rows = await _db.ActivityBookings.AsNoTracking().Where(b => b.ActDate == d && b.Status != "CANCELLED")
+            .Select(b => new { b.AbId, b.ActivityId, b.StartTime, b.People, b.Total, b.Status, b.BookingId,
+                Name = b.User.FirstName + " " + b.User.LastName, b.User.Phone }).ToListAsync();
+        var bids = rows.Where(r => r.BookingId != null).Select(r => r.BookingId!.Value).Distinct().ToList();
+        var roomsOf = (await _db.BookingRooms.AsNoTracking().Where(br => bids.Contains(br.BookingId)).Select(br => new { br.BookingId, br.Room.RoomNo }).ToListAsync())
+            .GroupBy(x => x.BookingId).ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.RoomNo).OrderBy(x => x)));
+        var vm = new ActivityRosterViewModel { Date = d };
+        foreach (var a in acts)
+            foreach (var t in HotelActivities.OpenOn(a, d) ? HotelActivities.ParseTimes(a.Times) : rows.Where(r => r.ActivityId == a.ActivityId).Select(r => r.StartTime).Distinct().ToList())
+            {
+                var people = rows.Where(r => r.ActivityId == a.ActivityId && r.StartTime == t).OrderBy(r => r.Name)
+                    .Select(r => new ActivityBookingRowViewModel { AbId = r.AbId, GuestName = r.Name, Phone = r.Phone, People = r.People, Total = r.Total, Status = r.Status,
+                        Rooms = r.BookingId is { } bid ? roomsOf.GetValueOrDefault(bid) : null }).ToList();
+                vm.Sessions.Add((a.ActivityId, a.Name, t, a.Location, a.Capacity, people));
+            }
+        vm.Sessions = vm.Sessions.OrderBy(s => s.Time).ThenBy(s => s.Name).ToList();
+        return View(vm);
+    }
+
+    /// <summary>บันทึกผลการเข้าร่วม: ATTENDED / NO_SHOW / CONFIRMED (ย้อนกลับ)</summary>
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> MarkActivity(int id, string status)
+    {
+        if (status is not ("ATTENDED" or "NO_SHOW" or "CONFIRMED")) return BadRequest();
+        var b = await _db.ActivityBookings.FirstOrDefaultAsync(x => x.AbId == id);
+        if (b == null) return NotFound();
+        if (b.Status == "CANCELLED") { Flash("รายการนี้ถูกยกเลิกแล้ว", true); return RedirectToAction(nameof(Activities), new { date = b.ActDate.ToString("yyyy-MM-dd") }); }
+        if (b.ActDate > Today) { Flash("บันทึกการเข้าร่วมได้ตั้งแต่วันกิจกรรม", true); return RedirectToAction(nameof(Activities), new { date = b.ActDate.ToString("yyyy-MM-dd") }); }
+        b.Status = status;
+        await _db.SaveChangesAsync();
+        await AuditTrail.WriteAsync(HttpContext, "FrontDesk.MarkActivity", id, true, HotelActivities.StatusLabel(status));
+        Flash($"บันทึก \"{HotelActivities.StatusLabel(status)}\" แล้ว");
+        return RedirectToAction(nameof(Activities), new { date = b.ActDate.ToString("yyyy-MM-dd") });
+    }
 }
 
 // ======================================================================
 // DeliveryController
 // ======================================================================
-/// <summary>ฝ่ายส่งของ: รับงานส่งบริการเสริม/ของใช้ไปที่ห้อง แล้วกดเสร็จเมื่อส่งแล้ว</summary>
+/// <summary>ฝ่ายส่งของ: รับงานส่งบริการเสริม และของใช้ที่ผู้เข้าพักขอเพิ่ม (Part 53) → กำลังนำส่ง → ส่งแล้ว / ไม่พบผู้เข้าพัก</summary>
 [Authorize(Roles = RoleNames.Delivery)]
 public class DeliveryController : AppController
 {
     private readonly Csi402dbContext _db;
     public DeliveryController(Csi402dbContext db) => _db = db;
+
+    /// <summary>ชนิดงาน: S = บริการเสริมที่สั่งไว้ · R = ของใช้ที่ผู้เข้าพักขอเพิ่ม</summary>
+    private static bool IsReq(string? kind) => kind == "R";
 
     [HttpGet]
     public Task<IActionResult> Index() => List(done: false);
@@ -614,59 +659,146 @@ public class DeliveryController : AppController
     public Task<IActionResult> Done() => List(done: true);
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Take(int id)
+    public async Task<IActionResult> Take(int id, string? kind)
     {
         // อัปเดตแบบมีเงื่อนไขในคำสั่งเดียว: ถ้าอีกคนกดรับไปก่อน จะไม่ทับชื่อ
-        var me = CurrentUserId; var doing = BookingWorkflow.DeliveryDoing;
-        var taken = await _db.DeliveryTasks.Where(x => x.TaskId == id && x.Status == "PENDING")
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, doing).SetProperty(x => x.AssignedTo, me));
+        var me = CurrentUserId; var doing = BookingWorkflow.DeliveryDoing; var now = AppClock.Now;
+        var taken = IsReq(kind)
+            ? await _db.ItemRequests.Where(x => x.RequestId == id && x.Status == "PENDING")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, doing).SetProperty(x => x.AssignedTo, me).SetProperty(x => x.PickedAt, now))
+            : await _db.DeliveryTasks.Where(x => x.TaskId == id && x.Status == "PENDING")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, doing).SetProperty(x => x.AssignedTo, me).SetProperty(x => x.PickedAt, now));
         if (taken == 0) return Stale();
-        Flash("รับงานแล้ว");
+        Flash("รับงานแล้ว — สถานะเป็น \"กำลังนำส่ง\"");
         return RedirectToAction(nameof(Index));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Finish(int id)
+    public async Task<IActionResult> Finish(int id, string? kind)
     {
-        var t = await _db.DeliveryTasks.FirstOrDefaultAsync(x => x.TaskId == id);
-        if (t == null || !BookingWorkflow.CanFinishTask(t.Status, BookingWorkflow.DeliveryDoing, t.AssignedTo, CurrentUserId))
-            return Stale();
-
-        t.Status = "DONE";
-        t.DoneAt = pameka_7033_l005.Helpers.AppClock.Now;
+        var now = AppClock.Now;
+        if (IsReq(kind))
+        {
+            var r = await _db.ItemRequests.Include(x => x.Room).FirstOrDefaultAsync(x => x.RequestId == id);
+            if (r == null || !BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.DeliveryDoing, r.AssignedTo, CurrentUserId)) return Stale();
+            r.Status = "DONE"; r.DoneAt = now;
+            Notify.Add(_db, r.UserId, $"ส่ง{RoomRequests.ItemName(r.Item)}ถึงห้อง {r.Room.RoomNo} แล้ว",
+                $"{RoomRequests.ItemName(r.Item)} × {r.Qty} ส่งถึงห้องเรียบร้อย ขอให้มีความสุขกับการเข้าพัก", "/Member#mb-req");
+        }
+        else
+        {
+            var t = await _db.DeliveryTasks.Include(x => x.Room).Include(x => x.Bs).ThenInclude(x => x.Service).Include(x => x.Bs.Booking)
+                .FirstOrDefaultAsync(x => x.TaskId == id);
+            if (t == null || !BookingWorkflow.CanFinishTask(t.Status, BookingWorkflow.DeliveryDoing, t.AssignedTo, CurrentUserId)) return Stale();
+            t.Status = "DONE"; t.DoneAt = now;
+            Notify.Add(_db, t.Bs.Booking.UserId, $"ส่ง{t.Bs.Service.ServiceName}ถึงห้อง {t.Room.RoomNo} แล้ว",
+                $"{t.Bs.Service.ServiceName} × {t.Bs.Quantity} ส่งถึงห้องเรียบร้อย", $"/Booking/Details/{t.Bs.BookingId}");
+        }
         await _db.SaveChangesAsync();
-        Flash("ส่งสำเร็จแล้ว");
+        Flash("ส่งสำเร็จแล้ว แจ้งผู้เข้าพักเรียบร้อย");
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>ไปถึงห้องแล้วไม่พบผู้เข้าพัก: คืนงานเข้าคิว (รอนำส่งใหม่) นับครั้ง และแจ้งผู้เข้าพัก</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> NotHome(int id, string? kind)
+    {
+        var uid = CurrentUserId;
+        int guest; string what, room, link;
+        if (IsReq(kind))
+        {
+            var r = await _db.ItemRequests.Include(x => x.Room).FirstOrDefaultAsync(x => x.RequestId == id);
+            if (r == null || !BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.DeliveryDoing, r.AssignedTo, uid)) return Stale();
+            r.Status = "PENDING"; r.AssignedTo = null; r.PickedAt = null; r.Missed = (byte)Math.Min(r.Missed + 1, 255);
+            (guest, what, room, link) = (r.UserId, RoomRequests.ItemName(r.Item), r.Room.RoomNo, "/Member#mb-req");
+        }
+        else
+        {
+            var t = await _db.DeliveryTasks.Include(x => x.Room).Include(x => x.Bs).ThenInclude(x => x.Service).Include(x => x.Bs.Booking)
+                .FirstOrDefaultAsync(x => x.TaskId == id);
+            if (t == null || !BookingWorkflow.CanFinishTask(t.Status, BookingWorkflow.DeliveryDoing, t.AssignedTo, uid)) return Stale();
+            t.Status = "PENDING"; t.AssignedTo = null; t.PickedAt = null; t.Missed = (byte)Math.Min(t.Missed + 1, 255);
+            (guest, what, room, link) = (t.Bs.Booking.UserId, t.Bs.Service.ServiceName, t.Room.RoomNo, $"/Booking/Details/{t.Bs.BookingId}");
+        }
+        Notify.Add(_db, guest, $"นำ{what}ไปส่งที่ห้อง {room} แต่ไม่พบผู้เข้าพัก",
+            "พนักงานจะนำส่งให้อีกครั้ง หากต้องการกำหนดเวลา ติดต่อแผนกต้อนรับได้", link);
+        await _db.SaveChangesAsync();
+        Flash($"บันทึกแล้ว: ไม่พบผู้เข้าพักห้อง {room} งานกลับเข้าคิวรอนำส่งใหม่");
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>ตั้ง/ยกเลิกงานด่วน (งานด่วนขึ้นบนสุดของคิว)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Urgent(int id, string? kind)
+    {
+        var n = IsReq(kind)
+            ? await _db.ItemRequests.Where(x => x.RequestId == id && (x.Status == "PENDING" || x.Status == "DELIVERING"))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Urgent, x => !x.Urgent))
+            : await _db.DeliveryTasks.Where(x => x.TaskId == id && x.Status != "DONE")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Urgent, x => !x.Urgent));
+        if (n == 0) return Stale();
+        Flash("ปรับความด่วนของงานแล้ว");
+        return RedirectToAction(nameof(Index));
+    }
 
     private async Task<IActionResult> List(bool done)
     {
-        var uid = CurrentUserId;
-        IQueryable<DeliveryTask> q = _db.DeliveryTasks.AsNoTracking();
-        q = done
-            ? q.Where(t => t.Status == "DONE").OrderByDescending(t => t.DoneAt)
-            : q.Where(t => t.Status != "DONE" && (t.AssignedTo == null || t.AssignedTo == uid)).OrderBy(t => t.TaskId);
+        var uid = CurrentUserId; var now = AppClock.Now;
+        var rows = new List<TaskRowViewModel>();
 
-        var rows = await q.Take(100).Select(t => new
+        IQueryable<DeliveryTask> q = _db.DeliveryTasks.AsNoTracking();
+        q = done ? q.Where(t => t.Status == "DONE").OrderByDescending(t => t.DoneAt)
+                 : q.Where(t => t.Status != "DONE" && (t.AssignedTo == null || t.AssignedTo == uid)).OrderBy(t => t.TaskId);
+        rows.AddRange((await q.Take(100).Select(t => new
         {
-            t.TaskId, RoomNo = t.Room.RoomNo, Service = t.Bs.Service.ServiceName, Qty = t.Bs.Quantity,
-            t.Status, t.AssignedTo, Assignee = t.AssignedToNavigation != null ? t.AssignedToNavigation.FirstName : null, t.DoneAt
-        }).ToListAsync();
+            t.TaskId, RoomNo = t.Room.RoomNo, Service = t.Bs.Service.ServiceName, Qty = t.Bs.Quantity, Guest = t.Bs.Booking.User.FirstName,
+            t.Status, t.AssignedTo, Assignee = t.AssignedToNavigation != null ? t.AssignedToNavigation.FirstName : null, t.DoneAt,
+            t.CreatedAt, t.PickedAt, t.Urgent, t.Missed
+        }).ToListAsync()).Select(r => new TaskRowViewModel
+        {
+            TaskId = r.TaskId, Kind = "S", RoomNo = r.RoomNo, Detail = $"{r.Service} × {r.Qty}", Source = "บริการเสริม", Guest = r.Guest,
+            Status = r.Status, StatusText = RoomRequests.StatusLabel(r.Status, r.Missed), Assignee = r.Assignee, DoneAt = r.DoneAt,
+            CreatedAt = r.CreatedAt, PickedAt = r.PickedAt, Urgent = r.Urgent, Missed = r.Missed,
+            CanTake = BookingWorkflow.CanTakeTask(r.Status),
+            CanFinish = BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.DeliveryDoing, r.AssignedTo, uid)
+        }));
+
+        IQueryable<ItemRequest> rq = _db.ItemRequests.AsNoTracking();
+        rq = done ? rq.Where(r => r.Status == "DONE").OrderByDescending(r => r.DoneAt)
+                  : rq.Where(r => (r.Status == "PENDING" || r.Status == "DELIVERING") && (r.AssignedTo == null || r.AssignedTo == uid)).OrderBy(r => r.RequestId);
+        rows.AddRange((await rq.Take(100).Select(r => new
+        {
+            r.RequestId, RoomNo = r.Room.RoomNo, r.Item, r.Qty, r.Note, Guest = _db.Users.Where(u => u.UserId == r.UserId).Select(u => u.FirstName).FirstOrDefault(),
+            r.Status, r.AssignedTo, Assignee = r.AssignedToNavigation != null ? r.AssignedToNavigation.FirstName : null, r.DoneAt,
+            r.CreatedAt, r.PickedAt, r.Urgent, r.Missed
+        }).ToListAsync()).Select(r => new TaskRowViewModel
+        {
+            TaskId = r.RequestId, Kind = "R", RoomNo = r.RoomNo, Detail = $"{RoomRequests.ItemName(r.Item)} × {r.Qty}", Note = r.Note,
+            Source = "ลูกค้าขอเพิ่ม", Guest = r.Guest,
+            Status = r.Status, StatusText = RoomRequests.StatusLabel(r.Status, r.Missed), Assignee = r.Assignee, DoneAt = r.DoneAt,
+            CreatedAt = r.CreatedAt, PickedAt = r.PickedAt, Urgent = r.Urgent, Missed = r.Missed,
+            CanTake = BookingWorkflow.CanTakeTask(r.Status),
+            CanFinish = BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.DeliveryDoing, r.AssignedTo, uid)
+        }));
+
+        foreach (var r in rows)
+        {
+            r.Minutes = RoomRequests.Minutes(r.CreatedAt, done && r.DoneAt is { } d ? d : now);
+            r.Late = !done && r.Minutes > RoomRequests.LateMinutes;
+        }
+        rows = done ? rows.OrderByDescending(r => r.DoneAt).Take(100).ToList()
+                    // งานด่วนก่อน → งานที่กำลังนำส่งของตัวเอง → รอนานสุดก่อน
+                    : rows.OrderByDescending(r => r.Urgent).ThenByDescending(r => r.Status == BookingWorkflow.DeliveryDoing)
+                          .ThenBy(r => r.CreatedAt ?? DateTime.MaxValue).ToList();
 
         return View("TaskList", new TaskListViewModel
         {
             Title = done ? "ห้องที่ส่งสำเร็จ" : "ห้องที่ต้องส่ง",
-            Description = done ? "งานส่งของที่เสร็จแล้ว (100 รายการล่าสุด)" : "รับงานก่อน แล้วกด \"ส่งสำเร็จ\" เมื่อนำของไปถึงห้อง",
+            Description = done ? "งานส่งของที่เสร็จแล้ว (100 รายการล่าสุด)"
+                : $"งานด่วนอยู่บนสุด · รอเกิน {RoomRequests.LateMinutes} นาทีจะเป็นสีแดง · รับงาน → \"ส่งสำเร็จ\" หรือ \"ไม่พบผู้เข้าพัก\" (งานกลับเข้าคิว)",
             EmptyText = done ? "ยังไม่มีงานที่ส่งสำเร็จ" : "ตอนนี้ไม่มีงานส่งของค้างอยู่",
-            TakeLabel = "รับงาน", FinishLabel = "ส่งสำเร็จ", ShowDone = done,
-            Rows = rows.Select(r => new TaskRowViewModel
-            {
-                TaskId = r.TaskId, RoomNo = r.RoomNo, Detail = $"{r.Service} × {r.Qty}", Status = r.Status,
-                Assignee = r.Assignee, DoneAt = r.DoneAt,
-                CanTake = BookingWorkflow.CanTakeTask(r.Status),
-                CanFinish = BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.DeliveryDoing, r.AssignedTo, uid)
-            }).ToList()
+            TakeLabel = "รับงาน", FinishLabel = "ส่งสำเร็จ", ShowDone = done, Delivery = true,
+            Rows = rows
         });
     }
 }

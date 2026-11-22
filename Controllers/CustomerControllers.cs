@@ -152,7 +152,7 @@ public class HomeController : Controller
     [IgnoreAntiforgeryToken]
     public IActionResult Error(int? code)
     {
-        return View(new ErrorViewModel { StatusCode = code ?? 500, RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        return View(new ErrorViewModel { StatusCode = code ?? 500, RequestId = System.Diagnostics.Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 }
 
@@ -608,7 +608,56 @@ public class MemberController : AppController
             .OrderBy(w => w.CheckIn).Take(10)
             .Select(w => new WaitlistItemViewModel { WaitId = w.WaitId, What = w.Type != null ? w.Type.TypeName : "ห้องใดก็ได้", CheckIn = w.CheckIn,
                 CheckOut = w.CheckOut, Guests = w.Guests, Status = w.Status, CreatedAt = w.CreatedAt }).ToListAsync();
+
+        // Part 53: กำลังเข้าพัก → ขอของใช้เพิ่มได้ และเห็นสถานะของที่ขอ
+        var stay = await _db.Bookings.AsNoTracking().Where(b => b.UserId == uid && b.Status == "CHECKED_IN")
+            .OrderByDescending(b => b.CheckIn).Select(b => new { b.BookingId, Rooms = b.BookingRooms.Select(r => new { r.RoomId, r.Room.RoomNo }).ToList() })
+            .FirstOrDefaultAsync();
+        if (stay != null)
+        {
+            vm.StayBookingId = stay.BookingId;
+            vm.StayRooms = stay.Rooms.OrderBy(r => r.RoomNo).Select(r => (r.RoomId, r.RoomNo)).ToList();
+            vm.Requests = (await _db.ItemRequests.AsNoTracking().Where(r => r.BookingId == stay.BookingId)
+                .OrderByDescending(r => r.RequestId).Take(20)
+                .Select(r => new { r.RequestId, r.Item, r.Qty, r.Room.RoomNo, r.Note, r.Urgent, r.Status, r.Missed, r.CreatedAt, r.DoneAt }).ToListAsync())
+                .Select(r => new ItemRequestRowViewModel { Id = r.RequestId, What = $"{RoomRequests.ItemName(r.Item)} × {r.Qty}", RoomNo = r.RoomNo,
+                    Note = r.Note, Urgent = r.Urgent, Status = r.Status, Missed = r.Missed, CreatedAt = r.CreatedAt, DoneAt = r.DoneAt }).ToList();
+        }
         return View(vm);
+    }
+
+    /// <summary>Part 53: ขอของใช้เพิ่มระหว่างเข้าพัก (เฉพาะการจองของตัวเองที่เช็คอินแล้ว) → เข้าคิวฝ่ายส่งของทันที</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestItem(int bookingId, int roomId, string? item, int qty = 1, string? note = null, bool urgent = false)
+    {
+        var uid = CurrentUserId ?? 0;
+        var b = await _db.Bookings.AsNoTracking().Where(x => x.BookingId == bookingId && x.UserId == uid && x.Status == "CHECKED_IN")
+            .Select(x => new { x.BookingId, Rooms = x.BookingRooms.Select(r => r.RoomId).ToList() }).FirstOrDefaultAsync();
+        if (b == null) { Flash("ขอของใช้ได้เฉพาะระหว่างเข้าพัก (หลังเช็คอิน)", true); return Redirect("/Member#mb-req"); }
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (!RoomRequests.IsItem(item) || !b.Rooms.Contains(roomId) || qty < 1 || qty > RoomRequests.MaxQty || note?.Length > 200)
+        { Flash($"ข้อมูลไม่ถูกต้อง: เลือกรายการและห้อง จำนวน 1–{RoomRequests.MaxQty} หมายเหตุไม่เกิน 200 ตัวอักษร", true); return Redirect("/Member#mb-req"); }
+        if (item == "OTHER" && note == null) { Flash("เลือก \"อื่น ๆ\" กรุณาระบุสิ่งที่ต้องการในหมายเหตุ", true); return Redirect("/Member#mb-req"); }
+        var open = await _db.ItemRequests.CountAsync(r => r.BookingId == bookingId && (r.Status == "PENDING" || r.Status == "DELIVERING"));
+        if (open >= RoomRequests.MaxOpenPerBooking)
+        { Flash($"มีคำขอที่ยังไม่ได้ส่ง {open} รายการแล้ว รอให้ส่งก่อนแล้วค่อยขอเพิ่ม", true); return Redirect("/Member#mb-req"); }
+
+        _db.ItemRequests.Add(new ItemRequest { BookingId = bookingId, UserId = uid, RoomId = roomId, Item = item!, Qty = (byte)qty, Note = note,
+            Urgent = urgent, Status = "PENDING", CreatedAt = AppClock.Now });
+        await _db.SaveChangesAsync();
+        Flash($"ส่งคำขอ{RoomRequests.ItemName(item)}แล้ว พนักงานจะนำไปส่งที่ห้องโดยเร็ว");
+        return Redirect("/Member#mb-req");
+    }
+
+    /// <summary>Part 53: ยกเลิกคำขอที่ยังไม่มีพนักงานรับงาน</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelRequest(int id)
+    {
+        var uid = CurrentUserId ?? 0;
+        var n = await _db.ItemRequests.Where(r => r.RequestId == id && r.UserId == uid && r.Status == "PENDING")
+            .ExecuteUpdateAsync(x => x.SetProperty(r => r.Status, "CANCELLED"));
+        Flash(n > 0 ? "ยกเลิกคำขอแล้ว" : "ยกเลิกไม่ได้: พนักงานรับงานไปแล้วหรือส่งเรียบร้อยแล้ว", n == 0);
+        return Redirect("/Member#mb-req");
     }
 
     /// <summary>Part 51: ยกเลิกการลงชื่อรอห้องว่าง (เฉพาะรายการของตัวเอง)</summary>
@@ -876,5 +925,95 @@ public class ReviewsController : AppController
             BookingId = b.BookingId, Rating = 5,
             Summary = $"การจอง #{b.BookingId} · {b.CheckIn:dd/MM/yyyy} – {b.CheckOut:dd/MM/yyyy} · ห้อง {string.Join(", ", b.Rooms)}"
         };
+    }
+}
+
+// ======================================================================
+// Part 52: ActivitiesController — กิจกรรมของโรงแรม (ทุกคนดูได้ · ผู้เข้าพักจองรอบเวลาได้)
+// ======================================================================
+[Authorize(Roles = RoleNames.Customer)]
+public class ActivitiesController : AppController
+{
+    private readonly Csi402dbContext _db;
+    public ActivitiesController(Csi402dbContext db) => _db = db;
+
+    [AllowAnonymous, HttpGet]
+    public async Task<IActionResult> Index(string? cat)
+    {
+        var now = AppClock.Now;
+        var today = DateOnly.FromDateTime(now);
+        var isCustomer = User.IsInRole(RoleNames.Customer);
+        var uid = isCustomer ? CurrentUserId ?? 0 : 0;
+        var vm = new ActivitiesPageViewModel { Today = today, IsCustomer = isCustomer, Category = HotelActivities.IsCategory(cat) ? cat : null };
+
+        var acts = await _db.Activities.AsNoTracking().Where(a => a.IsActive).OrderBy(a => a.Category).ThenBy(a => a.Name).ToListAsync();
+        var taken = await HotelActivities.TakenAsync(_db, today, today.AddDays(6));
+        var stays = uid == 0 ? new() : await _db.Bookings.AsNoTracking()
+            .Where(b => b.UserId == uid && (b.Status == "CONFIRMED" || b.Status == "CHECKED_IN") && b.CheckOut >= today)
+            .Select(b => new { b.CheckIn, b.CheckOut }).ToListAsync();
+        vm.HasStay = stays.Count > 0;
+        var stayDays = new SortedSet<DateOnly>();
+        foreach (var s in stays)
+            for (var d = s.CheckIn < today ? today : s.CheckIn; d <= s.CheckOut && d <= today.AddDays(HotelActivities.BookAheadDays); d = d.AddDays(1)) stayDays.Add(d);
+
+        foreach (var a in acts)
+        {
+            var card = new ActivityCardViewModel
+            {
+                Id = a.ActivityId, Name = a.Name, Category = a.Category, Description = a.Description, Price = a.Price,
+                DurationMin = a.DurationMin, Capacity = a.Capacity, Times = HotelActivities.ParseTimes(a.Times), Days = a.Days, Location = a.Location
+            };
+            for (var d = today; d <= today.AddDays(6); d = d.AddDays(1))
+            {
+                if (!HotelActivities.OpenOn(a, d)) continue;
+                foreach (var t in card.Times)
+                {
+                    if (d.ToDateTime(TimeOnly.ParseExact(t, "HH:mm")) <= now.AddMinutes(30)) continue;
+                    card.Sessions.Add((d, t, Math.Max(0, a.Capacity - taken.GetValueOrDefault((a.ActivityId, d, t)))));
+                }
+            }
+            card.BookableDates = stayDays.Where(d => HotelActivities.OpenOn(a, d)).ToList();
+            vm.Cards.Add(card);
+        }
+        if (uid != 0)
+        {
+            var mine = await _db.ActivityBookings.AsNoTracking().Include(b => b.Activity)
+                .Where(b => b.UserId == uid && b.ActDate >= today.AddDays(-14)).OrderBy(b => b.ActDate).ThenBy(b => b.StartTime).Take(50).ToListAsync();
+            vm.Mine = mine.Select(b => new ActivityBookingRowViewModel
+            {
+                AbId = b.AbId, ActivityId = b.ActivityId, ActivityName = b.Activity.Name, Location = b.Activity.Location, Date = b.ActDate, Time = b.StartTime,
+                People = b.People, Total = b.Total, Status = b.Status, CanCancel = HotelActivities.CanCancel(b, now)
+            }).ToList();
+        }
+        return View(vm);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Book(int activityId, DateOnly? date, string? time, int people = 1)
+    {
+        var uid = CurrentUserId ?? 0;
+        var (ok, msg, id) = await HotelActivities.BookAsync(_db, uid, activityId, date, time, people, AppClock.Now);
+        Flash(msg, !ok);
+        if (ok) await AuditTrail.WriteAsync(HttpContext, "Activities.Book", id, true, msg);
+        return Redirect(Url.Action(nameof(Index)) + (ok ? "#mine" : $"#act-{activityId}"));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(int id)
+    {
+        var uid = CurrentUserId ?? 0;
+        var b = await _db.ActivityBookings.Include(x => x.Activity).FirstOrDefaultAsync(x => x.AbId == id && x.UserId == uid);
+        if (b == null) return NotFound();
+        if (!HotelActivities.CanCancel(b, AppClock.Now))
+        {
+            Flash($"ยกเลิกไม่ได้ (ยกเลิกได้ก่อนเริ่มกิจกรรมอย่างน้อย {HotelActivities.CancelBeforeHours} ชั่วโมง)", true);
+            return Redirect(Url.Action(nameof(Index)) + "#mine");
+        }
+        b.Status = "CANCELLED"; b.CancelledAt = AppClock.Now;
+        Notify.Add(_db, uid, $"ยกเลิกกิจกรรมแล้ว: {b.Activity.Name}", $"{b.ActDate:dd/MM/yyyy} เวลา {b.StartTime} น.", "/Activities");
+        await _db.SaveChangesAsync();
+        await AuditTrail.WriteAsync(HttpContext, "Activities.Cancel", id, true, $"{b.Activity.Name} {b.ActDate:yyyy-MM-dd} {b.StartTime}");
+        Flash("ยกเลิกกิจกรรมแล้ว");
+        return Redirect(Url.Action(nameof(Index)) + "#mine");
     }
 }

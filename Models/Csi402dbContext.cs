@@ -24,6 +24,8 @@ public partial class Csi402dbContext : DbContext
 
     public virtual DbSet<DeliveryTask> DeliveryTasks { get; set; }
 
+    public virtual DbSet<ItemRequest> ItemRequests { get; set; }
+
     public virtual DbSet<ExtraService> ExtraServices { get; set; }
 
     public virtual DbSet<Expense> Expenses { get; set; }
@@ -37,6 +39,10 @@ public partial class Csi402dbContext : DbContext
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
 
     public virtual DbSet<WaitlistEntry> Waitlist { get; set; }
+
+    public virtual DbSet<Activity> Activities { get; set; }
+
+    public virtual DbSet<ActivityBooking> ActivityBookings { get; set; }
 
     public virtual DbSet<ContactMessage> ContactMessages { get; set; }
 
@@ -207,6 +213,10 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.DoneAt)
                 .HasColumnType("datetime")
                 .HasColumnName("done_at");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.PickedAt).HasColumnType("datetime").HasColumnName("picked_at");
+            entity.Property(e => e.Urgent).HasColumnName("urgent");
+            entity.Property(e => e.Missed).HasColumnName("missed");
             entity.Property(e => e.RoomId).HasColumnName("room_id");
             entity.Property(e => e.Status)
                 .HasDefaultValueSql("'PENDING'")
@@ -716,6 +726,72 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.NotifiedAt).HasColumnType("datetime").HasColumnName("notified_at");
             entity.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("room_waitlist_ibfk_1");
             entity.HasOne(d => d.Type).WithMany().HasForeignKey(d => d.TypeId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("room_waitlist_ibfk_2");
+        });
+
+        // Part 52: กิจกรรม
+        modelBuilder.Entity<Activity>(entity =>
+        {
+            entity.HasKey(e => e.ActivityId);
+            entity.ToTable("activities");
+            entity.HasIndex(e => e.Name, "ux_activity_name").IsUnique();
+            entity.Property(e => e.ActivityId).HasColumnName("activity_id");
+            entity.Property(e => e.Name).HasMaxLength(100).HasColumnName("name");
+            entity.Property(e => e.Category).HasMaxLength(10).HasColumnName("category");
+            entity.Property(e => e.Description).HasMaxLength(500).HasColumnName("description");
+            entity.Property(e => e.Price).HasPrecision(10, 2).HasColumnName("price");
+            entity.Property(e => e.DurationMin).HasColumnName("duration_min");
+            entity.Property(e => e.Capacity).HasColumnName("capacity");
+            entity.Property(e => e.Times).HasMaxLength(60).HasColumnName("times");
+            entity.Property(e => e.Days).HasMaxLength(7).HasColumnName("days");
+            entity.Property(e => e.Location).HasMaxLength(100).HasColumnName("location");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<ActivityBooking>(entity =>
+        {
+            entity.HasKey(e => e.AbId);
+            entity.ToTable("activity_bookings");
+            entity.HasIndex(e => new { e.ActivityId, e.ActDate, e.StartTime }, "ix_ab_slot");
+            entity.Property(e => e.AbId).HasColumnName("ab_id");
+            entity.Property(e => e.ActivityId).HasColumnName("activity_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.ActDate).HasColumnName("act_date");
+            entity.Property(e => e.StartTime).HasMaxLength(5).HasColumnName("start_time");
+            entity.Property(e => e.People).HasColumnName("people");
+            entity.Property(e => e.Total).HasPrecision(10, 2).HasColumnName("total");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.CancelledAt).HasColumnType("datetime").HasColumnName("cancelled_at");
+            entity.HasOne(d => d.Activity).WithMany().HasForeignKey(d => d.ActivityId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("activity_bookings_ibfk_1");
+            entity.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("activity_bookings_ibfk_2");
+            entity.HasOne<Booking>().WithMany().HasForeignKey(d => d.BookingId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("activity_bookings_ibfk_3");
+        });
+
+        modelBuilder.Entity<ItemRequest>(entity =>
+        {
+            entity.HasKey(e => e.RequestId);
+            entity.ToTable("item_requests");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "ix_ir_status");
+            entity.Property(e => e.RequestId).HasColumnName("request_id");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.RoomId).HasColumnName("room_id");
+            entity.Property(e => e.Item).HasMaxLength(20).HasColumnName("item");
+            entity.Property(e => e.Qty).HasColumnName("qty");
+            entity.Property(e => e.Note).HasMaxLength(200).HasColumnName("note");
+            entity.Property(e => e.Urgent).HasColumnName("urgent");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.AssignedTo).HasColumnName("assigned_to");
+            entity.Property(e => e.Missed).HasColumnName("missed");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.PickedAt).HasColumnType("datetime").HasColumnName("picked_at");
+            entity.Property(e => e.DoneAt).HasColumnType("datetime").HasColumnName("done_at");
+            entity.HasOne<Booking>().WithMany().HasForeignKey(d => d.BookingId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("item_requests_ibfk_1");
+            entity.HasOne<User>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("item_requests_ibfk_2");
+            entity.HasOne(d => d.Room).WithMany().HasForeignKey(d => d.RoomId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("item_requests_ibfk_3");
+            entity.HasOne(d => d.AssignedToNavigation).WithMany().HasForeignKey(d => d.AssignedTo).OnDelete(DeleteBehavior.SetNull).HasConstraintName("item_requests_ibfk_4");
         });
 
         OnModelCreatingPartial(modelBuilder);
