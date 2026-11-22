@@ -1293,3 +1293,149 @@ public static class PasswordResets
         return db.PasswordResets.Include(r => r.User).FirstOrDefaultAsync(r => r.TokenHash == hash && r.UsedAt == null && r.ExpiresAt > now);
     }
 }
+
+// ======================================================================
+// Part 55: dotnet run คำสั่งเดียว → เปิด Docker Desktop · ฐานข้อมูล MySQL ใน Docker · เว็บใน Docker (8088) · เว็บในเครื่อง
+// ======================================================================
+/// <summary>
+/// ตอนรัน <c>dotnet run</c> (Development บนเครื่องนักพัฒนา): เปิด Docker Desktop ถ้ายังไม่เปิด → สร้าง .env ถ้ายังไม่มี
+/// → เปิดฐานข้อมูลโปรเจกต์ "aurellestay" และรอให้พร้อม → ให้เว็บในเครื่องใช้ฐานข้อมูลเดียวกับ Docker
+/// → อัปเดตเว็บใน Docker (http://localhost:8088) เบื้องหลัง. แตะเฉพาะโปรเจกต์ Docker ชื่อ aurellestay เท่านั้น
+/// ปิดได้ด้วย DevDocker:Enabled=false ใน appsettings หรือ ตัวแปร AURELLE_NO_DOCKER=1
+/// </summary>
+public static class DevDocker
+{
+    private const string Project = "aurellestay";
+
+    public static void Prepare(WebApplicationBuilder b)
+    {
+        if (!b.Environment.IsDevelopment()) return;
+        if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true") return;
+        if (Environment.GetEnvironmentVariable("AURELLE_NO_DOCKER") == "1" || !b.Configuration.GetValue("DevDocker:Enabled", true)) return;
+        var root = b.Environment.ContentRootPath;
+        if (!File.Exists(Path.Combine(root, "docker-compose.yml"))) return;
+        try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { }
+
+        void Say(string t) => Console.WriteLine("[AurelleStay] " + t);
+        if (!Run("docker", "info", root, 20, out _))
+        {
+            if (!StartDockerDesktop()) { Say("ไม่พบ Docker — รันเว็บด้วยฐานข้อมูลตาม appsettings.json"); return; }
+            Say("กำลังเปิด Docker Desktop ...");
+            var ok = false;
+            for (var i = 0; i < 60 && !ok; i++) { Thread.Sleep(3000); ok = Run("docker", "info", root, 20, out _); }
+            if (!ok) { Say("Docker ยังไม่พร้อม — รันเว็บด้วยฐานข้อมูลตาม appsettings.json"); return; }
+        }
+
+        var env = LoadEnv(root, Say);
+        Say("เปิดฐานข้อมูล MySQL ใน Docker ...");
+        if (!Run("docker", $"compose -p {Project} up -d db", root, 900, out var err))
+        { Say("เปิดฐานข้อมูลใน Docker ไม่สำเร็จ: " + err.Trim()); return; }
+
+        var port = env.GetValueOrDefault("DB_HOST_PORT", "3317");
+        var cs = $"server=127.0.0.1;port={port};database=csi402db;user=aurelle;password={env.GetValueOrDefault("DB_PASSWORD", "")};SslMode=None;AllowPublicKeyRetrieval=True";
+        var ready = false;
+        for (var i = 0; i < 90 && !ready; i++)
+        {
+            try
+            {
+                using var c = new MySqlConnector.MySqlConnection(cs); c.Open();
+                using var cmd = c.CreateCommand(); cmd.CommandText = "SELECT 1 FROM users LIMIT 1"; cmd.ExecuteScalar(); ready = true;
+            }
+            catch { Thread.Sleep(2000); }
+        }
+        if (!ready) { Say("ฐานข้อมูลใน Docker ยังไม่พร้อม — รันเว็บด้วยฐานข้อมูลตาม appsettings.json"); return; }
+
+        // ใช้ฐานข้อมูล + ค่าตั้งค่าเดียวกับเว็บใน Docker (เฉพาะค่าที่ตั้งไว้ใน .env)
+        var map = new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = cs,
+            // ไม่พิมพ์ SQL ทุกคำสั่งลงหน้าจอ (ตัวส่งอีเมล/งานเบื้องหลังรันทุก 15 วินาที ทำให้อ่านข้อความสำคัญไม่ออก)
+            ["Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command"] = "Warning" };
+        foreach (var (k, key) in new[] { ("HOTEL_NAME", "Hotel:Name"), ("HOTEL_PHONE", "Hotel:Phone"), ("HOTEL_EMAIL", "Hotel:Email"), ("HOTEL_LINE", "Hotel:LineId"),
+                     ("HOTEL_ADDRESS", "Hotel:Address"), ("PROMPTPAY_ID", "Payment:PromptPayId"), ("PAY_ACCOUNT_NAME", "Payment:AccountName"),
+                     ("PAY_BANK_NAME", "Payment:BankName"), ("PAY_ACCOUNT_NO", "Payment:AccountNo"), ("SMTP_HOST", "Email:Host"), ("SMTP_PORT", "Email:Port"),
+                     ("SMTP_USER", "Email:User"), ("SMTP_PASSWORD", "Email:Password"), ("SMTP_FROM", "Email:From") })
+            if (env.TryGetValue(k, out var v) && !string.IsNullOrWhiteSpace(v)) map[key] = v;
+        b.Configuration.AddInMemoryCollection(map);
+        Say($"ฐานข้อมูลพร้อม (Docker, พอร์ต {port}) — เว็บในเครื่องใช้ข้อมูลชุดเดียวกับ Docker");
+
+        // อัปเดตเว็บใน Docker ให้เป็นโค้ดล่าสุด (เบื้องหลัง ไม่ต้องรอ)
+        try
+        {
+            var log = Path.Combine(Path.GetTempPath(), "aurellestay-docker-build.log");
+            var p = new System.Diagnostics.ProcessStartInfo("docker", $"compose -p {Project} up -d --build web")
+            { WorkingDirectory = root, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+            var proc = System.Diagnostics.Process.Start(p)!;
+            _ = Task.Run(async () =>
+            {
+                var o = await proc.StandardOutput.ReadToEndAsync(); var e = await proc.StandardError.ReadToEndAsync();
+                await proc.WaitForExitAsync();
+                try { await File.WriteAllTextAsync(log, o + e); } catch { }
+                Say(proc.ExitCode == 0 ? $"เว็บใน Docker อัปเดตแล้ว: http://localhost:{env.GetValueOrDefault("WEB_PORT", "8088")}"
+                                       : "อัปเดตเว็บใน Docker ไม่สำเร็จ ดู " + log);
+            });
+            Say($"กำลังอัปเดตเว็บใน Docker เบื้องหลัง (http://localhost:{env.GetValueOrDefault("WEB_PORT", "8088")})");
+        }
+        catch { }
+    }
+
+    private static bool Run(string file, string args, string dir, int timeoutSec, out string error)
+    {
+        error = "";
+        try
+        {
+            var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file, args)
+            { WorkingDirectory = dir, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true })!;
+            var err = p.StandardError.ReadToEndAsync(); _ = p.StandardOutput.ReadToEndAsync();
+            if (!p.WaitForExit(timeoutSec * 1000)) { try { p.Kill(true); } catch { } error = "หมดเวลา"; return false; }
+            error = err.Result;
+            return p.ExitCode == 0;
+        }
+        catch (Exception ex) { error = ex.Message; return false; }
+    }
+
+    private static bool StartDockerDesktop()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                var exe = new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "DockerDesktop", "Docker Desktop.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Docker", "Docker", "Docker Desktop.exe")
+                }.FirstOrDefault(File.Exists);
+                if (exe == null) return false;
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+                return true;
+            }
+            if (OperatingSystem.IsMacOS()) { System.Diagnostics.Process.Start("open", "-a Docker"); return true; }
+        }
+        catch { }
+        return false;
+    }
+
+    /// <summary>อ่าน .env (สร้างจาก .env.example พร้อมรหัสผ่านสุ่ม ถ้ายังไม่มี — เหมือน docker.ps1)</summary>
+    private static Dictionary<string, string> LoadEnv(string root, Action<string> say)
+    {
+        var path = Path.Combine(root, ".env");
+        if (!File.Exists(path) && File.Exists(Path.Combine(root, ".env.example")))
+        {
+            const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+            string Pw() => new string(Enumerable.Range(0, 24).Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)]).ToArray());
+            var text = File.ReadAllText(Path.Combine(root, ".env.example"));
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"(?m)^DB_ROOT_PASSWORD=.*$", "DB_ROOT_PASSWORD=" + Pw());
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"(?m)^DB_PASSWORD=.*$", "DB_PASSWORD=" + Pw());
+            File.WriteAllText(path, text, new System.Text.UTF8Encoding(false));
+            say("สร้างไฟล์ .env (รหัสผ่านฐานข้อมูลสุ่มใหม่ เก็บในเครื่องนี้เท่านั้น)");
+        }
+        var d = new Dictionary<string, string>();
+        if (File.Exists(path))
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var t = line.Trim();
+                if (t.Length == 0 || t[0] == '#') continue;
+                var i = t.IndexOf('='); if (i <= 0) continue;
+                d[t[..i].Trim()] = t[(i + 1)..].Trim();
+            }
+        return d;
+    }
+}

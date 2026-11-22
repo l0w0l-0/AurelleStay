@@ -16,6 +16,9 @@ System.Globalization.CultureInfo.CurrentUICulture = appCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Part 55: dotnet run คำสั่งเดียว — เปิด Docker Desktop + ฐานข้อมูลใน Docker + อัปเดตเว็บใน Docker ให้อัตโนมัติ (เฉพาะ Development)
+DevDocker.Prepare(builder);
+
 builder.Services.AddAppServices(builder.Configuration, builder.Environment);
 
 

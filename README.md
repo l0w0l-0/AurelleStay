@@ -53,6 +53,15 @@ AurelleStay เป็นเว็บไซต์จองห้องพัก�
 | **Dashboard ผู้จัดการ** | **ฝ่ายบริการ (ฟรอนต์)** |
 | <img src="docs/screenshots/dashboard.jpg" width="100%"> | <img src="docs/screenshots/frontdesk.jpg" width="100%"> |
 
+## เริ่มใช้งานด้วยคำสั่งเดียว
+
+```powershell
+dotnet run
+```
+
+ระบบจะเปิด Docker Desktop (ถ้ายังไม่เปิด) → เปิดฐานข้อมูล MySQL ใน Docker → รันเว็บที่ http://localhost:5290 และอัปเดตเว็บใน Docker ที่ http://localhost:8088 ให้เป็นโค้ดล่าสุดเบื้องหลัง — ทั้งสองเว็บใช้ข้อมูลชุดเดียวกัน
+(ไม่ต้องการ Docker: ตั้ง `AURELLE_NO_DOCKER=1` แล้วระบบจะใช้ฐานข้อมูลตาม `appsettings.json`)
+
 ## เริ่มใช้งาน (Docker — แนะนำ)
 
 ต้องมี [Docker Desktop](https://www.docker.com/products/docker-desktop/) เท่านั้น
