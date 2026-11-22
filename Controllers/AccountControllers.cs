@@ -143,7 +143,9 @@ public class AccountController : AppController
 
         await SignInUserAsync(user);
 
-        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+        // กลับหน้าเดิมเฉพาะหน้าที่เปิดได้จริงและบทบาทนี้มีสิทธิ์ (กันเข้าสู่ระบบแล้วเจอ 404/ไม่มีสิทธิ์) — ไม่งั้นไปหน้าหลักของบทบาท
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, user.Role.RoleName) }, "check"));
+        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) && ReturnUrlGuard.CanOpen(HttpContext, principal, returnUrl))
             return Redirect(returnUrl);
         var (controller, action) = RoleNames.HomeFor(user.Role.RoleName);
         return RedirectToAction(action, controller);

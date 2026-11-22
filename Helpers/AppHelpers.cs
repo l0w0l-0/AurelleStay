@@ -29,6 +29,8 @@ public static class AppSetup
 {
     public static void AddAppServices(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
+        // Part 57: ชื่อคุกกี้กันส่งฟอร์มซ้ำแยกระหว่าง dotnet run กับ Docker (localhost เดียวกัน)
+        services.AddAntiforgery(o => o.Cookie.Name = env.IsDevelopment() ? ".AurelleStay.Dev.Af" : ".AurelleStay.Af");
         services.AddControllersWithViews(o =>
         {
             o.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
@@ -76,6 +78,9 @@ public static class AppSetup
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
                 options.Cookie.HttpOnly = true;
+                // Part 57: dotnet run (5290) กับ Docker (8088) อยู่บน localhost เดียวกัน คุกกี้ไม่แยกตามพอร์ต
+                // → ตั้งชื่อคุกกี้แยกกัน ไม่งั้นเข้าสู่ระบบฝั่งหนึ่งแล้วอีกฝั่งหลุด/ส่งฟอร์มไม่ผ่าน
+                options.Cookie.Name = env.IsDevelopment() ? ".AurelleStay.Dev.Auth" : ".AurelleStay.Auth";
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.Cookie.SecurePolicy = env.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;   // เครื่องจริงส่งคุกกี้ผ่าน https เท่านั้น
 
@@ -1437,5 +1442,39 @@ public static class DevDocker
                 d[t[..i].Trim()] = t[(i + 1)..].Trim();
             }
         return d;
+    }
+}
+
+// ======================================================================
+// Part 57: ReturnUrlGuard — หลังเข้าสู่ระบบ กลับไปหน้าเดิมเฉพาะเมื่อเป็น "หน้า" ที่เปิดได้จริงด้วย GET และบทบาทนี้มีสิทธิ์
+// ======================================================================
+/// <summary>
+/// ป้องกันเข้าสู่ระบบแล้วเจอ 404/ไม่มีสิทธิ์ เช่น ลิงก์ returnUrl ที่ชี้ไปปุ่มที่ต้องกด (POST อย่างเดียว เช่น /Notifications/Delete/5)
+/// หรือหน้าของบทบาทอื่น (เคยเปิดหน้าพนักงานไว้ แล้วเข้าด้วยบัญชีลูกค้า) — กรณีนี้พาไปหน้าหลักของบทบาทแทน
+/// </summary>
+public static class ReturnUrlGuard
+{
+    public static bool CanOpen(HttpContext http, System.Security.Claims.ClaimsPrincipal user, string? url)
+    {
+        if (string.IsNullOrEmpty(url) || !url.StartsWith('/') || url.StartsWith("//") || url.StartsWith("/\\")) return false;
+        var path = url.Split('?', '#')[0].Trim('/');
+        var seg = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var ctl = seg.Length > 0 ? seg[0] : "Home";
+        var act = seg.Length > 1 ? seg[1] : "Index";
+        var provider = http.RequestServices.GetRequiredService<Microsoft.AspNetCore.Mvc.Infrastructure.IActionDescriptorCollectionProvider>();
+        var role = user.FindFirstValue(System.Security.Claims.ClaimTypes.Role);
+        foreach (var d in provider.ActionDescriptors.Items.OfType<Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor>())
+        {
+            if (d.AttributeRouteInfo != null) continue;   // เส้นทางพิเศษ (เช่น /live) ไม่ใช่หน้าให้กลับไป
+            if (!string.Equals(d.ControllerName, ctl, StringComparison.OrdinalIgnoreCase) || !string.Equals(d.ActionName, act, StringComparison.OrdinalIgnoreCase)) continue;
+            var methods = d.ActionConstraints?.OfType<Microsoft.AspNetCore.Mvc.ActionConstraints.HttpMethodActionConstraint>().SelectMany(c => c.HttpMethods).ToList();
+            if (methods is { Count: > 0 } && !methods.Contains("GET")) continue;   // ปุ่ม (POST อย่างเดียว)
+            var meta = d.EndpointMetadata;
+            if (meta.OfType<Microsoft.AspNetCore.Authorization.IAllowAnonymous>().Any()) return true;
+            var ok = meta.OfType<Microsoft.AspNetCore.Authorization.IAuthorizeData>()
+                .All(a => string.IsNullOrEmpty(a.Roles) || a.Roles.Split(',').Any(r => string.Equals(r.Trim(), role, StringComparison.OrdinalIgnoreCase)));
+            if (ok) return true;
+        }
+        return false;
     }
 }
