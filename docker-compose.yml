@@ -44,10 +44,6 @@ services:
       ConnectionStrings__DefaultConnection: "server=db;port=3306;database=csi402db;user=aurelle;password=${DB_PASSWORD};SslMode=None;AllowPublicKeyRetrieval=True"
       TZ: Asia/Bangkok
       Hotel__Name: ${HOTEL_NAME:-AurelleStay}
-      Hotel__Phone: ${HOTEL_PHONE:-}
-      Hotel__Email: ${HOTEL_EMAIL:-}
-      Hotel__LineId: ${HOTEL_LINE:-}
-      Hotel__Address: ${HOTEL_ADDRESS:-}
       # ช่องทางรับเงิน (Part 49): ใส่เบอร์พร้อมเพย์/เลขบัตร 13 หลัก → QR ระบุยอดอัตโนมัติ · บัญชีธนาคารแสดงในแท็บ "โอนเข้าบัญชี"
       Payment__PromptPayId: ${PROMPTPAY_ID:-}
       Payment__AccountName: ${PAY_ACCOUNT_NAME:-}

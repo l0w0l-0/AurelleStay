@@ -1354,8 +1354,7 @@ public static class DevDocker
         var map = new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = cs,
             // ไม่พิมพ์ SQL ทุกคำสั่งลงหน้าจอ (ตัวส่งอีเมล/งานเบื้องหลังรันทุก 15 วินาที ทำให้อ่านข้อความสำคัญไม่ออก)
             ["Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command"] = "Warning" };
-        foreach (var (k, key) in new[] { ("HOTEL_NAME", "Hotel:Name"), ("HOTEL_PHONE", "Hotel:Phone"), ("HOTEL_EMAIL", "Hotel:Email"), ("HOTEL_LINE", "Hotel:LineId"),
-                     ("HOTEL_ADDRESS", "Hotel:Address"), ("PROMPTPAY_ID", "Payment:PromptPayId"), ("PAY_ACCOUNT_NAME", "Payment:AccountName"),
+        foreach (var (k, key) in new[] { ("HOTEL_NAME", "Hotel:Name"), ("PROMPTPAY_ID", "Payment:PromptPayId"), ("PAY_ACCOUNT_NAME", "Payment:AccountName"),
                      ("PAY_BANK_NAME", "Payment:BankName"), ("PAY_ACCOUNT_NO", "Payment:AccountNo"), ("SMTP_HOST", "Email:Host"), ("SMTP_PORT", "Email:Port"),
                      ("SMTP_USER", "Email:User"), ("SMTP_PASSWORD", "Email:Password"), ("SMTP_FROM", "Email:From") })
             if (env.TryGetValue(k, out var v) && !string.IsNullOrWhiteSpace(v)) map[key] = v;
