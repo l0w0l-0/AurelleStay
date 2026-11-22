@@ -69,7 +69,7 @@
                 </form>
                 @if (s.TimesBooked == 0)
                 {
-                    <form asp-action="Delete" method="post" class="sva-del" onsubmit="return confirm('ลบ @s.ServiceName ?');">
+                    <form asp-action="Delete" method="post" class="sva-del" data-msg="ลบ @s.ServiceName ?" onsubmit="return confirm(this.dataset.msg);">
                         <input type="hidden" name="id" value="@s.ServiceId" />
                         <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบบริการ</button>
                     </form>

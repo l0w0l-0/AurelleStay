@@ -322,7 +322,7 @@
     });
 })();
 
-/* ---- Part 50: ตัวเลขสด — งานใหม่ของพนักงาน / การแจ้งเตือนใหม่ของลูกค้า (ถามเซิร์ฟเวอร์ทุก 30 วินาทีเมื่อเปิดแท็บอยู่) ---- */
+/* ---- Part 50/56: ตัวเลขสด — งานใหม่ของพนักงาน / การแจ้งเตือนใหม่ของลูกค้า (ถามเซิร์ฟเวอร์ทุก 5 วินาทีเมื่อเปิดแท็บอยู่) ---- */
 (function () {
     'use strict';
     var url = document.body && document.body.getAttribute('data-live');
@@ -371,6 +371,24 @@
             }).catch(function () { /* เครือข่ายสะดุด รอบหน้าค่อยลองใหม่ */ });
     }
     poll();
-    setInterval(poll, 30000);
+    setInterval(poll, 5000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+})();
+
+/* ---- Part 56: ลบการแจ้งเตือนทีละรายการโดยไม่โหลดหน้าใหม่ (ปิด JavaScript ก็ยังลบได้ด้วยฟอร์มปกติ) ---- */
+(function () {
+    'use strict';
+    if (!window.fetch) return;
+    document.addEventListener('submit', function (e) {
+        var f = e.target;
+        if (!f.classList || !f.classList.contains('nt-del')) return;
+        e.preventDefault();
+        var li = f.closest('.nt-item');
+        fetch(f.action, { method: 'POST', body: new FormData(f), credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (!j || !j.ok) { f.submit(); return; }
+                if (li) { li.classList.add('is-removing'); setTimeout(function () { var ul = li.parentNode; li.remove(); if (ul && !ul.children.length) location.reload(); }, 220); }
+            }).catch(function () { f.submit(); });
+    });
 })();

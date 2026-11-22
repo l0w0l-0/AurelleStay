@@ -412,7 +412,7 @@ public class AccountController : AppController
             q = q.Where(h => h.LoggedInAtUtc < cutoff);
         }
         var n = await q.ExecuteDeleteAsync();
-        Flash(n == 0 ? "ไม่มีประวัติที่ต้องล้าง"
+        Flash(n == 0 ? (keepDays > 0 ? $"ไม่มีประวัติที่เก่ากว่า {keepDays} วัน — เลือก \"ทั้งหมด\" ถ้าต้องการล้างทุกรายการ" : "ไม่มีประวัติที่ต้องล้าง")
             : keepDays == 0 ? $"ล้างประวัติเข้าสู่ระบบทั้งหมดแล้ว {n:N0} รายการ"
             : $"ล้างประวัติที่เก่ากว่า {keepDays} วันแล้ว {n:N0} รายการ");
         return RedirectToAction(nameof(LoginHistory));

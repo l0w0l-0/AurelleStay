@@ -175,19 +175,22 @@ public class RoomsController : Controller
         return Json(await BookingQueries.BookedNightsAsync(_db, id));
     }
 
-    /// <summary>รายละเอียดห้อง: ข้อมูลห้อง คะแนนรีวิวของผู้ที่เคยพักห้องนี้ ปฏิทินว่าง 2 เดือน และฟอร์มเลือกวันจอง</summary>
-    [HttpGet]
-    /// <summary>Part 51: ลงชื่อรอห้องว่าง (เฉพาะลูกค้า) — typeId ว่าง = ห้องใดก็ได้ · กลับไปหน้าที่ส่งมา</summary>
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = RoleNames.Customer)]
+    /// <summary>Part 51: ลงชื่อรอห้องว่าง (เฉพาะลูกค้า) — typeId ว่าง = ห้องใดก็ได้ · กลับไปหน้าที่ส่งมา
+    /// (คอนโทรลเลอร์นี้เปิดให้ทุกคน [AllowAnonymous] ซึ่งชนะ [Authorize] ระดับ action จึงตรวจบทบาทเองที่นี่)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Waitlist(int? typeId, DateOnly? checkIn, DateOnly? checkOut, int guests = 1, string? back = null)
     {
-        if (!int.TryParse(User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier), out var uid)) return Forbid();
+        if (User.Identity?.IsAuthenticated != true)
+            return RedirectToAction("Login", "Account", new { returnUrl = Url.IsLocalUrl(back) ? back : "/Rooms" });
+        if (!User.IsInRole(RoleNames.Customer) || !int.TryParse(User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier), out var uid)) return Forbid();
         var (ok, msg) = await pameka_7033_l005.Helpers.Waitlist.JoinAsync(_db, uid, typeId, checkIn, checkOut, guests, DateOnly.FromDateTime(AppClock.Today));
         TempData["Status"] = msg; if (!ok) TempData["StatusError"] = true;
         if (ok) await AuditTrail.WriteAsync(HttpContext, "Rooms.Waitlist", typeId, true, $"ลงชื่อรอห้องว่าง {checkIn:yyyy-MM-dd} – {checkOut:yyyy-MM-dd}");
         return Url.IsLocalUrl(back) ? Redirect(back!) : RedirectToAction("Index", "Member");
     }
 
+    /// <summary>รายละเอียดห้อง: ข้อมูลห้อง คะแนนรีวิวของผู้ที่เคยพักห้องนี้ ปฏิทินว่าง 2 เดือน และฟอร์มเลือกวันจอง</summary>
+    [HttpGet]
     public async Task<IActionResult> Details(int id, DateOnly? checkIn, DateOnly? checkOut, int? guests)
     {
         var room = await _db.Rooms.AsNoTracking().Where(r => r.RoomId == id).Select(BookingQueries.ToCard).FirstOrDefaultAsync();
@@ -881,6 +884,27 @@ public class NotificationsController : AppController
             .OrderByDescending(n => n.NotificationId).Take(50).ToListAsync();
         await _db.Notifications.Where(n => n.UserId == uid && !n.IsRead).ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true));
         return View(items);   // รายการที่ส่งไปยังมีสถานะ "ยังไม่อ่าน" เดิม ใช้ไฮไลต์รายการใหม่
+    }
+
+    /// <summary>Part 56: ลบการแจ้งเตือน 1 รายการ (เฉพาะของตัวเอง)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var uid = CurrentUserId ?? 0;
+        var n = await _db.Notifications.Where(x => x.NotificationId == id && x.UserId == uid).ExecuteDeleteAsync();
+        if (Request.Headers.Accept.ToString().Contains("application/json")) return Json(new { ok = n > 0 });
+        Flash(n > 0 ? "ลบการแจ้งเตือนแล้ว" : "ไม่พบการแจ้งเตือนนี้", n == 0);
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>Part 56: ล้างการแจ้งเตือนทั้งหมด (เฉพาะของตัวเอง)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Clear()
+    {
+        var uid = CurrentUserId ?? 0;
+        var n = await _db.Notifications.Where(x => x.UserId == uid).ExecuteDeleteAsync();
+        Flash(n > 0 ? $"ล้างการแจ้งเตือนทั้งหมดแล้ว {n} รายการ" : "ไม่มีการแจ้งเตือนให้ล้าง");
+        return RedirectToAction(nameof(Index));
     }
 }
 

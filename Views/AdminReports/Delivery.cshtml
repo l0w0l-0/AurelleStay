@@ -89,7 +89,7 @@
                                         <form asp-action="FixIssue" asp-route-id="@i.Id" method="post" class="staff-inline"><button type="submit" class="cx-btn cx-btn--small">ซ่อมเสร็จ</button></form>
                                         @if (i.RoomStatus is "AVAILABLE" or "CLEANING")
                                         {
-                                            <form asp-action="CloseRoom" asp-route-id="@i.Id" method="post" class="staff-inline" onsubmit="return confirm('ปิดห้อง @i.RoomNo เพื่อซ่อม? ห้องจะไม่เปิดให้จองจนกว่าจะกดซ่อมเสร็จ')"><button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ปิดห้องซ่อม</button></form>
+                                            <form asp-action="CloseRoom" asp-route-id="@i.Id" method="post" class="staff-inline" data-msg="ปิดห้อง @i.RoomNo เพื่อซ่อม? ห้องจะไม่เปิดให้จองจนกว่าจะกดซ่อมเสร็จ" onsubmit="return confirm(this.dataset.msg);"><button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ปิดห้องซ่อม</button></form>
                                         }
                                     }
                                 </td>

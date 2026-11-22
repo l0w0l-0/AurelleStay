@@ -62,7 +62,7 @@
                                 <span class="cx-badge cx-badge--@(m.Status == "ATTENDED" ? "PAID" : m.Status == "CONFIRMED" ? "CONFIRMED" : "CANCELLED")">@HotelActivities.StatusLabel(m.Status)</span>
                                 @if (m.CanCancel)
                                 {
-                                    <form asp-action="Cancel" method="post" onsubmit="return confirm('ยกเลิกกิจกรรม @m.ActivityName วันที่ @DShort(m.Date) ?');">
+                                    <form asp-action="Cancel" method="post" data-msg="ยกเลิกกิจกรรม @m.ActivityName วันที่ @DShort(m.Date) ?" onsubmit="return confirm(this.dataset.msg);">
                                         <input type="hidden" name="id" value="@m.AbId" />
                                         <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิก</button>
                                     </form>

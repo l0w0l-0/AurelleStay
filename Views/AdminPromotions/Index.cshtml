@@ -170,7 +170,7 @@
                     </form>
                     @if (!p.HasBookings)
                     {
-                        <form asp-action="Delete" method="post" class="pr-del" onsubmit="return confirm('ลบโปรโมชั่น @p.PromoName ?');">
+                        <form asp-action="Delete" method="post" class="pr-del" data-msg="ลบโปรโมชั่น @p.PromoName ?" onsubmit="return confirm(this.dataset.msg);">
                             <input type="hidden" name="id" value="@p.PromoId" />
                             <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบโปรโมชั่น</button>
                         </form>

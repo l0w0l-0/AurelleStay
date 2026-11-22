@@ -73,7 +73,7 @@
                         <tr>
                             <td>@r.SpentOn.ToString("dd/MM/yyyy")</td><td>@r.Category</td><td class="text-end">@r.Amount.ToString("N2")</td><td>@r.Note</td><td>@r.By</td>
                             <td>
-                                <form asp-action="DeleteExpense" method="post" class="staff-inline" onsubmit="return confirm('ลบรายจ่าย @r.Category @r.Amount.ToString("N2") บาท ?');">
+                                <form asp-action="DeleteExpense" method="post" class="staff-inline" data-msg="ลบรายจ่าย @r.Category @r.Amount.ToString("N2") บาท ?" onsubmit="return confirm(this.dataset.msg);">
                                     <input type="hidden" name="id" value="@r.Id" />
                                     <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ลบ</button>
                                 </form>

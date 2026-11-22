@@ -31,7 +31,7 @@
                             }
                             @if (r.CanMaintenance)
                             {
-                                <form asp-action="SetRoomStatus" method="post" class="staff-inline" onsubmit="return confirm('ปิดห้อง @r.RoomNo เพื่อซ่อมบำรุง ? ลูกค้าจะจองห้องนี้ไม่ได้');">
+                                <form asp-action="SetRoomStatus" method="post" class="staff-inline" data-msg="ปิดห้อง @r.RoomNo เพื่อซ่อมบำรุง ? ลูกค้าจะจองห้องนี้ไม่ได้" onsubmit="return confirm(this.dataset.msg);">
                                     <input type="hidden" name="roomId" value="@r.RoomId" /><input type="hidden" name="status" value="MAINTENANCE" />
                                     <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ปิดซ่อมบำรุง</button>
                                 </form>

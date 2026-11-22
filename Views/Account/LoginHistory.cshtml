@@ -15,9 +15,9 @@
               onsubmit="var s=this.keepDays; return confirm(s.value==='0' ? 'ล้างประวัติเข้าสู่ระบบทั้งหมด? กู้คืนไม่ได้' : 'ล้างประวัติที่เก่ากว่า ' + s.value + ' วัน? กู้คืนไม่ได้');">
             <label>ล้างประวัติ
                 <select name="keepDays" class="form-select">
-                    <option value="90">เก่ากว่า 90 วัน</option>
-                    <option value="30">เก่ากว่า 30 วัน</option>
                     <option value="0">ทั้งหมด</option>
+                    <option value="30">เก่ากว่า 30 วัน</option>
+                    <option value="90">เก่ากว่า 90 วัน</option>
                 </select>
             </label>
             <button type="submit" class="btn btn-outline-danger">ล้างประวัติ</button>

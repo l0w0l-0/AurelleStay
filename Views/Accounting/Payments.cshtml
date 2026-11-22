@@ -60,12 +60,12 @@
                             {
                                 <td>
                                     <form asp-action="@confirmAction" method="post" class="staff-inline"
-                                          onsubmit="return confirm('@confirmLabel การจอง #@r.BookingId ยอด @r.Amount.ToString("N2") บาท ?');">
+                                          data-msg="@confirmLabel การจอง #@r.BookingId ยอด @r.Amount.ToString("N2") บาท ?" onsubmit="return confirm(this.dataset.msg);">
                                         <input type="hidden" name="id" value="@r.PaymentId" />
                                         <button type="submit" class="cx-btn cx-btn--small">@confirmLabel</button>
                                     </form>
                                     <form asp-action="@rejectAction" method="post" class="staff-inline"
-                                          onsubmit="return confirm('ปฏิเสธรายการของการจอง #@r.BookingId ?');">
+                                          data-msg="ปฏิเสธรายการของการจอง #@r.BookingId ?" onsubmit="return confirm(this.dataset.msg);">
                                         <input type="hidden" name="id" value="@r.PaymentId" />
                                         <button type="submit" class="cx-btn cx-btn--small cx-btn--danger">ปฏิเสธ</button>
                                     </form>

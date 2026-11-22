@@ -6,8 +6,17 @@
 
 <div class="cx-wrap cx-page">
     @if (User.IsInRole(pameka_7033_l005.Helpers.RoleNames.Customer)) { <partial name="_MemberNav" /> }
-    <h1>การแจ้งเตือน</h1>
-    <p class="cx-hint">แจ้งเมื่อสถานะการจองหรือการชำระเงินของคุณเปลี่ยน (แสดง 50 รายการล่าสุด)</p>
+    <div class="nt-head">
+        <h1>การแจ้งเตือน</h1>
+        @if (Model.Any())
+        {
+            <form asp-action="Clear" method="post" onsubmit="return confirm('ล้างการแจ้งเตือนทั้งหมด? กู้คืนไม่ได้')">
+                <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ล้างทั้งหมด</button>
+            </form>
+        }
+    </div>
+    <partial name="_Flash" />
+    <p class="cx-hint">แจ้งเมื่อสถานะการจองหรือการชำระเงินของคุณเปลี่ยน (แสดง 50 รายการล่าสุด) · การแจ้งเตือนใหม่เด้งขึ้นภายในไม่กี่วินาที</p>
 
     @if (!Model.Any())
     {
@@ -23,6 +32,11 @@
             @foreach (var n in Model)
             {
                 <li class="nt-item @(n.IsRead ? "" : "nt-item--new")">
+                    <form asp-action="Delete" asp-route-id="@n.NotificationId" method="post" class="nt-del">
+                        <button type="submit" class="nt-del__btn" aria-label="ลบการแจ้งเตือน: @n.Title" title="ลบ">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                        </button>
+                    </form>
                     <h2>
                         @if (n.Link != null && n.Link.StartsWith("/")) { <a href="@n.Link">@n.Title</a> } else { @n.Title }
                         @if (!n.IsRead) { <span class="nt-new">ใหม่</span> }
