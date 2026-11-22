@@ -415,6 +415,7 @@ public static class BookingQueries
                     break;
                 case RoleNames.Housekeeping:
                     c["Index"] = await db.HousekeepingTasks.CountAsync(t => t.Status != "DONE");
+                    c["Issues"] = await db.RoomIssues.CountAsync(i => i.Status == "OPEN");
                     break;
                 case RoleNames.Admin:
                     c["AdminBookings"] = await db.Bookings.CountAsync(b => b.Status == "PENDING");
@@ -1720,4 +1721,47 @@ public static class RoomRequests
 
     /// <summary>นาทีที่ผ่านไปนับจากเข้าคิว (ไม่มีเวลาเข้าคิว = null)</summary>
     public static int? Minutes(DateTime? from, DateTime now) => from is { } f ? Math.Max(0, (int)(now - f).TotalMinutes) : null;
+}
+
+// ======================================================================
+// Part 54: ฝ่ายแม่บ้าน — ลูกค้าขอทำความสะอาด · ห้ามรบกวน · ด่วน/จับเวลา · แจ้งซ่อม · สถิติ
+// ======================================================================
+public static class HousekeepingOps
+{
+    public const string IssuesTableSql = @"CREATE TABLE IF NOT EXISTS `room_issues` (
+    `issue_id` int NOT NULL AUTO_INCREMENT,
+    `room_id` int NOT NULL,
+    `reported_by` int NULL,
+    `description` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `serious` tinyint(1) NOT NULL DEFAULT 0,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OPEN',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `fixed_at` datetime NULL,
+    PRIMARY KEY (`issue_id`),
+    KEY `ix_issue_status` (`status`),
+    CONSTRAINT `room_issues_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE,
+    CONSTRAINT `room_issues_ibfk_2` FOREIGN KEY (`reported_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /// <summary>ช่วงเวลาที่ลูกค้าเลือกให้เข้าทำความสะอาด</summary>
+    public static readonly string[] Slots = { "ตอนนี้เลย", "09:00–12:00", "12:00–15:00", "15:00–18:00" };
+    /// <summary>รอเกินกี่นาทีถือว่าช้า</summary>
+    public const int LateMinutes = 60;
+
+    public static string KindLabel(string? kind, int? bookingId) => kind switch
+    {
+        "REQUEST" => "ลูกค้าขอทำความสะอาดระหว่างพัก",
+        "CHECKOUT" => $"เช็คเอาท์ของการจอง #{bookingId}",
+        _ when bookingId.HasValue => $"เช็คเอาท์ของการจอง #{bookingId}",
+        _ => "ทำความสะอาดทั่วไป (แผนกต้อนรับสั่ง)"
+    };
+
+    public static string StatusLabel(string s, byte missed) => s switch
+    {
+        "PENDING" when missed > 0 => "รอเข้าใหม่",
+        "PENDING" => "รอรับงาน",
+        "CLEANING" => "กำลังทำ",
+        "DONE" => "เสร็จแล้ว",
+        _ => s
+    };
 }

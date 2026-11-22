@@ -720,6 +720,72 @@ public class AdminReportsController : AdminAreaController
         });
     }
 
+    /// <summary>Part 54: สถิติแม่บ้าน (จำนวนห้อง เวลาเฉลี่ย งานล่าช้า แยกตามพนักงาน) + รายการแจ้งซ่อม</summary>
+    [HttpGet]
+    public async Task<IActionResult> Housekeeping(DateOnly? from, DateOnly? to)
+    {
+        var today = DateOnly.FromDateTime(AppClock.Today);
+        var t = to ?? today; var f = from ?? t.AddDays(-29);
+        if (f > t) (f, t) = (t, f);
+        if (t.DayNumber - f.DayNumber > 366) f = t.AddDays(-366);
+        var start = f.ToDateTime(TimeOnly.MinValue); var end = t.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var now = AppClock.Now; var late = HousekeepingOps.LateMinutes;
+
+        var all = await Db.HousekeepingTasks.AsNoTracking().Where(x => x.Status == "DONE" && x.DoneAt >= start && x.DoneAt < end && x.AssignedTo != null)
+            .Select(x => new { Who = x.AssignedToNavigation!.FirstName + " " + x.AssignedToNavigation.LastName, x.CreatedAt, x.PickedAt, x.DoneAt, Req = x.Kind == "REQUEST" }).ToListAsync();
+        static double? Avg(IEnumerable<double> v) { var l = v.ToList(); return l.Count == 0 ? null : Math.Round(l.Average(), 1); }
+        var open = await Db.HousekeepingTasks.AsNoTracking().Where(x => x.Status != "DONE").Select(x => new { x.CreatedAt, x.Urgent }).ToListAsync();
+
+        return View("Delivery", new DeliveryStatsViewModel
+        {
+            Housekeeping = true, From = f, To = t, OpenNow = open.Count, UrgentNow = open.Count(o => o.Urgent),
+            LateNow = open.Count(o => o.CreatedAt is { } c && (now - c).TotalMinutes > late),
+            Staff = all.GroupBy(x => x.Who).Select(g => new DeliveryStaffStat
+            {
+                Name = g.Key, Done = g.Count(), Requests = g.Count(x => x.Req),
+                AvgWait = Avg(g.Where(x => x.CreatedAt != null && x.PickedAt != null).Select(x => (x.PickedAt!.Value - x.CreatedAt!.Value).TotalMinutes)),
+                AvgTotal = Avg(g.Where(x => x.CreatedAt != null).Select(x => (x.DoneAt!.Value - x.CreatedAt!.Value).TotalMinutes)),
+                Late = g.Count(x => x.CreatedAt != null && (x.DoneAt!.Value - x.CreatedAt!.Value).TotalMinutes > late)
+            }).OrderByDescending(x => x.Done).ToList(),
+            Issues = await Db.RoomIssues.AsNoTracking().OrderBy(i => i.Status == "OPEN" ? 0 : 1).ThenByDescending(i => i.IssueId).Take(50)
+                .Select(i => new RoomIssueRowViewModel { Id = i.IssueId, RoomNo = i.Room.RoomNo, Description = i.Description, Serious = i.Serious, Status = i.Status,
+                    CreatedAt = i.CreatedAt, FixedAt = i.FixedAt, Reporter = i.Reporter != null ? i.Reporter.FirstName : null, RoomStatus = i.Room.Status }).ToListAsync()
+        });
+    }
+
+    /// <summary>ปิดเรื่องแจ้งซ่อม (ซ่อมเสร็จ) · ถ้าห้องปิดซ่อมอยู่และไม่มีเรื่องค้างอื่น → ส่งทำความสะอาดก่อนเปิดขาย</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> FixIssue(int id)
+    {
+        var i = await Db.RoomIssues.Include(x => x.Room).FirstOrDefaultAsync(x => x.IssueId == id && x.Status == "OPEN");
+        if (i == null) return Stale(nameof(Housekeeping));
+        i.Status = "FIXED"; i.FixedAt = AppClock.Now;
+        var reopened = false;
+        if (i.Room.Status == "MAINTENANCE" && !await Db.RoomIssues.AnyAsync(x => x.RoomId == i.RoomId && x.IssueId != id && x.Status == "OPEN"))
+        {
+            i.Room.Status = "CLEANING"; reopened = true;
+            if (!await Db.HousekeepingTasks.AnyAsync(x => x.RoomId == i.RoomId && x.Status != "DONE"))
+                Db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = i.RoomId, Status = "PENDING", Kind = "GENERAL", Note = "หลังซ่อม: " + i.Description, CreatedAt = AppClock.Now });
+        }
+        await Db.SaveChangesAsync();
+        Flash(reopened ? $"ปิดเรื่องแล้ว ห้อง {i.Room.RoomNo} ส่งทำความสะอาดก่อนเปิดให้จอง" : $"ปิดเรื่องแจ้งซ่อมห้อง {i.Room.RoomNo} แล้ว");
+        return Redirect("/AdminReports/Housekeeping#issues");
+    }
+
+    /// <summary>ปิดห้องเพื่อซ่อม (เฉพาะห้องที่ว่าง/รอทำความสะอาด — ห้องที่มีผู้พักต้องย้ายแขกก่อน)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CloseRoom(int id)
+    {
+        var i = await Db.RoomIssues.Include(x => x.Room).FirstOrDefaultAsync(x => x.IssueId == id && x.Status == "OPEN");
+        if (i == null) return Stale(nameof(Housekeeping));
+        if (i.Room.Status is not ("AVAILABLE" or "CLEANING"))
+        { Flash($"ปิดห้อง {i.Room.RoomNo} ไม่ได้: ห้องมีผู้พักหรือปิดซ่อมอยู่แล้ว", true); return Redirect("/AdminReports/Housekeeping#issues"); }
+        i.Room.Status = "MAINTENANCE";
+        await Db.SaveChangesAsync();
+        Flash($"ปิดห้อง {i.Room.RoomNo} เพื่อซ่อมแล้ว (ไม่เปิดให้จองจนกว่าจะปิดเรื่อง)");
+        return Redirect("/AdminReports/Housekeeping#issues");
+    }
+
     /// <summary>ส่งออกรายงานช่วงวันที่เดียวกับหน้าจอเป็น CSV (UTF-8 มี BOM เพื่อให้ Excel อ่านภาษาไทยถูก)</summary>
     [HttpGet]
     public async Task<IActionResult> Export(DateOnly? from, DateOnly? to)

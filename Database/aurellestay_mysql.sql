@@ -161,10 +161,6 @@ CREATE TABLE IF NOT EXISTS `housekeeping_tasks` (
     `assigned_to` int NULL,
     `status` enum('PENDING','CLEANING','DONE') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
     `done_at` datetime NULL,
-    `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
-    `picked_at` datetime NULL,
-    `urgent` tinyint(1) NOT NULL DEFAULT 0,
-    `missed` tinyint unsigned NOT NULL DEFAULT 0,
     PRIMARY KEY (`task_id`),
     CONSTRAINT `housekeeping_tasks_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`),
     CONSTRAINT `housekeeping_tasks_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`),
@@ -364,6 +360,22 @@ CREATE TABLE IF NOT EXISTS `activity_bookings` (
     CONSTRAINT `chk_ab_people` CHECK (`people` BETWEEN 1 AND 20)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Part 54: แม่บ้านแจ้งซ่อม
+CREATE TABLE IF NOT EXISTS `room_issues` (
+    `issue_id` int NOT NULL AUTO_INCREMENT,
+    `room_id` int NOT NULL,
+    `reported_by` int NULL,
+    `description` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `serious` tinyint(1) NOT NULL DEFAULT 0,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OPEN',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `fixed_at` datetime NULL,
+    PRIMARY KEY (`issue_id`),
+    KEY `ix_issue_status` (`status`),
+    CONSTRAINT `room_issues_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE,
+    CONSTRAINT `room_issues_ibfk_2` FOREIGN KEY (`reported_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Part 53: ของใช้ที่ผู้เข้าพักขอเพิ่มระหว่างเข้าพัก (คิวฝ่ายส่งของ)
 CREATE TABLE IF NOT EXISTS `item_requests` (
     `request_id` int NOT NULL AUTO_INCREMENT,
@@ -485,6 +497,19 @@ CALL `aurelle_add_column`('promotions', 'auto_key', 'varchar(40) CHARACTER SET u
 -- Part 50: เช็คอินออนไลน์ล่วงหน้า (เวลาที่จะมาถึง / คำขอพิเศษ)
 CALL `aurelle_add_column`('bookings', 'arrival_time', 'varchar(5) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
 CALL `aurelle_add_column`('bookings', 'guest_request', 'varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
+-- Part 53-54: ฝ่ายส่งของ / แม่บ้าน
+CALL `aurelle_add_column`('delivery_tasks', 'created_at', 'datetime NULL DEFAULT CURRENT_TIMESTAMP');
+CALL `aurelle_add_column`('delivery_tasks', 'picked_at', 'datetime NULL');
+CALL `aurelle_add_column`('delivery_tasks', 'urgent', 'tinyint(1) NOT NULL DEFAULT 0');
+CALL `aurelle_add_column`('delivery_tasks', 'missed', 'tinyint unsigned NOT NULL DEFAULT 0');
+CALL `aurelle_add_column`('housekeeping_tasks', 'created_at', 'datetime NULL DEFAULT CURRENT_TIMESTAMP');
+CALL `aurelle_add_column`('housekeeping_tasks', 'picked_at', 'datetime NULL');
+CALL `aurelle_add_column`('housekeeping_tasks', 'urgent', 'tinyint(1) NOT NULL DEFAULT 0');
+CALL `aurelle_add_column`('housekeeping_tasks', 'missed', 'tinyint unsigned NOT NULL DEFAULT 0');
+CALL `aurelle_add_column`('housekeeping_tasks', 'kind', 'varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
+CALL `aurelle_add_column`('housekeeping_tasks', 'pref_time', 'varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
+CALL `aurelle_add_column`('housekeeping_tasks', 'note', 'varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
+CALL `aurelle_add_column`('bookings', 'do_not_disturb', 'tinyint(1) NOT NULL DEFAULT 0');
 DROP PROCEDURE IF EXISTS `aurelle_add_column`;
 
 -- Part 14: สถานะ REJECTED = ฝ่ายบัญชีปฏิเสธสลิป (เก็บไว้เป็นประวัติ ไม่ลบทิ้ง)

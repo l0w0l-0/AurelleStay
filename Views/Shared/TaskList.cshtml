@@ -33,7 +33,7 @@
                                 @r.Detail
                                 @if (r.Source != null) { <small class="dv-sub">@r.Source@(r.Guest != null ? " · คุณ" + r.Guest : "")</small> }
                                 @if (!string.IsNullOrEmpty(r.Note)) { <small class="dv-sub">หมายเหตุ: @r.Note</small> }
-                                @if (r.Missed > 0) { <small class="dv-sub dv-sub--warn">ไม่พบผู้เข้าพัก @r.Missed ครั้ง</small> }
+                                @if (r.Missed > 0) { <small class="dv-sub dv-sub--warn">@Model.NotHomeLabel @r.Missed ครั้ง</small> }
                             </td>
                             <td><span class="cx-badge cx-badge--@r.Status">@(r.StatusText ?? ThaiLabels.TaskStatus(r.Status))</span></td>
                             @if (Model.Delivery)
@@ -52,7 +52,7 @@
                                     {
                                         <form asp-action="Take" method="post" class="staff-inline">
                                             <input type="hidden" name="id" value="@r.TaskId" />
-                                            @if (Model.Delivery) { <input type="hidden" name="kind" value="@r.Kind" /> }
+                                            @if (Model.KindField) { <input type="hidden" name="kind" value="@r.Kind" /> }
                                             <button type="submit" class="cx-btn cx-btn--small">@Model.TakeLabel</button>
                                         </form>
                                     }
@@ -60,21 +60,21 @@
                                     {
                                         <form asp-action="Finish" method="post" class="staff-inline">
                                             <input type="hidden" name="id" value="@r.TaskId" />
-                                            @if (Model.Delivery) { <input type="hidden" name="kind" value="@r.Kind" /> }
+                                            @if (Model.KindField) { <input type="hidden" name="kind" value="@r.Kind" /> }
                                             <button type="submit" class="cx-btn cx-btn--small">@Model.FinishLabel</button>
                                         </form>
                                         @if (Model.Delivery)
                                         {
-                                            <form asp-action="NotHome" method="post" class="staff-inline">
-                                                <input type="hidden" name="id" value="@r.TaskId" /><input type="hidden" name="kind" value="@r.Kind" />
-                                                <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ไม่พบผู้เข้าพัก</button>
+                                            <form asp-action="@Model.NotHomeAction" method="post" class="staff-inline">
+                                                <input type="hidden" name="id" value="@r.TaskId" />@if (Model.KindField) { <input type="hidden" name="kind" value="@r.Kind" /> }
+                                                <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">@Model.NotHomeLabel</button>
                                             </form>
                                         }
                                     }
                                     @if (Model.Delivery)
                                     {
                                         <form asp-action="Urgent" method="post" class="staff-inline">
-                                            <input type="hidden" name="id" value="@r.TaskId" /><input type="hidden" name="kind" value="@r.Kind" />
+                                            <input type="hidden" name="id" value="@r.TaskId" />@if (Model.KindField) { <input type="hidden" name="kind" value="@r.Kind" /> }
                                             <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">@(r.Urgent ? "ยกเลิกด่วน" : "ตั้งเป็นด่วน")</button>
                                         </form>
                                     }

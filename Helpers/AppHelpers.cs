@@ -189,7 +189,7 @@ public static class RoleNames
         Accounting => [("Index", "ตรวจสอบการชำระเงิน"), ("Refunds", "คำขอคืนเงิน"), ("History", "ประวัติการเงิน"), ("Expenses", "รายจ่าย / กำไร")],
         FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Activities", "กิจกรรมวันนี้"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง")],
         Delivery => [("Index", "ห้องที่ต้องส่ง"), ("Done", "ห้องที่ส่งสำเร็จ")],
-        Housekeeping => [("Index", "ห้องที่ต้องทำความสะอาด"), ("Done", "ห้องที่ทำไปแล้ว")],
+        Housekeeping => [("Index", "ห้องที่ต้องทำความสะอาด"), ("Done", "ห้องที่ทำไปแล้ว"), ("Issues", "แจ้งซ่อม")],
         _ => []
     };
 }
@@ -456,6 +456,15 @@ public static class DbSetup
         ("delivery_tasks", "picked_at", "datetime NULL"),
         ("delivery_tasks", "urgent", "tinyint(1) NOT NULL DEFAULT 0"),
         ("delivery_tasks", "missed", "tinyint unsigned NOT NULL DEFAULT 0"),
+        // Part 54: ฝ่ายแม่บ้าน
+        ("housekeeping_tasks", "kind", "varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        ("housekeeping_tasks", "created_at", "datetime NULL DEFAULT CURRENT_TIMESTAMP"),
+        ("housekeeping_tasks", "picked_at", "datetime NULL"),
+        ("housekeeping_tasks", "urgent", "tinyint(1) NOT NULL DEFAULT 0"),
+        ("housekeeping_tasks", "missed", "tinyint unsigned NOT NULL DEFAULT 0"),
+        ("housekeeping_tasks", "pref_time", "varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        ("housekeeping_tasks", "note", "varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        ("bookings", "do_not_disturb", "tinyint(1) NOT NULL DEFAULT 0"),
         ("room_types", "amenities", "varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("room_types", "image_url", "varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("room_types", "weekend_price", "decimal(10,2) NULL"),
@@ -668,6 +677,12 @@ public static class DbSetup
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง activity_bookings");
         }
 
+        // Part 54: แจ้งซ่อม
+        if (!have.Contains("room_issues.issue_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(HousekeepingOps.IssuesTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง room_issues");
+        }
         // Part 53: ของใช้ที่ผู้เข้าพักขอเพิ่ม
         if (!have.Contains("item_requests.request_id"))
         {
@@ -842,6 +857,10 @@ public static class AuditTrail
         ["Rooms.Waitlist"] = ("ลงชื่อรอห้องว่าง", "ประเภทห้อง"), ["Activities.Book"] = ("จองกิจกรรม", "การจองกิจกรรม"), ["Activities.Cancel"] = ("ยกเลิกกิจกรรม", "การจองกิจกรรม"),
         ["FrontDesk.MarkActivity"] = ("บันทึกการเข้าร่วมกิจกรรม", "การจองกิจกรรม"), ["AdminActivities.Save"] = ("บันทึกกิจกรรม", "กิจกรรม"), ["AdminActivities.Delete"] = ("ลบกิจกรรม", "กิจกรรม"), ["AdminAudit.TestEmail"] = ("ส่งอีเมลทดสอบ", ""),
         ["Member.RequestItem"] = ("ขอของใช้เพิ่ม", "การจอง"), ["Member.CancelRequest"] = ("ยกเลิกคำขอของใช้", "คำขอของใช้"),
+        ["Member.RequestCleaning"] = ("ขอทำความสะอาดห้อง", "การจอง"), ["Member.DoNotDisturb"] = ("ตั้งป้ายห้ามรบกวน", "การจอง"),
+        ["Housekeeping.NotNow"] = ("แจ้งลูกค้าไม่สะดวก", "งานทำความสะอาด"), ["Housekeeping.Urgent"] = ("ตั้ง/ยกเลิกงานด่วน", "งานทำความสะอาด"),
+        ["Housekeeping.ReportIssue"] = ("แจ้งซ่อม", "ห้อง"), ["AdminReports.FixIssue"] = ("ปิดเรื่องแจ้งซ่อม", "แจ้งซ่อม"),
+        ["AdminReports.CloseRoom"] = ("ปิดห้องซ่อมบำรุง", "ห้อง"),
         ["Delivery.NotHome"] = ("แจ้งไม่พบผู้เข้าพัก", "งานส่งของ"), ["Delivery.Urgent"] = ("ตั้ง/ยกเลิกงานด่วน", "งานส่งของ"),
         ["Booking.RequestRefund"] = ("ขอคืนเงิน", "การจอง"), ["Reviews.Create"] = ("เขียนรีวิว", "การจอง"),
         ["Accounting.Confirm"] = ("ยืนยันการชำระเงิน", "การชำระ"), ["Accounting.Reject"] = ("ปฏิเสธหลักฐานการชำระเงิน", "การชำระ"),
@@ -1258,7 +1277,7 @@ public static class PasswordResets
     {
         var now = AppClock.Now;
         await db.PasswordResets.Where(r => r.UserId == userId && r.UsedAt == null && r.ExpiresAt > now)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, now));
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, now.AddMinutes(-1)));   // ย้อน 1 นาที กันปัดเศษวินาทีของ MySQL ทำให้ลิงก์เก่ายังใช้ได้ชั่วครู่
         var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         db.PasswordResets.Add(new PasswordReset { UserId = userId, TokenHash = HashToken(token), ExpiresAt = now + Lifetime, CreatedAt = now, Ip = ip });

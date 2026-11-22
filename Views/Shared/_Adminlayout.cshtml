@@ -20,7 +20,7 @@
         ("HOTEL MANAGEMENT", new[] { ("AdminRooms", "Index", "จัดการห้องพัก"), ("AdminBookings", "Index", "การจองห้องพัก"), ("FrontDesk", "WalkIn", "จองห้องให้ลูกค้า"), ("FrontDesk", "Activities", "กิจกรรมวันนี้"), ("Rooms", "Availability", "ปฏิทินห้องว่าง"), ("Account", "UserList", "ลูกค้า / ผู้ใช้"), ("Account", "LoginHistory", "ประวัติเข้าสู่ระบบ") }),
         ("SERVICES", new[] { ("AdminServices", "Index", "บริการเสริม / อาหาร"), ("AdminActivities", "Index", "กิจกรรม"), ("AdminPromotions", "Index", "โปรโมชั่น"), ("AdminReviews", "Index", "รีวิวจากลูกค้า"), ("AdminMessages", "Index", "ข้อความจากลูกค้า") }),
         ("STAFF", new[] { ("AdminStaff", "Index", "จัดการพนักงาน") }),
-        ("SYSTEM", new[] { ("AdminReports", "Index", "รายงาน"), ("AdminReports", "Delivery", "สถิติฝ่ายส่งของ"), ("AdminAudit", "Index", "บันทึกกิจกรรม"), ("AdminAudit", "SystemStatus", "สถานะระบบ / สำรองข้อมูล") })
+        ("SYSTEM", new[] { ("AdminReports", "Index", "รายงาน"), ("AdminReports", "Delivery", "สถิติฝ่ายส่งของ"), ("AdminReports", "Housekeeping", "แม่บ้าน / แจ้งซ่อม"), ("AdminAudit", "Index", "บันทึกกิจกรรม"), ("AdminAudit", "SystemStatus", "สถานะระบบ / สำรองข้อมูล") })
     };
 
     // ไอคอนเส้นบาง (SVG path) ตามเมนู — key = Controller.Action
@@ -55,6 +55,8 @@
         ["Delivery.Done"] = "M5 12l5 5L20 7",
         ["Housekeeping.Index"] = "M12 3v9M8 12h8l1 9H7zM10 16v5M14 16v5",
         ["Housekeeping.Done"] = "M5 12l5 5L20 7",
+        ["Housekeeping.Issues"] = "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z",
+        ["AdminReports.Housekeeping"] = "M12 3v9M8 12h8l1 9H7zM10 16v5M14 16v5",
     };
     string Ico(string c, string a) => icons.TryGetValue($"{c}.{a}", out var d) ? d : "M12 12h.01";
     var pageTitle = ViewData["Title"]?.ToString() ?? "";

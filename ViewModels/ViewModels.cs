@@ -365,6 +365,9 @@ public class MemberDashboardViewModel
     public int? StayBookingId { get; set; }
     public List<(int RoomId, string RoomNo)> StayRooms { get; set; } = new();
     public List<ItemRequestRowViewModel> Requests { get; set; } = new();
+    // Part 54: ทำความสะอาดระหว่างพัก / ห้ามรบกวน
+    public bool DoNotDisturb { get; set; }
+    public List<ItemRequestRowViewModel> Cleanings { get; set; } = new();
 }
 
 public class ItemRequestRowViewModel
@@ -389,6 +392,22 @@ public class DeliveryStatsViewModel
     public int UrgentNow { get; set; }
     public List<DeliveryStaffStat> Staff { get; set; } = new();
     public List<(string Item, int Count)> TopItems { get; set; } = new();
+    // Part 54: ใช้หน้าเดียวกันสำหรับแม่บ้าน
+    public bool Housekeeping { get; set; }
+    public List<RoomIssueRowViewModel> Issues { get; set; } = new();
+}
+
+public class RoomIssueRowViewModel
+{
+    public int Id { get; set; }
+    public string RoomNo { get; set; } = "";
+    public string Description { get; set; } = "";
+    public bool Serious { get; set; }
+    public string Status { get; set; } = "";
+    public string? Reporter { get; set; }
+    public string RoomStatus { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public DateTime? FixedAt { get; set; }
 }
 
 public class DeliveryStaffStat
@@ -622,7 +641,10 @@ public class TaskListViewModel
     public string TakeLabel { get; set; } = "รับงาน";
     public string FinishLabel { get; set; } = "เสร็จแล้ว";
     public bool ShowDone { get; set; }
-    public bool Delivery { get; set; }   // Part 53: แสดงคอลัมน์/ปุ่มของฝ่ายส่งของ
+    public bool Delivery { get; set; }   // Part 53: แสดงคอลัมน์เวลา/ปุ่มด่วน/ปุ่มคืนงาน (ใช้ทั้งฝ่ายส่งของและแม่บ้าน)
+    public bool KindField { get; set; } = true;          // ส่ง kind (S/R) ไปกับฟอร์ม — เฉพาะฝ่ายส่งของ
+    public string NotHomeLabel { get; set; } = "ไม่พบผู้เข้าพัก";
+    public string NotHomeAction { get; set; } = "NotHome";
     public List<TaskRowViewModel> Rows { get; set; } = new();
 }
 

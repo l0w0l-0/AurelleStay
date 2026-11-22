@@ -48,6 +48,9 @@ public partial class Booking
 
     public virtual ICollection<HousekeepingTask> HousekeepingTasks { get; set; } = new List<HousekeepingTask>();
 
+    /// <summary>Part 54: ผู้เข้าพักติดป้าย "ห้ามรบกวน"</summary>
+    public bool DoNotDisturb { get; set; }
+
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     public virtual Promotion? Promo { get; set; }
@@ -184,6 +187,15 @@ public partial class HousekeepingTask
     public string Status { get; set; } = null!;
 
     public DateTime? DoneAt { get; set; }
+
+    // Part 54: ฝ่ายแม่บ้าน — ชนิดงาน · เวลาเข้าคิว/รับงาน · ด่วน · ลูกค้าไม่สะดวก · ช่วงเวลาที่ลูกค้าสะดวก
+    public string? Kind { get; set; }          // CHECKOUT / REQUEST (ลูกค้าขอระหว่างพัก) / GENERAL
+    public DateTime? CreatedAt { get; set; }
+    public DateTime? PickedAt { get; set; }
+    public bool Urgent { get; set; }
+    public byte Missed { get; set; }
+    public string? PrefTime { get; set; }
+    public string? Note { get; set; }
 
     public virtual User? AssignedToNavigation { get; set; }
 
@@ -648,4 +660,19 @@ public class ItemRequest
     public DateTime? DoneAt { get; set; }
     public virtual Room Room { get; set; } = null!;
     public virtual User? AssignedToNavigation { get; set; }
+}
+
+/// <summary>Part 54: แม่บ้านแจ้งของเสีย/ชำรุดในห้อง → ผู้จัดการติดตามและปิดห้องซ่อมได้</summary>
+public class RoomIssue
+{
+    public int IssueId { get; set; }
+    public int RoomId { get; set; }
+    public int? ReportedBy { get; set; }
+    public string Description { get; set; } = "";
+    public bool Serious { get; set; }
+    public string Status { get; set; } = "OPEN";   // OPEN / FIXED
+    public DateTime CreatedAt { get; set; }
+    public DateTime? FixedAt { get; set; }
+    public virtual Room Room { get; set; } = null!;
+    public virtual User? Reporter { get; set; }
 }

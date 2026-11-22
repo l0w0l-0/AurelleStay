@@ -487,11 +487,14 @@ public class FrontDeskController : AppController
         var (b, rooms) = await LoadBookingWithRooms(id);
         if (b == null || !BookingWorkflow.CanCheckOut(b.Status)) return Stale();
 
-        b.Status = "CHECKED_OUT";
+        b.Status = "CHECKED_OUT"; b.DoNotDisturb = false;
+        // คำขอทำความสะอาดระหว่างพักที่ยังค้าง → ปิด (ห้องจะถูกทำความสะอาดหลังเช็คเอาท์อยู่แล้ว)
+        await _db.HousekeepingTasks.Where(t => t.BookingId == b.BookingId && t.Kind == "REQUEST" && t.Status != "DONE")
+            .ExecuteUpdateAsync(x => x.SetProperty(t => t.Status, "DONE").SetProperty(t => t.DoneAt, AppClock.Now).SetProperty(t => t.Note, "ปิดอัตโนมัติเมื่อเช็คเอาท์"));
         foreach (var r in rooms)
         {
             r.Status = "CLEANING";
-            _db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = r.RoomId, BookingId = b.BookingId, Status = "PENDING" });
+            _db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = r.RoomId, BookingId = b.BookingId, Status = "PENDING", Kind = "CHECKOUT", CreatedAt = AppClock.Now });
         }
         await _db.SaveChangesAsync();
         Flash($"เช็คเอาท์การจอง #{b.BookingId} แล้ว ส่งงานทำความสะอาด {rooms.Count} ห้องให้ฝ่ายทำความสะอาดแล้ว");
@@ -579,7 +582,7 @@ public class FrontDeskController : AppController
         }
 
         room.Status = "CLEANING";
-        _db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = room.RoomId, Status = "PENDING" });
+        _db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = room.RoomId, Status = "PENDING", Kind = "GENERAL", CreatedAt = AppClock.Now });
         await _db.SaveChangesAsync();
         Flash($"ส่งงานทำความสะอาดห้อง {room.RoomNo} แล้ว");
         return RedirectToAction(nameof(Rooms));
@@ -806,7 +809,8 @@ public class DeliveryController : AppController
 // ======================================================================
 // HousekeepingController
 // ======================================================================
-/// <summary>ฝ่ายทำความสะอาด: รับงานห้องที่เช็คเอาท์/ที่ฝ่ายบริการส่งมา ทำเสร็จแล้วห้องกลับเป็น "ว่าง"</summary>
+/// <summary>ฝ่ายทำความสะอาด (แม่บ้าน): ห้องเช็คเอาท์ · ห้องที่แผนกต้อนรับส่งมา · ลูกค้าขอทำความสะอาดระหว่างพัก (Part 54)
+/// สถานะ รอรับงาน → กำลังทำ → เสร็จ / ลูกค้าไม่สะดวก (กลับเข้าคิว) · งานด่วน + จับเวลา · แจ้งซ่อม</summary>
 [Authorize(Roles = RoleNames.Housekeeping)]
 public class HousekeepingController : AppController
 {
@@ -822,33 +826,93 @@ public class HousekeepingController : AppController
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Take(int id)
     {
-        var me = CurrentUserId; var doing = BookingWorkflow.CleaningDoing;
+        var me = CurrentUserId; var doing = BookingWorkflow.CleaningDoing; var now = AppClock.Now;
         var taken = await _db.HousekeepingTasks.Where(x => x.TaskId == id && x.Status == "PENDING")
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, doing).SetProperty(x => x.AssignedTo, me));
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, doing).SetProperty(x => x.AssignedTo, me).SetProperty(x => x.PickedAt, now));
         if (taken == 0) return Stale();
-        Flash("รับงานแล้ว");
+        Flash("รับงานแล้ว — สถานะเป็น \"กำลังทำ\"");
         return RedirectToAction(nameof(Index));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Finish(int id)
     {
-        var t = await _db.HousekeepingTasks.Include(x => x.Room).FirstOrDefaultAsync(x => x.TaskId == id);
+        var t = await _db.HousekeepingTasks.Include(x => x.Room).Include(x => x.Booking).FirstOrDefaultAsync(x => x.TaskId == id);
         if (t == null || !BookingWorkflow.CanFinishTask(t.Status, BookingWorkflow.CleaningDoing, t.AssignedTo, CurrentUserId))
             return Stale();
 
         t.Status = "DONE";
-        t.DoneAt = pameka_7033_l005.Helpers.AppClock.Now;
+        t.DoneAt = AppClock.Now;
+        if (t.Kind == "REQUEST" && t.Booking != null)
+        {
+            Notify.Add(_db, t.Booking.UserId, $"ทำความสะอาดห้อง {t.Room.RoomNo} เรียบร้อยแล้ว", "ขอให้มีความสุขกับการเข้าพัก", "/Member#mb-clean");
+            await _db.SaveChangesAsync();
+            Flash($"ทำความสะอาดห้อง {t.Room.RoomNo} เสร็จแล้ว แจ้งผู้เข้าพักเรียบร้อย");
+            return RedirectToAction(nameof(Index));
+        }
         if (t.Room.Status == "CLEANING") t.Room.Status = "AVAILABLE";
         await _db.SaveChangesAsync();
         Flash($"ทำความสะอาดห้อง {t.Room.RoomNo} เสร็จแล้ว ห้องกลับเป็น \"ว่าง\"");
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>ลูกค้าไม่สะดวก / ติดป้ายห้ามรบกวน: คืนงานเข้าคิว (รอเข้าใหม่) นับครั้ง และแจ้งผู้เข้าพัก (งานที่ลูกค้าขอ)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> NotNow(int id)
+    {
+        var t = await _db.HousekeepingTasks.Include(x => x.Room).Include(x => x.Booking).FirstOrDefaultAsync(x => x.TaskId == id);
+        if (t == null || !BookingWorkflow.CanFinishTask(t.Status, BookingWorkflow.CleaningDoing, t.AssignedTo, CurrentUserId))
+            return Stale();
+        t.Status = "PENDING"; t.AssignedTo = null; t.PickedAt = null; t.Missed = (byte)Math.Min(t.Missed + 1, 255);
+        if (t.Kind == "REQUEST" && t.Booking != null)
+            Notify.Add(_db, t.Booking.UserId, $"แม่บ้านแวะห้อง {t.Room.RoomNo} แต่ยังเข้าทำความสะอาดไม่ได้",
+                "จะกลับมาอีกครั้ง หากสะดวกแล้วปลดป้ายห้ามรบกวน หรือแจ้งแผนกต้อนรับได้", "/Member#mb-clean");
+        await _db.SaveChangesAsync();
+        Flash($"บันทึกแล้ว: ห้อง {t.Room.RoomNo} ยังเข้าไม่ได้ งานกลับเข้าคิวรอเข้าใหม่");
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Urgent(int id)
+    {
+        var n = await _db.HousekeepingTasks.Where(x => x.TaskId == id && x.Status != "DONE")
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Urgent, x => !x.Urgent));
+        if (n == 0) return Stale();
+        Flash("ปรับความด่วนของงานแล้ว");
+        return RedirectToAction(nameof(Index));
+    }
+
+    // ---------------------------------------------------------------- แจ้งซ่อม
+    [HttpGet]
+    public async Task<IActionResult> Issues()
+    {
+        ViewBag.Rooms = await _db.Rooms.AsNoTracking().OrderBy(r => r.RoomNo).Select(r => new ValueTuple<int, string>(r.RoomId, r.RoomNo)).ToListAsync();
+        var list = await _db.RoomIssues.AsNoTracking().OrderBy(i => i.Status == "OPEN" ? 0 : 1).ThenByDescending(i => i.IssueId).Take(50)
+            .Select(i => new RoomIssueRowViewModel { Id = i.IssueId, RoomNo = i.Room.RoomNo, Description = i.Description, Serious = i.Serious,
+                Status = i.Status, CreatedAt = i.CreatedAt, FixedAt = i.FixedAt, Reporter = i.Reporter != null ? i.Reporter.FirstName : null, RoomStatus = i.Room.Status })
+            .ToListAsync();
+        return View(list);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReportIssue(int roomId, string? description, bool serious = false)
+    {
+        description = description?.Trim();
+        if (string.IsNullOrEmpty(description) || description.Length > 300 || !await _db.Rooms.AnyAsync(r => r.RoomId == roomId))
+        { Flash("เลือกห้องและอธิบายปัญหา (ไม่เกิน 300 ตัวอักษร)", true); return RedirectToAction(nameof(Issues)); }
+        var room = await _db.Rooms.AsNoTracking().FirstAsync(r => r.RoomId == roomId);
+        _db.RoomIssues.Add(new RoomIssue { RoomId = roomId, ReportedBy = CurrentUserId, Description = description, Serious = serious, Status = "OPEN", CreatedAt = AppClock.Now });
+        // แจ้งผู้จัดการทุกคน
+        foreach (var aid in await _db.Users.Where(u => u.Role.RoleName == RoleNames.Admin).Select(u => u.UserId).ToListAsync())
+            Notify.Add(_db, aid, $"แจ้งซ่อมห้อง {room.RoomNo}{(serious ? " (ร้ายแรง)" : "")}", description, "/AdminReports/Housekeeping#issues");
+        await _db.SaveChangesAsync();
+        Flash($"แจ้งซ่อมห้อง {room.RoomNo} แล้ว ผู้จัดการได้รับแจ้งเตือน");
+        return RedirectToAction(nameof(Issues));
+    }
 
     private async Task<IActionResult> List(bool done)
     {
-        var uid = CurrentUserId;
+        var uid = CurrentUserId; var now = AppClock.Now; var today = DateOnly.FromDateTime(AppClock.Today);
         IQueryable<HousekeepingTask> q = _db.HousekeepingTasks.AsNoTracking();
         q = done
             ? q.Where(t => t.Status == "DONE").OrderByDescending(t => t.DoneAt)
@@ -856,24 +920,47 @@ public class HousekeepingController : AppController
 
         var rows = await q.Take(100).Select(t => new
         {
-            t.TaskId, RoomNo = t.Room.RoomNo, t.BookingId, t.Status, t.AssignedTo,
-            Assignee = t.AssignedToNavigation != null ? t.AssignedToNavigation.FirstName : null, t.DoneAt
+            t.TaskId, t.RoomId, RoomNo = t.Room.RoomNo, t.BookingId, t.Status, t.AssignedTo, t.Kind, t.PrefTime, t.Note,
+            Guest = t.Kind == "REQUEST" && t.Booking != null ? t.Booking.User.FirstName : null,
+            Dnd = t.Kind == "REQUEST" && t.Booking != null && t.Booking.DoNotDisturb,
+            Assignee = t.AssignedToNavigation != null ? t.AssignedToNavigation.FirstName : null, t.DoneAt, t.CreatedAt, t.PickedAt, t.Urgent, t.Missed
         }).ToListAsync();
+        // ห้องที่มีลูกค้าจะเข้าพักวันนี้ → ด่วนอัตโนมัติ
+        var roomIds = rows.Select(r => r.RoomId).Distinct().ToList();
+        var arriving = done ? new HashSet<int>() : (await _db.BookingRooms.AsNoTracking()
+            .Where(br => roomIds.Contains(br.RoomId) && br.Booking.CheckIn == today && (br.Booking.Status == "CONFIRMED" || br.Booking.Status == "PENDING"))
+            .Select(br => br.RoomId).ToListAsync()).ToHashSet();
+
+        var list = rows.Select(r =>
+        {
+            var auto = arriving.Contains(r.RoomId);
+            var min = RoomRequests.Minutes(r.CreatedAt, done && r.DoneAt is { } d ? d : now);
+            var sub = r.Kind == "REQUEST" ? "ลูกค้าขอ" + (r.Guest != null ? " · คุณ" + r.Guest : "") + (r.PrefTime != null ? " · สะดวก " + r.PrefTime : "") : null;
+            if (auto && !done) sub = (sub == null ? "" : sub + " · ") + "มีลูกค้าเข้าพักวันนี้";
+            if (r.Dnd && !done) sub = (sub == null ? "" : sub + " · ") + "ติดป้ายห้ามรบกวน";
+            return new TaskRowViewModel
+            {
+                TaskId = r.TaskId, RoomNo = r.RoomNo, Detail = HousekeepingOps.KindLabel(r.Kind, r.BookingId), Source = sub, Note = r.Note,
+                Status = r.Status, StatusText = HousekeepingOps.StatusLabel(r.Status, r.Missed), Assignee = r.Assignee, DoneAt = r.DoneAt,
+                CreatedAt = r.CreatedAt, PickedAt = r.PickedAt, Urgent = r.Urgent || auto, Missed = r.Missed, Minutes = min,
+                Late = !done && min > HousekeepingOps.LateMinutes,
+                CanTake = BookingWorkflow.CanTakeTask(r.Status),
+                CanFinish = BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.CleaningDoing, r.AssignedTo, uid)
+            };
+        }).ToList();
+        if (!done)
+            list = list.OrderByDescending(r => r.Urgent).ThenByDescending(r => r.Status == BookingWorkflow.CleaningDoing)
+                .ThenBy(r => r.CreatedAt ?? DateTime.MaxValue).ToList();
 
         return View("TaskList", new TaskListViewModel
         {
             Title = done ? "ห้องที่ทำไปแล้ว" : "ห้องที่ต้องทำความสะอาด",
-            Description = done ? "งานที่ทำเสร็จแล้ว (100 รายการล่าสุด)" : "รับงานก่อน แล้วกด \"ทำเสร็จแล้ว\" ห้องจะกลับเป็น \"ว่าง\" ให้จองได้อีก",
+            Description = done ? "งานที่ทำเสร็จแล้ว (100 รายการล่าสุด)"
+                : $"งานด่วน (ห้องที่มีลูกค้าเข้าพักวันนี้) อยู่บนสุด · รอเกิน {HousekeepingOps.LateMinutes} นาทีเป็นสีแดง · เข้าห้องไม่ได้กด \"ลูกค้าไม่สะดวก\" งานจะกลับเข้าคิว",
             EmptyText = done ? "ยังไม่มีงานที่ทำเสร็จ" : "ตอนนี้ไม่มีห้องที่ต้องทำความสะอาด",
-            TakeLabel = "รับงาน", FinishLabel = "ทำเสร็จแล้ว", ShowDone = done,
-            Rows = rows.Select(r => new TaskRowViewModel
-            {
-                TaskId = r.TaskId, RoomNo = r.RoomNo,
-                Detail = r.BookingId.HasValue ? $"เช็คเอาท์ของการจอง #{r.BookingId}" : "ทำความสะอาดทั่วไป (ฝ่ายบริการสั่ง)",
-                Status = r.Status, Assignee = r.Assignee, DoneAt = r.DoneAt,
-                CanTake = BookingWorkflow.CanTakeTask(r.Status),
-                CanFinish = BookingWorkflow.CanFinishTask(r.Status, BookingWorkflow.CleaningDoing, r.AssignedTo, uid)
-            }).ToList()
+            TakeLabel = "รับงาน", FinishLabel = "ทำเสร็จแล้ว", ShowDone = done, Delivery = true,
+            KindField = false, NotHomeLabel = "ลูกค้าไม่สะดวก", NotHomeAction = "NotNow",
+            Rows = list
         });
     }
 }

@@ -1,13 +1,17 @@
 @model pameka_7033_l005.ViewModels.DeliveryStatsViewModel
 @using pameka_7033_l005.Helpers
 @{
-    ViewData["Title"] = "สถิติฝ่ายส่งของ";
+    var hk = Model.Housekeeping;
+    var title = hk ? "แม่บ้าน / แจ้งซ่อม" : "สถิติฝ่ายส่งของ";
+    var lateMin = hk ? HousekeepingOps.LateMinutes : RoomRequests.LateMinutes;
+    ViewData["Title"] = title;
     Layout = "_Adminlayout";
     string M(double? v) => v is double d ? (d >= 60 ? $"{(int)d / 60} ชม. {(int)d % 60} นาที" : $"{d:0.#} นาที") : "–";
 }
 <div class="dashboard">
-    <h1>สถิติฝ่ายส่งของ</h1>
-    <p>งานที่ส่งสำเร็จระหว่าง @Model.From.ToString("dd/MM/yyyy") – @Model.To.ToString("dd/MM/yyyy") ทั้งบริการเสริมและของใช้ที่ลูกค้าขอเพิ่ม · ล่าช้า = ใช้เวลารวมเกิน @RoomRequests.LateMinutes นาที</p>
+    <h1>@title</h1>
+    <partial name="_Flash" />
+    <p>@(hk ? "ห้องที่ทำความสะอาดเสร็จ" : "งานที่ส่งสำเร็จ")ระหว่าง @Model.From.ToString("dd/MM/yyyy") – @Model.To.ToString("dd/MM/yyyy") @(hk ? "ทั้งห้องเช็คเอาท์และที่ลูกค้าขอระหว่างพัก" : "ทั้งบริการเสริมและของใช้ที่ลูกค้าขอเพิ่ม") · ล่าช้า = ใช้เวลารวมเกิน @lateMin นาที</p>
 
     <form method="get" class="dvs-form">
         <label>ตั้งแต่ <input type="date" name="from" value="@Model.From.ToString("yyyy-MM-dd")" class="form-control" /></label>
@@ -16,23 +20,23 @@
     </form>
 
     <div class="dvs-kpis">
-        <div class="dvs-kpi"><b>@Model.Staff.Sum(s => s.Done)</b><span>ส่งสำเร็จในช่วงนี้</span></div>
+        <div class="dvs-kpi"><b>@Model.Staff.Sum(s => s.Done)</b><span>@(hk ? "ทำเสร็จในช่วงนี้" : "ส่งสำเร็จในช่วงนี้")</span></div>
         <div class="dvs-kpi"><b>@Model.OpenNow</b><span>งานค้างตอนนี้</span></div>
         <div class="dvs-kpi @(Model.UrgentNow > 0 ? "dvs-kpi--bad" : "")"><b>@Model.UrgentNow</b><span>งานด่วนค้าง</span></div>
-        <div class="dvs-kpi @(Model.LateNow > 0 ? "dvs-kpi--bad" : "")"><b>@Model.LateNow</b><span>รอเกิน @RoomRequests.LateMinutes นาที</span></div>
+        <div class="dvs-kpi @(Model.LateNow > 0 ? "dvs-kpi--bad" : "")"><b>@Model.LateNow</b><span>รอเกิน @lateMin นาที</span></div>
     </div>
 
     <div class="staff-card">
         <h2 class="h5">แยกตามพนักงาน</h2>
         @if (!Model.Staff.Any())
         {
-            <div class="cx-empty"><b>ยังไม่มีงานที่ส่งสำเร็จในช่วงนี้</b><span>ลองเลือกช่วงวันที่ให้กว้างขึ้น</span></div>
+            <div class="cx-empty"><b>ยังไม่มีงานที่เสร็จในช่วงนี้</b><span>ลองเลือกช่วงวันที่ให้กว้างขึ้น</span></div>
         }
         else
         {
             <div class="staff-table-wrap">
                 <table class="table table-bordered staff-table">
-                    <thead><tr><th>พนักงาน</th><th>ส่งสำเร็จ</th><th>ของที่ลูกค้าขอ</th><th>รอรับงานเฉลี่ย</th><th>ใช้เวลารวมเฉลี่ย</th><th>ล่าช้า</th></tr></thead>
+                    <thead><tr><th>พนักงาน</th><th>@(hk ? "ห้องที่ทำ" : "ส่งสำเร็จ")</th><th>@(hk ? "ลูกค้าขอระหว่างพัก" : "ของที่ลูกค้าขอ")</th><th>รอรับงานเฉลี่ย</th><th>ใช้เวลารวมเฉลี่ย</th><th>ล่าช้า</th></tr></thead>
                     <tbody>
                     @foreach (var s in Model.Staff)
                     {
@@ -54,6 +58,47 @@
                     <tbody>@foreach (var (item, n) in Model.TopItems) { <tr><td>@item</td><td>@n</td></tr> }</tbody>
                 </table>
             </div>
+        </div>
+    }
+
+    @if (hk)
+    {
+        <div class="staff-card" id="issues">
+            <h2 class="h5">แจ้งซ่อมจากแม่บ้าน @if (Model.Issues.Any(i => i.Status == "OPEN")) { <span class="dv-tag dv-tag--urgent">รอซ่อม @Model.Issues.Count(i => i.Status == "OPEN")</span> }</h2>
+            @if (!Model.Issues.Any())
+            {
+                <div class="cx-empty"><b>ยังไม่มีการแจ้งซ่อม</b><span>แม่บ้านแจ้งได้จากเมนู "แจ้งซ่อม"</span></div>
+            }
+            else
+            {
+                <div class="staff-table-wrap">
+                    <table class="table table-bordered staff-table">
+                        <thead><tr><th>ห้อง</th><th>ปัญหา</th><th>ผู้แจ้ง</th><th>แจ้งเมื่อ</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+                        <tbody>
+                        @foreach (var i in Model.Issues)
+                        {
+                            <tr>
+                                <td>@i.RoomNo<small class="dv-sub">@ThaiLabels.RoomStatus(i.RoomStatus)</small></td>
+                                <td>@if (i.Serious) { <span class="dv-tag dv-tag--urgent">ร้ายแรง</span> }@i.Description</td>
+                                <td>@i.Reporter</td>
+                                <td>@i.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td><span class="cx-badge cx-badge--@(i.Status == "OPEN" ? "PENDING" : "DONE")">@(i.Status == "OPEN" ? "รอซ่อม" : "ซ่อมแล้ว " + i.FixedAt?.ToString("dd/MM HH:mm"))</span></td>
+                                <td>
+                                    @if (i.Status == "OPEN")
+                                    {
+                                        <form asp-action="FixIssue" asp-route-id="@i.Id" method="post" class="staff-inline"><button type="submit" class="cx-btn cx-btn--small">ซ่อมเสร็จ</button></form>
+                                        @if (i.RoomStatus is "AVAILABLE" or "CLEANING")
+                                        {
+                                            <form asp-action="CloseRoom" asp-route-id="@i.Id" method="post" class="staff-inline" onsubmit="return confirm('ปิดห้อง @i.RoomNo เพื่อซ่อม? ห้องจะไม่เปิดให้จองจนกว่าจะกดซ่อมเสร็จ')"><button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ปิดห้องซ่อม</button></form>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
     }
 </div>

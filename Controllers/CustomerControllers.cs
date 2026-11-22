@@ -611,7 +611,7 @@ public class MemberController : AppController
 
         // Part 53: กำลังเข้าพัก → ขอของใช้เพิ่มได้ และเห็นสถานะของที่ขอ
         var stay = await _db.Bookings.AsNoTracking().Where(b => b.UserId == uid && b.Status == "CHECKED_IN")
-            .OrderByDescending(b => b.CheckIn).Select(b => new { b.BookingId, Rooms = b.BookingRooms.Select(r => new { r.RoomId, r.Room.RoomNo }).ToList() })
+            .OrderByDescending(b => b.CheckIn).Select(b => new { b.BookingId, b.DoNotDisturb, Rooms = b.BookingRooms.Select(r => new { r.RoomId, r.Room.RoomNo }).ToList() })
             .FirstOrDefaultAsync();
         if (stay != null)
         {
@@ -622,6 +622,12 @@ public class MemberController : AppController
                 .Select(r => new { r.RequestId, r.Item, r.Qty, r.Room.RoomNo, r.Note, r.Urgent, r.Status, r.Missed, r.CreatedAt, r.DoneAt }).ToListAsync())
                 .Select(r => new ItemRequestRowViewModel { Id = r.RequestId, What = $"{RoomRequests.ItemName(r.Item)} × {r.Qty}", RoomNo = r.RoomNo,
                     Note = r.Note, Urgent = r.Urgent, Status = r.Status, Missed = r.Missed, CreatedAt = r.CreatedAt, DoneAt = r.DoneAt }).ToList();
+            // Part 54: ทำความสะอาดระหว่างพัก + ป้ายห้ามรบกวน
+            vm.DoNotDisturb = stay.DoNotDisturb;
+            vm.Cleanings = await _db.HousekeepingTasks.AsNoTracking().Where(t => t.BookingId == stay.BookingId && t.Kind == "REQUEST")
+                .OrderByDescending(t => t.TaskId).Take(10)
+                .Select(t => new ItemRequestRowViewModel { Id = t.TaskId, What = "ทำความสะอาดห้อง", RoomNo = t.Room.RoomNo, Note = t.PrefTime,
+                    Status = t.Status, Missed = t.Missed, CreatedAt = t.CreatedAt ?? DateTime.MinValue, DoneAt = t.DoneAt }).ToListAsync();
         }
         return View(vm);
     }
@@ -647,6 +653,41 @@ public class MemberController : AppController
         await _db.SaveChangesAsync();
         Flash($"ส่งคำขอ{RoomRequests.ItemName(item)}แล้ว พนักงานจะนำไปส่งที่ห้องโดยเร็ว");
         return Redirect("/Member#mb-req");
+    }
+
+    /// <summary>Part 54: ขอทำความสะอาดห้องระหว่างพัก (เลือกช่วงเวลาที่สะดวก) → เข้าคิวแม่บ้าน · ห้องละ 1 งานค้าง</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestCleaning(int bookingId, int roomId, string? slot, string? note = null)
+    {
+        var uid = CurrentUserId ?? 0;
+        var b = await _db.Bookings.Where(x => x.BookingId == bookingId && x.UserId == uid && x.Status == "CHECKED_IN")
+            .Select(x => new { x.BookingId, Rooms = x.BookingRooms.Select(r => r.RoomId).ToList() }).FirstOrDefaultAsync();
+        if (b == null) { Flash("ขอทำความสะอาดได้เฉพาะระหว่างเข้าพัก (หลังเช็คอิน)", true); return Redirect("/Member#mb-clean"); }
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (!b.Rooms.Contains(roomId) || !HousekeepingOps.Slots.Contains(slot) || note?.Length > 200)
+        { Flash("เลือกห้องและช่วงเวลาที่สะดวก (หมายเหตุไม่เกิน 200 ตัวอักษร)", true); return Redirect("/Member#mb-clean"); }
+        if (await _db.HousekeepingTasks.AnyAsync(t => t.RoomId == roomId && t.Status != "DONE"))
+        { Flash("ห้องนี้มีคำขอทำความสะอาดที่ยังไม่เสร็จอยู่แล้ว", true); return Redirect("/Member#mb-clean"); }
+
+        _db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = roomId, BookingId = bookingId, Status = "PENDING", Kind = "REQUEST",
+            PrefTime = slot, Note = note, Urgent = slot == HousekeepingOps.Slots[0], CreatedAt = AppClock.Now });
+        // ขอทำความสะอาด = พร้อมให้เข้า → ปลดป้ายห้ามรบกวนให้อัตโนมัติ
+        await _db.Bookings.Where(x => x.BookingId == bookingId).ExecuteUpdateAsync(x => x.SetProperty(y => y.DoNotDisturb, false));
+        await _db.SaveChangesAsync();
+        Flash($"ส่งคำขอทำความสะอาดแล้ว (สะดวก {slot}) แม่บ้านจะเข้าไปตามเวลา");
+        return Redirect("/Member#mb-clean");
+    }
+
+    /// <summary>Part 54: ติด/ปลดป้าย "ห้ามรบกวน" — แม่บ้านเห็นในคิวงาน</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DoNotDisturb(int bookingId, bool on)
+    {
+        var uid = CurrentUserId ?? 0;
+        var n = await _db.Bookings.Where(x => x.BookingId == bookingId && x.UserId == uid && x.Status == "CHECKED_IN")
+            .ExecuteUpdateAsync(x => x.SetProperty(y => y.DoNotDisturb, on));
+        if (n == 0) { Flash("ตั้งป้ายได้เฉพาะระหว่างเข้าพัก", true); return Redirect("/Member#mb-clean"); }
+        Flash(on ? "ติดป้าย \"ห้ามรบกวน\" แล้ว แม่บ้านจะไม่เข้าห้องจนกว่าจะปลด" : "ปลดป้าย \"ห้ามรบกวน\" แล้ว");
+        return Redirect("/Member#mb-clean");
     }
 
     /// <summary>Part 53: ยกเลิกคำขอที่ยังไม่มีพนักงานรับงาน</summary>

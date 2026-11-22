@@ -204,6 +204,51 @@
         </section>
     }
 
+    @if (Model.StayBookingId is int cleanStay)
+    {
+        <section class="mb-card mb-req" id="mb-clean" aria-labelledby="mb-clean-h">
+            <h2 id="mb-clean-h">ทำความสะอาดห้อง @if (Model.DoNotDisturb) { <span class="mb-pill">ห้ามรบกวน</span> }</h2>
+            <div class="mb-clean__dnd">
+                <span>@(Model.DoNotDisturb ? "ตอนนี้ติดป้าย \"ห้ามรบกวน\" อยู่ แม่บ้านจะไม่เข้าห้อง" : "ต้องการความเป็นส่วนตัว ติดป้าย \"ห้ามรบกวน\" ได้")</span>
+                <form method="post" asp-controller="Member" asp-action="DoNotDisturb" class="d-inline">
+                    <input type="hidden" name="bookingId" value="@cleanStay" /><input type="hidden" name="on" value="@(Model.DoNotDisturb ? "false" : "true")" />
+                    <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">@(Model.DoNotDisturb ? "ปลดป้ายห้ามรบกวน" : "ติดป้ายห้ามรบกวน")</button>
+                </form>
+            </div>
+            <form method="post" asp-controller="Member" asp-action="RequestCleaning" class="mb-req__form">
+                <input type="hidden" name="bookingId" value="@cleanStay" />
+                <label>ห้อง
+                    <select name="roomId" class="form-select" required>
+                        @foreach (var (rid, rno) in Model.StayRooms) { <option value="@rid">@rno</option> }
+                    </select>
+                </label>
+                <label>ช่วงเวลาที่สะดวก
+                    <select name="slot" class="form-select" required>
+                        @foreach (var sl in HousekeepingOps.Slots) { <option value="@sl">@sl</option> }
+                    </select>
+                </label>
+                <label class="mb-req__note">หมายเหตุ (ถ้ามี)
+                    <input type="text" name="note" maxlength="200" class="form-control" placeholder="เช่น เปลี่ยนผ้าปูที่นอน, ไม่ต้องเปลี่ยนผ้าเช็ดตัว" />
+                </label>
+                <button type="submit" class="cx-btn">ขอทำความสะอาด</button>
+            </form>
+            @if (Model.Cleanings.Any())
+            {
+                <ul class="mb-list mb-req__list">
+                    @foreach (var c in Model.Cleanings)
+                    {
+                        <li>
+                            <span><b>@c.What · ห้อง @c.RoomNo</b>
+                                <span>ขอเมื่อ @c.CreatedAt.ToString("dd/MM HH:mm")@(c.Note != null ? " · สะดวก " + c.Note : "")@(c.DoneAt is { } cd ? " · เสร็จเมื่อ " + cd.ToString("HH:mm") : "")</span></span>
+                            <span class="cx-badge cx-badge--@c.Status">@HousekeepingOps.StatusLabel(c.Status, c.Missed)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            <p class="mb-muted">สถานะ: รอรับงาน → กำลังทำ → เสร็จแล้ว · ทำเสร็จจะมีการแจ้งเตือน</p>
+        </section>
+    }
+
     @if (Model.Waiting.Any())
     {
         <section class="mb-card mb-wait" aria-labelledby="mb-wait-h">

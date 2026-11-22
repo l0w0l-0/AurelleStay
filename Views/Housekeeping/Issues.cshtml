@@ -1,0 +1,54 @@
+@model List<pameka_7033_l005.ViewModels.RoomIssueRowViewModel>
+@{
+    ViewData["Title"] = "แจ้งซ่อม";
+    Layout = "_Adminlayout";
+    var rooms = (List<(int Id, string No)>)ViewBag.Rooms;
+}
+<div class="dashboard">
+    <h1>แจ้งซ่อม</h1>
+    <partial name="_Flash" />
+    <p>เจอของเสียหรือชำรุดระหว่างทำความสะอาด แจ้งที่นี่ ผู้จัดการจะได้รับแจ้งเตือนทันที</p>
+
+    <div class="staff-card">
+        <form asp-action="ReportIssue" method="post" class="dvs-form">
+            <label>ห้อง
+                <select name="roomId" class="form-select" required>
+                    @foreach (var (id, no) in rooms) { <option value="@id">@no</option> }
+                </select>
+            </label>
+            <label class="hk-issue__desc">ปัญหาที่พบ
+                <input type="text" name="description" maxlength="300" required class="form-control" placeholder="เช่น แอร์ไม่เย็น, ก๊อกน้ำรั่ว, หลอดไฟเสีย" />
+            </label>
+            <label class="hk-issue__chk"><input type="checkbox" name="serious" value="true" /> ร้ายแรง (ควรปิดห้อง)</label>
+            <button type="submit" class="cx-btn cx-btn--small">แจ้งซ่อม</button>
+        </form>
+    </div>
+
+    <div class="staff-card">
+        <h2 class="h5">รายการแจ้งซ่อมล่าสุด</h2>
+        @if (!Model.Any())
+        {
+            <div class="cx-empty"><b>ยังไม่มีรายการแจ้งซ่อม</b><span>รายการที่แจ้งจะแสดงที่นี่พร้อมสถานะ</span></div>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table table-bordered staff-table">
+                    <thead><tr><th>ห้อง</th><th>ปัญหา</th><th>ผู้แจ้ง</th><th>แจ้งเมื่อ</th><th>สถานะ</th></tr></thead>
+                    <tbody>
+                    @foreach (var i in Model)
+                    {
+                        <tr>
+                            <td>@i.RoomNo</td>
+                            <td>@if (i.Serious) { <span class="dv-tag dv-tag--urgent">ร้ายแรง</span> }@i.Description</td>
+                            <td>@i.Reporter</td>
+                            <td>@i.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><span class="cx-badge cx-badge--@(i.Status == "OPEN" ? "PENDING" : "DONE")">@(i.Status == "OPEN" ? "รอซ่อม" : "ซ่อมแล้ว")</span></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

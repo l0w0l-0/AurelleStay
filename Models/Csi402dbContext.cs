@@ -26,6 +26,8 @@ public partial class Csi402dbContext : DbContext
 
     public virtual DbSet<ItemRequest> ItemRequests { get; set; }
 
+    public virtual DbSet<RoomIssue> RoomIssues { get; set; }
+
     public virtual DbSet<ExtraService> ExtraServices { get; set; }
 
     public virtual DbSet<Expense> Expenses { get; set; }
@@ -106,6 +108,7 @@ public partial class Csi402dbContext : DbContext
                 .HasPrecision(10, 2)
                 .HasColumnName("net_total");
             entity.Property(e => e.PromoId).HasColumnName("promo_id");
+            entity.Property(e => e.DoNotDisturb).HasColumnName("do_not_disturb");
             entity.Property(e => e.Status)
                 .HasDefaultValueSql("'PENDING'")
                 .HasColumnType("enum('PENDING','CONFIRMED','CHECKED_IN','CHECKED_OUT','CANCELLED')")
@@ -387,6 +390,13 @@ public partial class Csi402dbContext : DbContext
                 .HasDefaultValueSql("'PENDING'")
                 .HasColumnType("enum('PENDING','CLEANING','DONE')")
                 .HasColumnName("status");
+            entity.Property(e => e.Kind).HasMaxLength(10).HasColumnName("kind");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.PickedAt).HasColumnType("datetime").HasColumnName("picked_at");
+            entity.Property(e => e.Urgent).HasColumnName("urgent");
+            entity.Property(e => e.Missed).HasColumnName("missed");
+            entity.Property(e => e.PrefTime).HasMaxLength(20).HasColumnName("pref_time");
+            entity.Property(e => e.Note).HasMaxLength(200).HasColumnName("note");
 
             entity.HasOne(d => d.AssignedToNavigation).WithMany(p => p.HousekeepingTasks)
                 .HasForeignKey(d => d.AssignedTo)
@@ -792,6 +802,22 @@ public partial class Csi402dbContext : DbContext
             entity.HasOne<User>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("item_requests_ibfk_2");
             entity.HasOne(d => d.Room).WithMany().HasForeignKey(d => d.RoomId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("item_requests_ibfk_3");
             entity.HasOne(d => d.AssignedToNavigation).WithMany().HasForeignKey(d => d.AssignedTo).OnDelete(DeleteBehavior.SetNull).HasConstraintName("item_requests_ibfk_4");
+        });
+
+        modelBuilder.Entity<RoomIssue>(entity =>
+        {
+            entity.HasKey(e => e.IssueId);
+            entity.ToTable("room_issues");
+            entity.Property(e => e.IssueId).HasColumnName("issue_id");
+            entity.Property(e => e.RoomId).HasColumnName("room_id");
+            entity.Property(e => e.ReportedBy).HasColumnName("reported_by");
+            entity.Property(e => e.Description).HasMaxLength(300).HasColumnName("description");
+            entity.Property(e => e.Serious).HasColumnName("serious");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.FixedAt).HasColumnType("datetime").HasColumnName("fixed_at");
+            entity.HasOne(d => d.Room).WithMany().HasForeignKey(d => d.RoomId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("room_issues_ibfk_1");
+            entity.HasOne(d => d.Reporter).WithMany().HasForeignKey(d => d.ReportedBy).OnDelete(DeleteBehavior.SetNull).HasConstraintName("room_issues_ibfk_2");
         });
 
         OnModelCreatingPartial(modelBuilder);

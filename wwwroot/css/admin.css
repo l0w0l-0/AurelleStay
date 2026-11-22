@@ -777,3 +777,5 @@ tr.dv-late > td { background: #fdf1f1; }
 .dvs-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 16px; }
 .dvs-form label { display: grid; gap: 4px; font-size: .88rem; }
 
+.hk-issue__desc { flex: 1 1 280px; }
+.hk-issue__chk { display: flex !important; align-items: center; gap: 6px; padding-bottom: 8px; }
