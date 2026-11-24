@@ -1908,6 +1908,12 @@ img.is-zoomable:focus-visible { outline: 3px solid var(--brass, #b08a35); outlin
 .nt-del__btn:hover, .nt-del__btn:focus-visible { background: #f1e9f8; color: #b4232c; }
 .nt-item.is-removing { opacity: 0; transform: translateX(16px); transition: opacity .2s, transform .2s; }
 
+/* Part 59: รูป QR จริงของโรงแรม + QR ใส่ยอดอัตโนมัติ (ทางเลือก) */
+.py-qrimg--card { display: block; max-width: 320px; margin: 0 auto 10px; border-radius: 16px; box-shadow: 0 6px 24px rgba(45, 27, 71, .12); }
+.py-qralt { margin-top: 14px; padding: 10px 14px; border: 1px dashed #d8cde6; border-radius: 14px; text-align: left; }
+.py-qralt summary { cursor: pointer; font-weight: 600; color: #3b2a52; }
+.py-qralt[open] summary { margin-bottom: 10px; }
+
 /* ===================== ซ่อนแถบเลื่อน (scrollbar) ทั้งเว็บ — ยังเลื่อนด้วยล้อเมาส์/ทัชแพด/นิ้ว/คีย์บอร์ดได้ตามปกติ ===================== */
 html, * { scrollbar-width: none; -ms-overflow-style: none; }
 ::-webkit-scrollbar { display: none; width: 0; height: 0; }

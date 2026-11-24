@@ -438,7 +438,8 @@ public class BookingController : AppController
             return RedirectToAction(nameof(MyBookings));
         }
 
-        var qrFile = Path.Combine(_env.WebRootPath ?? "", "images", "payment-qr.png");
+        // รูป QR จริงของโรงแรม (ถ้ามี) — wwwroot/images/payment-qr.png หรือ .jpg (ไม่ขึ้น GitHub)
+        var qrName = new[] { "payment-qr.png", "payment-qr.jpg" }.FirstOrDefault(n => System.IO.File.Exists(Path.Combine(_env.WebRootPath ?? "", "images", n)));
         var pay = PaymentInfo.From(HttpContext.RequestServices.GetRequiredService<IConfiguration>());
         return View(new PayPageViewModel
         {
@@ -447,7 +448,7 @@ public class BookingController : AppController
             PromoName = b.Promo, Rooms = b.Rooms, PendingPayment = flags.PendingPayment,
             PayBy = BookingExpiry.Deadline(b.BookedAt, b.CheckIn, b.Pays.Where(p => p.Status == "REJECTED").Max(p => p.PaidAt)),
             Rejected = !flags.PendingPayment && b.Pays.Any(p => p.Status == "REJECTED"),
-            QrUrl = System.IO.File.Exists(qrFile) ? "~/images/payment-qr.png" : null
+            QrUrl = qrName != null ? "~/images/" + qrName : null
         });
     }
 

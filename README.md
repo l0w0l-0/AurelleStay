@@ -77,6 +77,9 @@ powershell -ExecutionPolicy Bypass -File .\docker.ps1 up          # สร้า
 3. เข้าสู่ระบบใหม่ → สร้างบัญชีพนักงานที่เมนู **พนักงาน**
 4. (สาธิต) เมนู **สถานะระบบ / สำรองข้อมูล** → **สร้างข้อมูลตัวอย่าง** ได้ลูกค้า 30 คนพร้อมการจอง การชำระเงิน และรีวิว (`guest01`–`guest30@demo.aurellestay.local` รหัส `Demo@2026`) ลบออกได้ด้วยปุ่มเดียว
 
+5. (ข้อมูลเพิ่ม) `.\docker.ps1 moredata` เพิ่มห้องพักเป็น 19 ห้อง บริการเสริม 15 รายการ กิจกรรม 11 รายการ และพนักงานฝ่ายละ 1–3 คน (รันซ้ำได้ ไม่ลบของเดิม)
+6. (QR รับเงิน) วางรูป QR ของโรงแรมไว้ที่ `wwwroot/images/payment-qr.jpg` (หรือ `.png`) แล้ว `.\docker.ps1 up` — ไฟล์นี้ไม่ขึ้น GitHub
+
 คำสั่งอื่น: `.\docker.ps1 status | logs | backup | down`
 ตั้งค่าใน `.env` (ดูตัวอย่างใน `.env.example`): รับเงินพร้อมเพย์ `PROMPTPAY_ID`, `PAY_ACCOUNT_NAME`, `PAY_BANK_NAME`, `PAY_ACCOUNT_NO` · ส่งอีเมลจริง `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (ไม่ตั้ง = เก็บอีเมลไว้ดูในหน้าสถานะระบบ)
 

@@ -3,12 +3,13 @@
 # วิธีใช้ (PowerShell ในโฟลเดอร์โปรเจกต์):
 #   powershell -ExecutionPolicy Bypass -File .\docker.ps1 up                  เปิดระบบ (ครั้งแรกสร้างฐานข้อมูลให้)
 #   powershell -ExecutionPolicy Bypass -File .\docker.ps1 admin you@mail.com  ตั้งบัญชีนี้เป็นผู้จัดการ (สมัครสมาชิกในเว็บก่อน)
+#   powershell -ExecutionPolicy Bypass -File .\docker.ps1 moredata              เพิ่มห้อง/พนักงาน/บริการเสริม/กิจกรรมตัวอย่าง (รันซ้ำได้ ไม่ลบของเดิม)
 #   powershell -ExecutionPolicy Bypass -File .\docker.ps1 status | logs | down | backup
 # ทำงานเฉพาะโปรเจกต์ Docker ชื่อ "aurellestay" เท่านั้น ไม่แตะโปรเจกต์อื่น
 # ไฟล์นี้บันทึกเป็น UTF-8 มี BOM เพื่อให้ Windows PowerShell 5.1 อ่านภาษาไทยถูก
 # =====================================================================
 param(
-    [Parameter(Position = 0)][ValidateSet('up', 'down', 'status', 'logs', 'admin', 'backup')][string]$Command = 'up',
+    [Parameter(Position = 0)][ValidateSet('up', 'down', 'status', 'logs', 'admin', 'backup', 'moredata')][string]$Command = 'up',
     [Parameter(Position = 1)][string]$Arg
 )
 $ErrorActionPreference = 'Stop'
@@ -64,6 +65,18 @@ switch ($Command) {
         $n = & docker compose -p aurellestay exec -T -e "MYSQL_PWD=$pw" db mysql -N -uroot csi402db -e $sql
         if ("$n".Trim() -eq '1') { Write-Host "ตั้ง $Arg เป็นผู้จัดการแล้ว — ออกจากระบบแล้วเข้าใหม่ โดยเลือกบทบาทผู้จัดการ" -ForegroundColor Green }
         else { Fail "ไม่พบบัญชี $Arg (หรือเป็นผู้จัดการอยู่แล้ว) — สมัครสมาชิกในเว็บก่อน" }
+    }
+    'moredata' {
+        # Part 59: เพิ่มข้อมูลจาก Database/aurellestay_more_data.sql (เพิ่มอย่างเดียว รันซ้ำได้)
+        $file = Join-Path $PSScriptRoot 'Database\aurellestay_more_data.sql'
+        if (-not (Test-Path $file)) { Fail 'ไม่พบไฟล์ Database\aurellestay_more_data.sql' }
+        $pw = EnvValue 'DB_ROOT_PASSWORD'
+        Step 'เพิ่มห้องพัก พนักงาน บริการเสริม และกิจกรรม'
+        Compose cp $file db:/tmp/more_data.sql
+        & docker compose -p aurellestay exec -T -e "MYSQL_PWD=$pw" db sh -c 'mysql -uroot --default-character-set=utf8mb4 csi402db < /tmp/more_data.sql'
+        if ($LASTEXITCODE -ne 0) { Fail 'เพิ่มข้อมูลไม่สำเร็จ' }
+        $n = (& docker compose -p aurellestay exec -T -e "MYSQL_PWD=$pw" db mysql -N -uroot csi402db -e "SELECT (SELECT COUNT(*) FROM rooms), (SELECT COUNT(*) FROM extra_services), (SELECT COUNT(*) FROM activities), (SELECT COUNT(*) FROM users u JOIN roles r USING(role_id) WHERE r.role_name<>'customer')") -split '\s+'
+        Write-Host "เสร็จแล้ว: ห้อง $($n[0]) · บริการเสริม $($n[1]) · กิจกรรม $($n[2]) · พนักงาน $($n[3])" -ForegroundColor Green
     }
     'backup' {
         $dir = Join-Path $PSScriptRoot 'Backups'; New-Item -ItemType Directory -Force -Path $dir | Out-Null

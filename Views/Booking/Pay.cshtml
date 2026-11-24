@@ -35,8 +35,17 @@
             @if (hasQr)
             {
                 <div class="py-pane" id="pane-qr" role="tabpanel" aria-labelledby="tab-qr">
+                    @if (Model.QrUrl != null)
+                    {
+                        @* Part 59: รูป QR จริงของโรงแรม (ที่ผู้จัดการใส่ไว้) แสดงก่อน *@
+                        <img src="@Url.Content(Model.QrUrl)" alt="QR พร้อมเพย์ของโรงแรม" class="py-qrimg py-qrimg--card" />
+                        <p class="py-qrnote">สแกนแล้วกรอกยอด <b>฿@Model.Net.ToString("N2")</b> ให้ตรงทุกสตางค์</p>
+                        <a class="cx-btn cx-btn--ghost cx-btn--small" href="@Url.Content(Model.QrUrl)" download="aurellestay-qr@(System.IO.Path.GetExtension(Model.QrUrl))">บันทึกรูป QR</a>
+                    }
                     @if (Model.QrPayload != null)
                     {
+                        @if (Model.QrUrl != null) { @:<details class="py-qralt"><summary>ไม่อยากพิมพ์ยอดเอง? ใช้ QR ที่ใส่ยอดให้อัตโนมัติ</summary>
+                        }
                         <div class="py-qrbox">
                             <p class="py-qrbox__brand">THAI QR PAYMENT · พร้อมเพย์</p>
                             <div class="py-qrbox__code" data-qr="@Model.QrPayload" role="img" aria-label="QR พร้อมเพย์ ยอด @Model.Net.ToString("N2") บาท">
@@ -45,12 +54,9 @@
                             <p class="py-qrbox__to">@(pay.AccountName ?? "AurelleStay") · พร้อมเพย์ @Mask(pay.PromptPayId!)</p>
                         </div>
                         <p class="py-qrnote">QR นี้ระบุยอดให้แล้ว สแกนแล้วยอดขึ้นอัตโนมัติ ไม่ต้องพิมพ์เอง</p>
-                        <button type="button" class="cx-btn cx-btn--ghost cx-btn--small" data-qr-save="aurellestay-booking-@(Model.BookingId).png">บันทึกรูป QR</button>
-                    }
-                    else
-                    {
-                        <img src="@Url.Content(Model.QrUrl!)" alt="QR Code สำหรับชำระเงิน" class="py-qrimg" />
-                        <p class="py-qrnote">สแกนแล้วกรอกยอดให้ตรงตามด้านล่างทุกสตางค์</p>
+                        <button type="button" class="cx-btn cx-btn--ghost cx-btn--small" data-qr-save="aurellestay-booking-@(Model.BookingId).png">บันทึกรูป QR นี้</button>
+                        @if (Model.QrUrl != null) { @:</details>
+                        }
                     }
                 </div>
             }
