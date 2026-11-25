@@ -478,7 +478,11 @@ public class FrontDeskController : AppController
         }
         b.Status = "CONFIRMED";
         await _db.SaveChangesAsync();
-        Flash($"การจอง #{b.BookingId} กลับเป็น \"จองสำเร็จ\" แล้ว เช็คอินได้ตามปกติ");
+        // กิจกรรมที่ถูกยกเลิกตอนบันทึกไม่มาเข้าพักคืนที่นั่งไปแล้ว — ไม่กู้คืนอัตโนมัติ (อาจมีคนจองที่นั่งไปแล้ว) แจ้งให้จองใหม่
+        var lostActs = await _db.ActivityBookings.CountAsync(a => a.BookingId == b.BookingId && a.Status == "CANCELLED"
+            && a.ActDate >= Today);
+        Flash($"การจอง #{b.BookingId} กลับเป็น \"จองสำเร็จ\" แล้ว เช็คอินได้ตามปกติ"
+            + (lostActs > 0 ? $" · มีกิจกรรมที่ถูกยกเลิกไป {lostActs} รายการ หากลูกค้ายังต้องการ กดจองกิจกรรมให้ใหม่" : ""));
         return RedirectToAction(nameof(Index));
     }
 
