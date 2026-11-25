@@ -182,6 +182,10 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.UnitPrice)
                 .HasPrecision(10, 2)
                 .HasColumnName("unit_price");
+            entity.Property(e => e.InStay).HasColumnName("in_stay");
+            entity.Property(e => e.PaidAt).HasColumnType("datetime").HasColumnName("paid_at");
+            entity.Property(e => e.PayMethod).HasMaxLength(10).HasColumnName("pay_method");
+            entity.Property(e => e.PaidBy).HasColumnName("paid_by");
 
             entity.HasOne(d => d.Booking).WithMany(p => p.BookingServices)
                 .HasForeignKey(d => d.BookingId)
@@ -774,6 +778,9 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
             entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
             entity.Property(e => e.CancelledAt).HasColumnType("datetime").HasColumnName("cancelled_at");
+            entity.Property(e => e.PaidAt).HasColumnType("datetime").HasColumnName("paid_at");
+            entity.Property(e => e.PayMethod).HasMaxLength(10).HasColumnName("pay_method");
+            entity.Property(e => e.PaidBy).HasColumnName("paid_by");
             entity.HasOne(d => d.Activity).WithMany().HasForeignKey(d => d.ActivityId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("activity_bookings_ibfk_1");
             entity.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("activity_bookings_ibfk_2");
             entity.HasOne<Booking>().WithMany().HasForeignKey(d => d.BookingId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("activity_bookings_ibfk_3");

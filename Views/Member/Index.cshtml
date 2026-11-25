@@ -32,23 +32,26 @@
 
     @if (Model.StayBookingId is int stayNow)
     {
-        <div class="mb-alert mb-alert--stay" role="status">
+        <div class="mb-alert mb-alert--stay" role="status" data-alert-key="stay-@stayNow">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V8l9-5 9 5v13M9 21v-6h6v6" /></svg>
             <p><b>กำลังเข้าพัก ห้อง @string.Join(", ", Model.StayRooms.Select(r => r.RoomNo))</b> ต้องการอะไรเพิ่ม พนักงานนำไปส่งถึงห้อง</p>
             <a href="#mb-req" class="cx-btn cx-btn--small">ขอของใช้เพิ่ม</a>
+            <a href="#mb-svc" class="cx-btn cx-btn--ghost cx-btn--small">สั่งบริการ / ดูยอด</a>
             <a href="#mb-clean" class="cx-btn cx-btn--ghost cx-btn--small">ขอทำความสะอาด</a>
+            <button type="button" class="mb-alert__x" data-dismiss-alert aria-label="ปิดแถบนี้">×</button>
         </div>
     }
 
     @foreach (var b in Model.NeedAction)
     {
-        <div class="mb-alert" role="status">
+        <div class="mb-alert" role="status" data-alert-key="pay-@b.BookingId-@(b.LastRejectedAt?.Ticks ?? 0)">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16.5h.01" /></svg>
             <p>
                 <b>การจอง #@b.BookingId @(b.LastRejectedAt != null ? "— สลิปถูกปฏิเสธ แนบใหม่" : "— รอชำระเงิน")</b>
                 ภายใน @BookingExpiry.Deadline(b.BookedAt, b.CheckIn, b.LastRejectedAt).ToString("dd/MM HH:mm") น. มิฉะนั้นระบบจะยกเลิกอัตโนมัติ
             </p>
             <a asp-controller="Booking" asp-action="Pay" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">ชำระเงิน</a>
+            <button type="button" class="mb-alert__x" data-dismiss-alert aria-label="ปิดแถบนี้">×</button>
         </div>
     }
 
@@ -223,6 +226,55 @@
 
     @if (Model.StayBookingId is int cleanStay)
     {
+        <section class="mb-card mb-req" id="mb-svc" aria-labelledby="mb-svc-h">
+            <h2 id="mb-svc-h">สั่งบริการเสริม <span class="mb-pill">ชำระตอนเช็คเอาท์</span></h2>
+            @if (Model.StayServices.Any())
+            {
+                <form method="post" asp-controller="Member" asp-action="OrderService" class="mb-req__form">
+                    <input type="hidden" name="bookingId" value="@Model.StayBookingId" />
+                    <label>บริการ
+                        <select name="serviceId" class="form-select" required>
+                            @foreach (var sv in Model.StayServices) { <option value="@sv.Id">@sv.Name · @sv.Price.ToString("N0") บาท</option> }
+                        </select>
+                    </label>
+                    <label>ห้อง
+                        <select name="roomId" class="form-select" required>
+                            @foreach (var (rid, rno) in Model.StayRooms) { <option value="@rid">@rno</option> }
+                        </select>
+                    </label>
+                    <label>จำนวน
+                        <input type="number" name="qty" value="1" min="1" max="@StayBill.MaxQty" class="form-control" required />
+                    </label>
+                    <label class="mb-req__urgent"><input type="checkbox" name="urgent" value="true" /> ด่วน</label>
+                    <button type="submit" class="cx-btn">สั่ง</button>
+                </form>
+            }
+            <h3 class="h6 mt-3">ค่าใช้จ่ายระหว่างพัก</h3>
+            @if (!Model.StayLines.Any()) { <p class="mb-muted">ยังไม่มี (ค่ากิจกรรมที่จองไว้และบริการที่สั่งเพิ่มจะแสดงที่นี่)</p> }
+            else
+            {
+                <ul class="mb-list mb-req__list">
+                    @foreach (var l in Model.StayLines)
+                    {
+                        <li>
+                            <span><b>@(l.Kind == "A" ? "กิจกรรม: " : "")@l.Title × @l.Qty@(l.RoomNo != null ? " · ห้อง " + l.RoomNo : "")</b>
+                                <span>@l.Amount.ToString("N2") บาท@(l.Date is { } dd ? " · " + dd.ToString("dd/MM") : "")</span></span>
+                            <span class="mb-wait__act">
+                                <span class="cx-badge cx-badge--@(l.PaidAt != null ? "PAID" : "PENDING")">@(l.PaidAt != null ? "ชำระแล้ว" : "รอชำระ")</span>
+                                @if (l.CanCancel)
+                                {
+                                    <form method="post" asp-controller="Member" asp-action="CancelService" asp-route-bsId="@l.Id" class="d-inline" onsubmit="return confirm('ยกเลิกรายการนี้?')">
+                                        <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิก</button>
+                                    </form>
+                                }
+                            </span>
+                        </li>
+                    }
+                </ul>
+                <p class="mb-muted"><b>ยอดที่ต้องชำระที่เคาน์เตอร์ตอนเช็คเอาท์: @Model.StayLines.Where(l => l.PaidAt == null).Sum(l => l.Amount).ToString("N2") บาท</b> (เงินสด / โอน / บัตร)</p>
+            }
+        </section>
+
         <section class="mb-card mb-req" id="mb-clean" aria-labelledby="mb-clean-h">
             <h2 id="mb-clean-h">ทำความสะอาดห้อง @if (Model.DoNotDisturb) { <span class="mb-pill">ห้ามรบกวน</span> }</h2>
             <div class="mb-clean__dnd">

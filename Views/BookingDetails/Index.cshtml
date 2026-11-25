@@ -78,6 +78,16 @@
             <dt>ส่วนลด</dt><dd>− @Model.Discount.ToString("N2") บาท</dd>
             <dt>ยอดสุทธิ</dt><dd><b>@Model.Net.ToString("N2") บาท</b></dd>
         </dl>
+
+        @if (Model.StayLines.Any())
+        {
+            <h2>ค่าใช้จ่ายระหว่างพัก <small class="text-muted">(แยกจากยอดจอง ชำระที่เคาน์เตอร์ก่อนเช็คเอาท์)</small></h2>
+            <div class="table-responsive" tabindex="0" role="region" aria-label="ตารางค่าใช้จ่ายระหว่างพัก"><table class="table">
+                <thead><tr><th>รายการ</th><th class="text-end">จำนวน</th><th class="text-end">ยอด (บาท)</th><th>สถานะ</th></tr></thead>
+                <tbody>@foreach (var l in Model.StayLines) { <tr><td>@(l.Kind == "A" ? "กิจกรรม: " : "บริการ: ")@l.Title@(l.RoomNo != null ? " · ห้อง " + l.RoomNo : "")</td><td class="text-end">@l.Qty</td><td class="text-end">@l.Amount.ToString("N2")</td><td>@(l.PaidAt != null ? $"ชำระแล้ว ({pameka_7033_l005.Helpers.StayBill.MethodName(l.Method)})" : "รอชำระ")</td></tr> }</tbody>
+                <tfoot><tr><th colspan="2" class="text-end">ค้างชำระ</th><th class="text-end">@Model.StayLines.Where(l => l.PaidAt == null).Sum(l => l.Amount).ToString("N2")</th><th></th></tr></tfoot>
+            </table></div>
+        }
     </section>
 
     <section class="cx-box">

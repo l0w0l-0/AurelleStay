@@ -343,6 +343,9 @@ public class MyBookingItemViewModel
 // ---------- หน้าสมาชิก (Part 36)
 public class MemberDashboardViewModel
 {
+    /// <summary>Part 60: ค่าใช้จ่ายระหว่างพัก + บริการที่สั่งเพิ่มได้</summary>
+    public List<pameka_7033_l005.Helpers.StayBill.Line> StayLines { get; set; } = new();
+    public List<(int Id, string Name, decimal Price)> StayServices { get; set; } = new();
     public string FirstName { get; set; } = "";
     public DateTime MemberSince { get; set; }
     public DateOnly Today { get; set; }
@@ -512,6 +515,8 @@ public class SystemStatusViewModel
 
 public class BookingDetailViewModel
 {
+    /// <summary>Part 60: ค่าใช้จ่ายระหว่างพัก (บริการที่สั่งเพิ่ม + กิจกรรม)</summary>
+    public List<pameka_7033_l005.Helpers.StayBill.Line> StayLines { get; set; } = new();
     public int BookingId { get; set; }
     public string Status { get; set; } = "";
     public string Customer { get; set; } = "";
@@ -595,6 +600,7 @@ public class FrontDeskRowViewModel
     public string? IdCheckPromo { get; set; }   // โปรที่ต้องตรวจบัตรตอนเช็คอิน (เช่น วันเกิด)
     public string? ArrivalTime { get; set; }    // Part 50: เวลาที่ลูกค้าแจ้งว่าจะมาถึง
     public string? GuestRequest { get; set; }   // Part 50: คำขอพิเศษ
+    public decimal ExtraDue { get; set; }       // Part 60: ค่าใช้จ่ายระหว่างพักที่ยังไม่ชำระ
 }
 
 public class RoomStatusRowViewModel
@@ -1214,4 +1220,19 @@ public class ActivityRosterViewModel
 {
     public DateOnly Date { get; set; }
     public List<(int ActivityId, string Name, string Time, string? Location, int Capacity, List<ActivityBookingRowViewModel> People)> Sessions { get; set; } = new();
+}
+
+/// <summary>Part 60: บิลระหว่างพัก (หน้าเคาน์เตอร์)</summary>
+public class StayBillViewModel
+{
+    public int BookingId { get; set; }
+    public string Status { get; set; } = "";
+    public DateOnly CheckIn { get; set; }
+    public DateOnly CheckOut { get; set; }
+    public string Customer { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public List<(int RoomId, string RoomNo)> Rooms { get; set; } = new();
+    public List<pameka_7033_l005.Helpers.StayBill.Line> Lines { get; set; } = new();
+    public List<(int Id, string Name, decimal Price)> Services { get; set; } = new();
+    public decimal Due => Lines.Where(l => l.PaidAt == null).Sum(l => l.Amount);
 }

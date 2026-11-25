@@ -628,6 +628,10 @@ public class MemberController : AppController
                     Note = r.Note, Urgent = r.Urgent, Status = r.Status, Missed = r.Missed, CreatedAt = r.CreatedAt, DoneAt = r.DoneAt }).ToList();
             // Part 54: ทำความสะอาดระหว่างพัก + ป้ายห้ามรบกวน
             vm.DoNotDisturb = stay.DoNotDisturb;
+            // Part 60: สั่งบริการเสริมเพิ่มระหว่างพัก + ยอดที่ต้องชำระตอนเช็คเอาท์
+            vm.StayLines = await StayBill.LinesAsync(_db, stay.BookingId);
+            vm.StayServices = (await _db.ExtraServices.AsNoTracking().Where(s => s.IsActive != false).OrderBy(s => s.ServiceName)
+                .Select(s => new { s.ServiceId, s.ServiceName, s.Price }).ToListAsync()).Select(s => (s.ServiceId, s.ServiceName, s.Price)).ToList();
             vm.Cleanings = await _db.HousekeepingTasks.AsNoTracking().Where(t => t.BookingId == stay.BookingId && t.Kind == "REQUEST")
                 .OrderByDescending(t => t.TaskId).Take(10)
                 .Select(t => new ItemRequestRowViewModel { Id = t.TaskId, What = "ทำความสะอาดห้อง", RoomNo = t.Room.RoomNo, Note = t.PrefTime,
@@ -657,6 +661,29 @@ public class MemberController : AppController
         await _db.SaveChangesAsync();
         Flash($"ส่งคำขอ{RoomRequests.ItemName(item)}แล้ว พนักงานจะนำไปส่งที่ห้องโดยเร็ว");
         return Redirect("/Member#mb-req");
+    }
+
+    /// <summary>Part 60: สั่งบริการเสริมเพิ่มระหว่างพัก (ชำระที่เคาน์เตอร์ตอนเช็คเอาท์)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> OrderService(int bookingId, int roomId, int serviceId, int qty = 1, bool urgent = false)
+    {
+        var uid = CurrentUserId ?? 0;
+        if (!await _db.Bookings.AnyAsync(b => b.BookingId == bookingId && b.UserId == uid))
+        { Flash("ไม่พบการจองนี้", true); return Redirect("/Member#mb-svc"); }
+        var (ok, msg) = await StayBill.AddServiceAsync(_db, bookingId, roomId, serviceId, qty, urgent);
+        Flash(msg, !ok);
+        return Redirect("/Member#mb-svc");
+    }
+
+    /// <summary>Part 60: ยกเลิกบริการที่สั่งระหว่างพัก (ก่อนพนักงานรับงาน)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelService(int bsId)
+    {
+        var uid = CurrentUserId ?? 0;
+        var bid = await _db.BookingServices.Where(s => s.BsId == bsId && s.Booking.UserId == uid).Select(s => (int?)s.BookingId).FirstOrDefaultAsync();
+        var ok = bid != null && await StayBill.CancelServiceAsync(_db, bsId, bid.Value);
+        Flash(ok ? "ยกเลิกรายการแล้ว" : "ยกเลิกไม่ได้ (พนักงานกำลังนำส่งแล้ว)", !ok);
+        return Redirect("/Member#mb-svc");
     }
 
     /// <summary>Part 54: ขอทำความสะอาดห้องระหว่างพัก (เลือกช่วงเวลาที่สะดวก) → เข้าคิวแม่บ้าน · ห้องละ 1 งานค้าง</summary>

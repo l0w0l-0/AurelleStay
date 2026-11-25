@@ -695,6 +695,13 @@ public static class DbSetup
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง item_requests");
         }
 
+        // Part 60: บิลระหว่างพัก — บริการที่สั่งเพิ่มระหว่างพัก + ค่ากิจกรรม ชำระที่เคาน์เตอร์ตอนเช็คเอาท์
+        foreach (var (table, column, ddl) in StayBill.Columns.Where(c => !have.Contains($"{c.Table}.{c.Column}")))
+        {
+            await db.Database.ExecuteSqlRawAsync($"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}");
+            log.LogWarning("อัปเกรดฐานข้อมูล: เพิ่มคอลัมน์ {Table}.{Column}", table, column);
+        }
+
         if (!have.Contains("audit_logs.audit_id"))
         {
             await db.Database.ExecuteSqlRawAsync(AuditTrail.CreateTableSql);
@@ -875,7 +882,7 @@ public static class AuditTrail
         ["AdminPromotions.Delete"] = ("ลบโปรโมชั่น", "โปรโมชั่น"), ["AdminPromotions.SendCode"] = ("ส่งรหัสโปรโมชั่นให้ลูกค้า", "โปรโมชั่น"),
         ["FrontDesk.MarkNoShow"] = ("บันทึกไม่มาเข้าพัก", "การจอง"), ["FrontDesk.UndoNoShow"] = ("ยกเลิกสถานะไม่มาเข้าพัก", "การจอง"),
         ["FrontDesk.CheckOut"] = ("เช็คเอาท์", "การจอง"), ["FrontDesk.SendDelivery"] = ("ส่งงานให้ฝ่ายส่งของ", "การจอง"),
-        ["FrontDesk.SetRoomStatus"] = ("เปลี่ยนสถานะห้อง", "ห้อง"), ["FrontDesk.SendCleaning"] = ("ส่งงานทำความสะอาด", "ห้อง"), ["FrontDesk.SendItem"] = ("ส่งของไปห้องผู้เข้าพัก", "ห้อง"),
+        ["FrontDesk.SetRoomStatus"] = ("เปลี่ยนสถานะห้อง", "ห้อง"), ["FrontDesk.SendCleaning"] = ("ส่งงานทำความสะอาด", "ห้อง"), ["FrontDesk.SendItem"] = ("ส่งของไปห้องผู้เข้าพัก", "ห้อง"), ["FrontDesk.Settle"] = ("รับชำระค่าใช้จ่ายระหว่างพัก", "การจอง"), ["FrontDesk.AddService"] = ("สั่งบริการเสริมให้ผู้เข้าพัก", "การจอง"), ["FrontDesk.CancelService"] = ("ยกเลิกบริการที่สั่งระหว่างพัก", "การจอง"), ["Member.OrderService"] = ("สั่งบริการเสริมระหว่างพัก", "การจอง"), ["Member.CancelService"] = ("ยกเลิกบริการที่สั่งระหว่างพัก", "การจอง"),
         ["Delivery.Take"] = ("รับงานส่งของ", "งาน"), ["Delivery.Finish"] = ("ส่งของสำเร็จ", "งาน"),
         ["Housekeeping.Take"] = ("รับงานทำความสะอาด", "งาน"), ["Housekeeping.Finish"] = ("ทำความสะอาดเสร็จ", "งาน"),
         ["AdminBookings.Cancel"] = ("ผู้จัดการยกเลิกการจอง", "การจอง"),

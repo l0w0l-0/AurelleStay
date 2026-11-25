@@ -392,3 +392,25 @@
             }).catch(function () { f.submit(); });
     });
 })();
+
+/* ---- แถบแจ้งเตือนในหน้าสมาชิก: กด × เพื่อปิด (จำไว้จนปิดเบราว์เซอร์ · แถบใหม่/สถานะใหม่จะแสดงอีกครั้ง) ---- */
+(function () {
+    'use strict';
+    function store() { try { return window.sessionStorage; } catch (e) { return null; } }
+    function hide(key) { var s = store(); if (!s) return; try { s.setItem('as-alert:' + key, '1'); } catch (e) { } }
+    function hidden(key) { var s = store(); try { return !!(s && s.getItem('as-alert:' + key)); } catch (e) { return false; } }
+    function init() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-alert-key]'), function (el) {
+            if (hidden(el.getAttribute('data-alert-key'))) el.remove();
+        });
+    }
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-dismiss-alert]');
+        if (!b) return;
+        var box = b.closest('[data-alert-key]');
+        if (!box) return;
+        hide(box.getAttribute('data-alert-key'));
+        box.remove();
+    });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();

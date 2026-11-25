@@ -1,0 +1,91 @@
+@model pameka_7033_l005.ViewModels.StayBillViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = $"บิลระหว่างพัก #{Model.BookingId}";
+    Layout = "_Adminlayout";
+    var inStay = Model.Status == "CHECKED_IN";
+}
+
+<div class="dashboard">
+    <h1>บิลระหว่างพัก · การจอง #@Model.BookingId</h1>
+    <partial name="_Flash" />
+    <p>@Model.Customer · @Model.Phone · ห้อง @string.Join(", ", Model.Rooms.Select(r => r.RoomNo)) · @Model.CheckIn.ToString("dd/MM/yy") – @Model.CheckOut.ToString("dd/MM/yy")
+        <span class="cx-badge cx-badge--@Model.Status">@ThaiLabels.BookingStatus(Model.Status)</span></p>
+    <p class="text-muted">ค่าห้องและบริการที่จองล่วงหน้าชำระแล้วตอนจอง บิลนี้คือค่าบริการที่สั่งเพิ่มระหว่างพักและค่ากิจกรรม ของใช้ที่ขอเพิ่ม (ผ้าเช็ดตัว น้ำดื่ม ฯลฯ) ไม่มีค่าใช้จ่าย</p>
+
+    <div class="staff-card">
+        <div class="staff-table-wrap">
+            <table class="table table-bordered staff-table">
+                <thead><tr><th>รายการ</th><th>ห้อง / วันที่</th><th class="text-end">จำนวน</th><th class="text-end">ยอด (บาท)</th><th>สถานะ</th><th></th></tr></thead>
+                <tbody>
+                @if (!Model.Lines.Any())
+                {
+                    <tr><td colspan="6" class="text-muted">ยังไม่มีค่าใช้จ่ายระหว่างพัก</td></tr>
+                }
+                @foreach (var l in Model.Lines)
+                {
+                    <tr>
+                        <td>@(l.Kind == "A" ? "กิจกรรม: " : "บริการ: ")@l.Title</td>
+                        <td>@(l.RoomNo != null ? "ห้อง " + l.RoomNo : l.Date?.ToString("dd/MM/yy"))</td>
+                        <td class="text-end">@l.Qty@(l.Kind == "A" ? " คน" : "")</td>
+                        <td class="text-end">@l.Amount.ToString("N2")</td>
+                        <td>@if (l.PaidAt is { } pa) { <span class="cx-badge cx-badge--PAID">ชำระแล้ว · @StayBill.MethodName(l.Method) @pa.ToString("dd/MM HH:mm")</span> } else { <span class="cx-badge cx-badge--PENDING">รอชำระ</span> }</td>
+                        <td>
+                            @if (l.CanCancel && inStay)
+                            {
+                                <form asp-action="CancelService" method="post" class="staff-inline" data-msg="ยกเลิก @l.Title ?" onsubmit="return confirm(this.dataset.msg);">
+                                    <input type="hidden" name="id" value="@Model.BookingId" /><input type="hidden" name="bsId" value="@l.Id" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ยกเลิก</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+                <tfoot><tr><th colspan="3" class="text-end">ค้างชำระ</th><th class="text-end">@Model.Due.ToString("N2")</th><th colspan="2"></th></tr></tfoot>
+            </table>
+        </div>
+
+        @if (inStay && Model.Due > 0)
+        {
+            <form asp-action="Settle" method="post" class="row g-2 align-items-end mt-2" data-msg="รับชำระ @Model.Due.ToString("N2") บาท ?" onsubmit="return confirm(this.dataset.msg);">
+                <input type="hidden" name="id" value="@Model.BookingId" />
+                <div class="col-md-4"><label class="form-label">วิธีชำระ</label>
+                    <select name="method" class="form-select" required>
+                        @foreach (var (code, name) in StayBill.Methods) { <option value="@code">@name</option> }
+                    </select></div>
+                <div class="col-md-4"><button type="submit" class="cx-btn">รับชำระ @Model.Due.ToString("N2") บาท</button></div>
+            </form>
+        }
+        else if (inStay)
+        {
+            <form asp-action="CheckOut" method="post" class="mt-2" data-msg="เช็คเอาท์การจอง #@Model.BookingId ?" onsubmit="return confirm(this.dataset.msg);">
+                <input type="hidden" name="id" value="@Model.BookingId" />
+                <button type="submit" class="cx-btn">ไม่มียอดค้าง · เช็คเอาท์</button>
+            </form>
+        }
+    </div>
+
+    @if (inStay && Model.Services.Any())
+    {
+        <div class="staff-card">
+            <h2 class="h5">สั่งบริการเสริมให้ผู้เข้าพัก (คิดเงินในบิลนี้)</h2>
+            <form asp-action="AddService" method="post" class="row g-2 align-items-end">
+                <input type="hidden" name="id" value="@Model.BookingId" />
+                <div class="col-md-4"><label class="form-label">บริการ</label>
+                    <select name="serviceId" class="form-select" required>
+                        @foreach (var s in Model.Services) { <option value="@s.Id">@s.Name · @s.Price.ToString("N0") บาท</option> }
+                    </select></div>
+                <div class="col-md-2"><label class="form-label">ห้อง</label>
+                    <select name="roomId" class="form-select" required>
+                        @foreach (var r in Model.Rooms) { <option value="@r.RoomId">@r.RoomNo</option> }
+                    </select></div>
+                <div class="col-md-2"><label class="form-label">จำนวน</label>
+                    <input type="number" name="qty" value="1" min="1" max="@StayBill.MaxQty" class="form-control" required /></div>
+                <div class="col-md-2"><label class="form-check"><input type="checkbox" name="urgent" value="true" class="form-check-input" /> ด่วน</label></div>
+                <div class="col-md-2"><button type="submit" class="cx-btn cx-btn--small">สั่ง</button></div>
+            </form>
+        </div>
+    }
+    <a asp-action="Index" class="cx-btn cx-btn--ghost cx-btn--small">← เช็คอิน / เช็คเอาท์</a>
+</div>

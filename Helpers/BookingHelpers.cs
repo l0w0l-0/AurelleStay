@@ -311,7 +311,7 @@ public static class BookingQueries
             Promo = x.Promo != null ? x.Promo.PromoName : null,
             Confirmed = x.ConfirmedByNavigation != null ? x.ConfirmedByNavigation.FirstName + " " + x.ConfirmedByNavigation.LastName : null,
             Rooms = x.BookingRooms.Select(r => new { r.RoomId, r.Room.RoomNo, Type = r.Room.Type.TypeName, r.PricePerNight, r.Nights }).ToList(),
-            Services = x.BookingServices.Select(s => new { s.Room.RoomNo, Name = s.Service.ServiceName, s.Quantity, s.UnitPrice }).ToList(),
+            Services = x.BookingServices.Where(s => !s.InStay).Select(s => new { s.Room.RoomNo, Name = s.Service.ServiceName, s.Quantity, s.UnitPrice }).ToList(),
             Pays = x.Payments.OrderBy(p => p.PaymentId).Select(p => new { p.PaymentId, p.PaymentType, p.Method, p.Status, p.Amount, p.PaidAt, By = p.HandledByNavigation != null ? p.HandledByNavigation.FirstName : null, HasSlip = p.SlipPath != null, p.Reference }).ToList(),
             x.Guests,
             Cleaning = x.HousekeepingTasks.Select(t => new { t.Room.RoomNo, t.Status, Who = t.AssignedToNavigation != null ? t.AssignedToNavigation.FirstName : null, t.DoneAt }).ToList(),
@@ -339,6 +339,7 @@ public static class BookingQueries
             RoomIds = b.Rooms.Select(r => r.RoomId).ToList(),
             ArrivalTime = b.ArrivalTime, GuestRequest = b.GuestRequest
         };
+        vm.StayLines = await StayBill.LinesAsync(db, b.BookingId);
         return vm;
     }
 
@@ -1623,7 +1624,7 @@ public static class HotelActivities
         db.ActivityBookings.Add(ab);
         await db.SaveChangesAsync();
         Notify.Add(db, userId, $"จองกิจกรรมแล้ว: {a.Name}",
-            $"{d:dd/MM/yyyy} เวลา {time} น. · {people} คน" + (a.Price > 0 ? $" · ค่ากิจกรรม {ab.Total:N0} บาท (ชำระที่เคาน์เตอร์หรือรวมในบิลตอนเช็คเอาท์)" : " · ฟรีสำหรับผู้เข้าพัก")
+            $"{d:dd/MM/yyyy} เวลา {time} น. · {people} คน" + (a.Price > 0 ? $" · ค่ากิจกรรม {ab.Total:N0} บาท (รวมในบิลระหว่างพัก ชำระที่เคาน์เตอร์ก่อนเช็คเอาท์)" : " · ฟรีสำหรับผู้เข้าพัก")
             + (a.Location is { Length: > 0 } loc ? $" · จุดนัดพบ {loc}" : ""), "/Activities");
         await db.SaveChangesAsync();
         await tx.CommitAsync();
@@ -1631,7 +1632,7 @@ public static class HotelActivities
     }
 
     public static bool CanCancel(ActivityBooking b, DateTime now) =>
-        b.Status == "CONFIRMED" && b.ActDate.ToDateTime(TimeOnly.ParseExact(b.StartTime, "HH:mm")) > now.AddHours(CancelBeforeHours);
+        b.Status == "CONFIRMED" && b.PaidAt == null && b.ActDate.ToDateTime(TimeOnly.ParseExact(b.StartTime, "HH:mm")) > now.AddHours(CancelBeforeHours);
 
     public static string StatusLabel(string? s) => s switch
     {
@@ -1764,4 +1765,117 @@ public static class HousekeepingOps
         "DONE" => "เสร็จแล้ว",
         _ => s
     };
+}
+
+// ======================================================================
+// Part 60: บิลระหว่างพัก — ค่ากิจกรรม + บริการเสริมที่สั่งเพิ่มระหว่างพัก ชำระที่เคาน์เตอร์ก่อนเช็คเอาท์
+// (ยอดจองห้อง + บริการที่จองไว้ล่วงหน้าชำระไปแล้วตอนจอง จึงไม่อยู่ในบิลนี้ · ของใช้ที่ขอเพิ่มฟรี)
+// ======================================================================
+public static class StayBill
+{
+    public static readonly (string Table, string Column, string Ddl)[] Columns =
+    {
+        ("booking_services", "in_stay", "tinyint(1) NOT NULL DEFAULT 0"),
+        ("booking_services", "paid_at", "datetime NULL"),
+        ("booking_services", "pay_method", "varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        ("booking_services", "paid_by", "int NULL"),
+        ("activity_bookings", "paid_at", "datetime NULL"),
+        ("activity_bookings", "pay_method", "varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
+        ("activity_bookings", "paid_by", "int NULL"),
+    };
+
+    /// <summary>วิธีรับชำระที่เคาน์เตอร์</summary>
+    public static readonly (string Code, string Name)[] Methods = { ("CASH", "เงินสด"), ("QR", "โอน / สแกน QR"), ("CARD", "บัตรเครดิต/เดบิต") };
+    public static bool IsMethod(string? m) => Methods.Any(x => x.Code == m);
+    public static string MethodName(string? m) => Methods.FirstOrDefault(x => x.Code == m).Name ?? m ?? "";
+    /// <summary>สั่งบริการเพิ่มระหว่างพักได้ครั้งละไม่เกิน / ค้างชำระได้ไม่เกิน (กันกดซ้ำ/ยอดบานปลาย)</summary>
+    public const int MaxQty = 5;
+    public const int MaxUnpaidLines = 15;
+
+    public record Line(string Kind, int Id, string Title, string? RoomNo, DateOnly? Date, int Qty, decimal Amount, DateTime At, DateTime? PaidAt, string? Method, bool CanCancel);
+
+    /// <summary>ค่ากิจกรรมที่ถูกนับ: ยืนยันแล้ว / เข้าร่วมแล้ว (ยกเลิก = ไม่คิด, ไม่มาตามนัด = ไม่คิด)</summary>
+    public static async Task<List<Line>> LinesAsync(Csi402dbContext db, int bookingId)
+    {
+        var svc = await db.BookingServices.AsNoTracking().Where(s => s.BookingId == bookingId && s.InStay)
+            .Select(s => new { s.BsId, s.Service.ServiceName, s.Room.RoomNo, s.Quantity, s.UnitPrice, s.PaidAt, s.PayMethod,
+                Sent = s.DeliveryTasks.Any(t => t.Status != "PENDING" || t.AssignedTo != null),
+                At = s.DeliveryTasks.Select(t => t.CreatedAt).FirstOrDefault() }).ToListAsync();
+        var act = await db.ActivityBookings.AsNoTracking()
+            .Where(a => a.BookingId == bookingId && (a.Status == "CONFIRMED" || a.Status == "ATTENDED") && a.Total > 0)
+            .Select(a => new { a.AbId, a.Activity.Name, a.ActDate, a.StartTime, a.People, a.Total, a.CreatedAt, a.PaidAt, a.PayMethod }).ToListAsync();
+        return svc.Select(s => new Line("S", s.BsId, s.ServiceName, s.RoomNo, null, s.Quantity, s.UnitPrice * s.Quantity, s.At ?? DateTime.MinValue,
+                    s.PaidAt, s.PayMethod, s.PaidAt == null && !s.Sent))
+            .Concat(act.Select(a => new Line("A", a.AbId, $"{a.Name} ({a.StartTime} น.)", null, a.ActDate, a.People, a.Total, a.CreatedAt, a.PaidAt, a.PayMethod, false)))
+            .OrderBy(l => l.PaidAt != null).ThenBy(l => l.At).ToList();
+    }
+
+    public static async Task<decimal> UnpaidAsync(Csi402dbContext db, int bookingId) =>
+        (await LinesAsync(db, bookingId)).Where(l => l.PaidAt == null).Sum(l => l.Amount);
+
+    /// <summary>ยอดค้างของหลายการจอง (หน้าเช็คอิน/เช็คเอาท์)</summary>
+    public static async Task<Dictionary<int, decimal>> UnpaidByBookingAsync(Csi402dbContext db, List<int> ids)
+    {
+        var s = await db.BookingServices.AsNoTracking().Where(x => ids.Contains(x.BookingId) && x.InStay && x.PaidAt == null)
+            .Select(x => new { x.BookingId, Amt = x.UnitPrice * x.Quantity }).ToListAsync();
+        var a = await db.ActivityBookings.AsNoTracking().Where(x => x.BookingId != null && ids.Contains(x.BookingId.Value)
+                && (x.Status == "CONFIRMED" || x.Status == "ATTENDED") && x.Total > 0 && x.PaidAt == null)
+            .Select(x => new { BookingId = x.BookingId!.Value, Amt = x.Total }).ToListAsync();
+        return s.Concat(a).GroupBy(x => x.BookingId).ToDictionary(g => g.Key, g => g.Sum(x => x.Amt));
+    }
+
+    /// <summary>สั่งบริการเสริมเพิ่มระหว่างพัก → บันทึกในบิล + ส่งงานให้ฝ่ายส่งของทันที</summary>
+    public static async Task<(bool Ok, string Msg)> AddServiceAsync(Csi402dbContext db, int bookingId, int roomId, int serviceId, int qty, bool urgent)
+    {
+        var b = await db.Bookings.AsNoTracking().Where(x => x.BookingId == bookingId && x.Status == "CHECKED_IN")
+            .Select(x => new { Rooms = x.BookingRooms.Select(r => r.RoomId).ToList() }).FirstOrDefaultAsync();
+        if (b == null) return (false, "สั่งบริการเพิ่มได้เฉพาะระหว่างเข้าพัก (หลังเช็คอิน)");
+        if (!b.Rooms.Contains(roomId)) return (false, "เลือกห้องของการจองนี้");
+        if (qty < 1 || qty > MaxQty) return (false, $"จำนวน 1–{MaxQty}");
+        var svc = await db.ExtraServices.AsNoTracking().FirstOrDefaultAsync(s => s.ServiceId == serviceId && s.IsActive != false);
+        if (svc == null) return (false, "ไม่พบบริการนี้ หรือปิดให้บริการแล้ว");
+        var open = await db.BookingServices.CountAsync(s => s.BookingId == bookingId && s.InStay && s.PaidAt == null);
+        if (open >= MaxUnpaidLines) return (false, $"มีรายการรอชำระ {open} รายการแล้ว กรุณาชำระที่เคาน์เตอร์ก่อนสั่งเพิ่ม");
+
+        var bs = new BookingService { BookingId = bookingId, RoomId = roomId, ServiceId = serviceId, Quantity = qty, UnitPrice = svc.Price, InStay = true };
+        db.BookingServices.Add(bs);
+        await db.SaveChangesAsync();
+        db.DeliveryTasks.Add(new DeliveryTask { BsId = bs.BsId, RoomId = roomId, Status = "PENDING", Urgent = urgent, CreatedAt = AppClock.Now });
+        await db.SaveChangesAsync();
+        return (true, $"สั่ง{svc.ServiceName} × {qty} แล้ว ({svc.Price * qty:N2} บาท ชำระที่เคาน์เตอร์ตอนเช็คเอาท์) พนักงานจะนำไปส่งที่ห้อง");
+    }
+
+    /// <summary>ยกเลิกบริการที่สั่งระหว่างพัก ได้เฉพาะที่ยังไม่มีพนักงานรับงานและยังไม่ชำระ</summary>
+    public static async Task<bool> CancelServiceAsync(Csi402dbContext db, int bsId, int bookingId)
+    {
+        var bs = await db.BookingServices.Include(s => s.DeliveryTasks)
+            .FirstOrDefaultAsync(s => s.BsId == bsId && s.BookingId == bookingId && s.InStay && s.PaidAt == null);
+        if (bs == null || bs.DeliveryTasks.Any(t => t.Status != "PENDING" || t.AssignedTo != null)) return false;
+        db.DeliveryTasks.RemoveRange(bs.DeliveryTasks);
+        db.BookingServices.Remove(bs);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    /// <summary>รับชำระทุกรายการที่ค้าง (ครั้งเดียว) → คืนยอดที่รับ</summary>
+    public static async Task<decimal> SettleAsync(Csi402dbContext db, int bookingId, string method, int staffId)
+    {
+        var now = AppClock.Now;
+        var svc = await db.BookingServices.Where(s => s.BookingId == bookingId && s.InStay && s.PaidAt == null).ToListAsync();
+        var act = await db.ActivityBookings.Where(a => a.BookingId == bookingId && (a.Status == "CONFIRMED" || a.Status == "ATTENDED") && a.Total > 0 && a.PaidAt == null).ToListAsync();
+        foreach (var s in svc) { s.PaidAt = now; s.PayMethod = method; s.PaidBy = staffId; }
+        foreach (var a in act) { a.PaidAt = now; a.PayMethod = method; a.PaidBy = staffId; }
+        await db.SaveChangesAsync();
+        return svc.Sum(s => s.UnitPrice * s.Quantity) + act.Sum(a => a.Total);
+    }
+
+    /// <summary>รายรับระหว่างพักที่รับชำระแล้วในช่วงเวลา (รวมในรายงานรายรับ)</summary>
+    public static async Task<List<(DateTime PaidAt, decimal Amount)>> PaidInRangeAsync(Csi402dbContext db, DateTime start, DateTime end)
+    {
+        var s = await db.BookingServices.AsNoTracking().Where(x => x.InStay && x.PaidAt >= start && x.PaidAt < end)
+            .Select(x => new { x.PaidAt, Amt = x.UnitPrice * x.Quantity }).ToListAsync();
+        var a = await db.ActivityBookings.AsNoTracking().Where(x => x.PaidAt >= start && x.PaidAt < end && x.Total > 0)
+            .Select(x => new { x.PaidAt, Amt = x.Total }).ToListAsync();
+        return s.Select(x => (x.PaidAt!.Value, x.Amt)).Concat(a.Select(x => (x.PaidAt!.Value, x.Amt))).ToList();
+    }
 }

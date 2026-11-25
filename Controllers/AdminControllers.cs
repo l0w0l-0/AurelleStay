@@ -90,6 +90,8 @@ public class AdminController : AdminAreaController
         var paidAll = await Db.Payments.AsNoTracking()
             .Where(p => p.PaymentType == BookingWorkflow.PaymentType && p.Status == "PAID")
             .Select(p => new { p.PaidAt, p.Amount }).ToListAsync();
+        // Part 60: รวมรายรับระหว่างพัก (บริการที่สั่งเพิ่ม + ค่ากิจกรรม) ที่รับชำระแล้ว
+        paidAll.AddRange((await StayBill.PaidInRangeAsync(Db, DateTime.MinValue, DateTime.MaxValue)).Select(x => new { PaidAt = (DateTime?)x.PaidAt, x.Amount }));
         vm.Revenue = paidAll.Sum(p => p.Amount);
         var paid60 = paidAll.Where(p => p.PaidAt >= start60).ToList();
         vm.Revenue30 = paid60.Where(p => p.PaidAt >= start30).Sum(p => p.Amount);
@@ -837,6 +839,7 @@ public class AdminReportsController : AdminAreaController
         var paid = await Db.Payments.AsNoTracking()
             .Where(p => p.PaymentType == BookingWorkflow.PaymentType && p.Status == "PAID" && p.PaidAt >= start && p.PaidAt < end)
             .Select(p => new { p.PaidAt, p.Amount }).ToListAsync();
+        paid.AddRange((await StayBill.PaidInRangeAsync(Db, start, end)).Select(x => new { PaidAt = (DateTime?)x.PaidAt, x.Amount }));
         var refunds = await Db.Payments.AsNoTracking()
             .Where(p => p.PaymentType == BookingWorkflow.RefundType && p.Status == "REFUNDED" && p.PaidAt >= start && p.PaidAt < end)
             .Select(p => p.Amount).ToListAsync();

@@ -97,6 +97,12 @@ public partial class BookingService
 
     public decimal UnitPrice { get; set; }
 
+    /// <summary>Part 60: สั่งเพิ่มระหว่างเข้าพัก (ไม่รวมในยอดจอง) → ชำระที่เคาน์เตอร์ตอนเช็คเอาท์</summary>
+    public bool InStay { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public string? PayMethod { get; set; }
+    public int? PaidBy { get; set; }
+
     public virtual Booking Booking { get; set; } = null!;
 
     public virtual ICollection<DeliveryTask> DeliveryTasks { get; set; } = new List<DeliveryTask>();
@@ -637,6 +643,10 @@ public class ActivityBooking
     public string Status { get; set; } = "CONFIRMED";   // CONFIRMED | CANCELLED | ATTENDED | NO_SHOW
     public DateTime CreatedAt { get; set; }
     public DateTime? CancelledAt { get; set; }
+    /// <summary>Part 60: รับชำระค่ากิจกรรมแล้ว (ที่เคาน์เตอร์ / ตอนเช็คเอาท์)</summary>
+    public DateTime? PaidAt { get; set; }
+    public string? PayMethod { get; set; }
+    public int? PaidBy { get; set; }
     public virtual Activity Activity { get; set; } = null!;
     public virtual User User { get; set; } = null!;
 }

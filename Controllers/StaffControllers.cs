@@ -368,6 +368,7 @@ public class FrontDeskController : AppController
                 b.ArrivalTime, b.GuestRequest
             }).ToListAsync();
 
+        var due = await StayBill.UnpaidByBookingAsync(_db, rows.Where(r => r.Status == "CHECKED_IN").Select(r => r.BookingId).ToList());
         var all = rows.Select(r =>
         {
             var flags = new PaymentFlags(false, false, r.PendingRefund, false);
@@ -376,7 +377,7 @@ public class FrontDeskController : AppController
                 BookingId = r.BookingId, Customer = r.Customer, Phone = r.Phone, Rooms = string.Join(", ", r.Rooms),
                 CheckIn = r.CheckIn, CheckOut = r.CheckOut, Status = r.Status,
                 UnsentServices = r.Unsent, PendingRefund = r.PendingRefund, IdCheckPromo = r.IdCheck,
-                ArrivalTime = r.ArrivalTime, GuestRequest = r.GuestRequest,
+                ArrivalTime = r.ArrivalTime, GuestRequest = r.GuestRequest, ExtraDue = due.GetValueOrDefault(r.BookingId),
                 CanCheckIn = BookingWorkflow.CanCheckIn(r.Status, r.CheckIn, r.CheckOut, today, flags),
                 CanCheckOut = BookingWorkflow.CanCheckOut(r.Status),
                 CanSendDelivery = BookingWorkflow.CanSendDelivery(r.Status) && r.Unsent > 0,
@@ -486,6 +487,13 @@ public class FrontDeskController : AppController
     {
         var (b, rooms) = await LoadBookingWithRooms(id);
         if (b == null || !BookingWorkflow.CanCheckOut(b.Status)) return Stale();
+        // Part 60: ต้องรับชำระค่าใช้จ่ายระหว่างพัก (บริการที่สั่งเพิ่ม / ค่ากิจกรรม) ให้ครบก่อนเช็คเอาท์
+        var due = await StayBill.UnpaidAsync(_db, b.BookingId);
+        if (due > 0)
+        {
+            Flash($"การจอง #{b.BookingId} มีค่าใช้จ่ายระหว่างพักค้างชำระ {due:N2} บาท รับชำระก่อนเช็คเอาท์", true);
+            return RedirectToAction(nameof(Bill), new { id = b.BookingId });
+        }
 
         b.Status = "CHECKED_OUT"; b.DoNotDisturb = false;
         // คำขอทำความสะอาดระหว่างพักที่ยังค้าง → ปิด (ห้องจะถูกทำความสะอาดหลังเช็คเอาท์อยู่แล้ว)
@@ -620,6 +628,63 @@ public class FrontDeskController : AppController
         await _db.SaveChangesAsync();
         Flash($"ส่งคำขอ{RoomRequests.ItemName(item)} × {qty} ไปห้อง {stay.RoomNo} ให้ฝ่ายส่งของแล้ว");
         return Redirect(Url.Action(nameof(Rooms)) + "#fd-send");
+    }
+
+    // ---------------------------------------------------------------- Part 60: บิลระหว่างพัก
+    /// <summary>บิลระหว่างพักของการจอง: รายการบริการที่สั่งเพิ่ม + ค่ากิจกรรม · รับชำระ · สั่งบริการให้ลูกค้า</summary>
+    [HttpGet]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> Bill(int id)
+    {
+        var b = await _db.Bookings.AsNoTracking().Where(x => x.BookingId == id).Select(x => new
+        {
+            x.BookingId, x.Status, x.CheckIn, x.CheckOut, Customer = x.User.FirstName + " " + x.User.LastName, x.User.Phone,
+            Rooms = x.BookingRooms.Select(r => new { r.RoomId, r.Room.RoomNo }).ToList()
+        }).FirstOrDefaultAsync();
+        if (b == null) return NotFound();
+        var lines = await StayBill.LinesAsync(_db, id);
+        return View(new StayBillViewModel
+        {
+            BookingId = b.BookingId, Status = b.Status, CheckIn = b.CheckIn, CheckOut = b.CheckOut, Customer = b.Customer, Phone = b.Phone,
+            Rooms = b.Rooms.OrderBy(r => r.RoomNo).Select(r => (r.RoomId, r.RoomNo)).ToList(), Lines = lines,
+            Services = (await _db.ExtraServices.AsNoTracking().Where(s => s.IsActive != false).OrderBy(s => s.ServiceName)
+                .Select(s => new { s.ServiceId, s.ServiceName, s.Price }).ToListAsync()).Select(s => (s.ServiceId, s.ServiceName, s.Price)).ToList()
+        });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> Settle(int id, string? method)
+    {
+        var status = await _db.Bookings.Where(x => x.BookingId == id).Select(x => x.Status).FirstOrDefaultAsync();
+        if (status == null) return NotFound();
+        if (status != "CHECKED_IN") { Flash("รับชำระได้ระหว่างเข้าพัก (ก่อนเช็คเอาท์)", true); return RedirectToAction(nameof(Bill), new { id }); }
+        if (!StayBill.IsMethod(method)) { Flash("เลือกวิธีชำระ", true); return RedirectToAction(nameof(Bill), new { id }); }
+        var amount = await StayBill.SettleAsync(_db, id, method!, CurrentUserId ?? 0);
+        if (amount <= 0) { Flash("ไม่มียอดค้างชำระ", true); return RedirectToAction(nameof(Bill), new { id }); }
+        var uid = await _db.Bookings.Where(x => x.BookingId == id).Select(x => x.UserId).FirstAsync();
+        Notify.Add(_db, uid, $"รับชำระค่าใช้จ่ายระหว่างพักแล้ว · การจอง #{id}", $"ยอด {amount:N2} บาท ({StayBill.MethodName(method)})", Notify.BookingLink(id));
+        await _db.SaveChangesAsync();
+        Flash($"รับชำระ {amount:N2} บาท ({StayBill.MethodName(method)}) แล้ว เช็คเอาท์ได้");
+        return RedirectToAction(nameof(Bill), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> AddService(int id, int roomId, int serviceId, int qty = 1, bool urgent = false)
+    {
+        var (ok, msg) = await StayBill.AddServiceAsync(_db, id, roomId, serviceId, qty, urgent);
+        Flash(msg, !ok);
+        return RedirectToAction(nameof(Bill), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> CancelService(int id, int bsId)
+    {
+        var ok = await StayBill.CancelServiceAsync(_db, bsId, id);
+        Flash(ok ? "ยกเลิกรายการแล้ว" : "ยกเลิกไม่ได้ (พนักงานรับงานไปแล้ว หรือชำระแล้ว)", !ok);
+        return RedirectToAction(nameof(Bill), new { id });
     }
 
     // ---------------------------------------------------------------- ตัวช่วย
