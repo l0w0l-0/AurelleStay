@@ -1934,3 +1934,41 @@ html, * { scrollbar-width: none; -ms-overflow-style: none; }
 .ac-card.has-media { padding-top: 0; overflow: hidden; }
 .ac-media { margin: 0 -22px 4px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #efe8f6, #f7f0de); }
 .ac-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Member page layout (Part 63): คอลัมน์ซ้าย = การเข้าพัก + การจอง/รีวิว · ขวา = สิทธิ์ + แจ้งเตือน */
+.mb-main { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.mb-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.mb-pair > .mb-card { margin: 0; display: flex; flex-direction: column; }
+.mb-pair > .mb-card .mb-link { margin-top: auto; padding-top: 8px; }
+.mb-perks small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.45; }
+.mb-perks li { padding: 9px 12px; }
+.mb-perks b { font-size: 1.4rem; }
+.mb-more { margin-top: 10px; }
+.mb-more > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; font-size: .86rem; font-weight: 600;
+    color: var(--pine); padding: 6px 12px; border-radius: 999px; border: 1px solid #e6dcc6; background: #fffdf8; }
+.mb-more > summary::-webkit-details-marker { display: none; }
+.mb-more > summary::after { content: "▾"; font-size: .8em; transition: transform .2s; }
+.mb-more[open] > summary::after { transform: rotate(180deg); }
+.mb-more > .mb-perks { margin-top: 10px; }
+.mb-hint { display: flex; gap: 14px; align-items: flex-start; padding: 16px 20px; border-radius: 18px;
+    border: 1px dashed #d9c9a3; background: linear-gradient(135deg, #fffaf0, #f8f3fb); }
+.mb-hint__ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: #fff; border: 1px solid #eee4cf; font-size: 1.2rem; }
+.mb-hint h2 { margin: 0 0 4px; font-size: 1rem; color: var(--pine); }
+.mb-hint p { margin: 0; font-size: .84rem; color: var(--ink-2); line-height: 1.6; }
+@media (max-width: 640px) { .mb-pair { grid-template-columns: 1fr; } }
+.mb-notes li { padding: 8px 0; }
+.mb-notes b { line-height: 1.4; }
+.mb-notes span span { display: block; margin-top: 1px; line-height: 1.3; }
+#mb-clean .mb-req__form { grid-template-columns: 1fr .8fr 1.8fr auto; }
+#mb-svc .mb-req__form { grid-template-columns: 1.6fr .8fr .5fr auto auto; }
+.mb-req__form > .cx-btn { justify-self: start; white-space: nowrap; padding-inline: 22px; }
+.mb-count b:not(:only-child) { word-break: keep-all; }
+.mb-count--text b { font-family: var(--f-head, inherit); font-size: 2.4rem; line-height: 1.1; }
+@media (max-width: 860px) { #mb-clean .mb-req__form, #mb-svc .mb-req__form { grid-template-columns: 1fr 1fr; } #mb-clean .mb-req__form > .cx-btn, #mb-svc .mb-req__form > .cx-btn { grid-column: 1 / -1; justify-self: stretch; } }
+@media (max-width: 640px) {
+    .mb-alert { position: relative; padding-right: 46px; }
+    .mb-alert__x { position: absolute; top: 8px; right: 8px; }
+    .mb-count--text { flex-wrap: wrap; gap: 4px 12px; }
+    .mb-count--text b { font-size: 2rem; white-space: nowrap; }
+}
+@media (max-width: 640px) { .mb-alert p { flex: 1 1 calc(100% - 40px); } .mb-alert .cx-btn { flex: 1 1 auto; text-align: center; } }
