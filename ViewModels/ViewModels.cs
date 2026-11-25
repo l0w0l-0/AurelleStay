@@ -1163,6 +1163,8 @@ public class ActivityCardViewModel
     public List<(DateOnly Date, string Time, int Left)> Sessions { get; set; } = new();
     /// <summary>วันที่ลูกค้าจองได้ (อยู่ในช่วงเข้าพัก + เปิดวันนั้น)</summary>
     public List<DateOnly> BookableDates { get; set; } = new();
+    /// <summary>รอบที่จองได้ในช่วงเข้าพักของลูกค้า (วัน, เวลา, ที่เหลือ)</summary>
+    public List<(DateOnly Date, string Time, int Left)> StaySessions { get; set; } = new();
 }
 
 public class ActivityBookingRowViewModel
@@ -1234,5 +1236,8 @@ public class StayBillViewModel
     public List<(int RoomId, string RoomNo)> Rooms { get; set; } = new();
     public List<pameka_7033_l005.Helpers.StayBill.Line> Lines { get; set; } = new();
     public List<(int Id, string Name, decimal Price)> Services { get; set; } = new();
+    /// <summary>กิจกรรมที่จองให้ผู้เข้าพักได้ (ชื่อ ราคา/คน รอบเวลา วันที่เปิด)</summary>
+    public List<(int Id, string Name, decimal Price, List<string> Times, string Days)> Activities { get; set; } = new();
+    public bool HasPaid => Lines.Any(l => l.PaidAt != null);
     public decimal Due => Lines.Where(l => l.PaidAt == null).Sum(l => l.Amount);
 }

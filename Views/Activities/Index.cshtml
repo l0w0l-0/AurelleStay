@@ -17,7 +17,7 @@
         <div class="sv-hero__copy">
             <p class="cx-eyebrow">Experiences</p>
             <h1>กิจกรรม<br /><em>ระหว่างเข้าพัก</em></h1>
-            <p class="sv-hero__lead">เรียนทำอาหารไทย โยคะยามเช้า ทัวร์ตลาดน้ำ และกิจกรรมครอบครัว จองรอบเวลาได้ทันทีสำหรับผู้เข้าพัก ชำระค่ากิจกรรมที่เคาน์เตอร์</p>
+            <p class="sv-hero__lead">เรียนทำอาหารไทย โยคะยามเช้า ทัวร์ตลาดน้ำ และกิจกรรมครอบครัว จองรอบเวลาได้ทันทีสำหรับผู้เข้าพัก ค่ากิจกรรมรวมในบิลห้องพัก ชำระที่เคาน์เตอร์ก่อนเช็คเอาท์</p>
             <dl class="sv-stats">
                 <div><dt>กิจกรรม</dt><dd>@Model.Cards.Count.ToString("00")</dd></div>
                 <div><dt>ฟรี</dt><dd>@Model.Cards.Count(c => c.Price == 0).ToString("00")</dd></div>
@@ -106,12 +106,14 @@
                         <li><span>รับ</span>@a.Capacity ที่ / รอบ</li>
                         @if (a.Location != null) { <li><span>จุดนัดพบ</span>@a.Location</li> }
                     </ul>
-                    @if (a.Sessions.Any())
+                    @{ var stayMode = Model.IsCustomer && a.StaySessions.Any(); var chips = stayMode ? a.StaySessions : a.Sessions; }
+                    @if (chips.Any())
                     {
-                        <div class="ac-slots" aria-label="ที่นั่งคงเหลือ 7 วันข้างหน้า">
-                            @foreach (var s in a.Sessions.Take(8))
+                        <p class="ac-muted mb-1">@(stayMode ? "รอบในช่วงเข้าพักของคุณ" : "ที่นั่งคงเหลือ 7 วันข้างหน้า")</p>
+                        <div class="ac-slots" aria-label="@(stayMode ? "รอบในช่วงเข้าพักของคุณ" : "ที่นั่งคงเหลือ 7 วันข้างหน้า")">
+                            @foreach (var s in chips.Take(8))
                             {
-                                <span class="ac-slot @(s.Left == 0 ? "is-full" : s.Left <= 3 ? "is-low" : "")" title="@DShort(s.Date) @s.Time น.">@DShort(s.Date) @s.Time<b>@(s.Left == 0 ? "เต็ม" : $"เหลือ {s.Left}")</b></span>
+                                <span class="ac-slot @(s.Left == 0 ? "is-full" : s.Left <= 3 ? "is-low" : "")" title="@DShort(s.Date) @s.Time น." data-slot="@(stayMode && s.Left > 0 ? s.Date.ToString("yyyy-MM-dd") + "|" + s.Time : null)">@DShort(s.Date) @s.Time<b>@(s.Left == 0 ? "เต็ม" : $"เหลือ {s.Left}")</b></span>
                             }
                         </div>
                     }
@@ -124,21 +126,18 @@
                         {
                             <span class="ac-muted">การจองกิจกรรมสำหรับลูกค้าที่เข้าพัก</span>
                         }
-                        else if (!a.BookableDates.Any())
+                        else if (!a.StaySessions.Any(x => x.Left > 0))
                         {
-                            <span class="ac-muted">@(Model.HasStay ? "ไม่มีรอบที่ตรงกับช่วงเข้าพักของคุณ" : "จองห้องพักก่อน แล้วจึงจองกิจกรรมได้")</span>
+                            <span class="ac-muted">@(!Model.HasStay ? "จองห้องพักก่อน แล้วจึงจองกิจกรรมได้" : a.StaySessions.Any() ? "รอบในช่วงเข้าพักของคุณเต็มแล้ว" : "ไม่มีรอบที่ตรงกับช่วงเข้าพักของคุณ")</span>
                         }
                         else
                         {
                             <form asp-action="Book" method="post" class="ac-form">
                                 <input type="hidden" name="activityId" value="@a.Id" />
-                                <label>วันที่
-                                    <select name="date" required>
-                                        @foreach (var d in a.BookableDates) { <option value="@d.ToString("yyyy-MM-dd")">@DShort(d)</option> }
-                                    </select>
-                                </label>
                                 <label>รอบ
-                                    <select name="time" required>@foreach (var t in a.Times) { <option value="@t">@t น.</option> }</select>
+                                    <select name="slot" required>
+                                        @foreach (var x in a.StaySessions.Where(x => x.Left > 0)) { <option value="@x.Date.ToString("yyyy-MM-dd")|@x.Time">@DShort(x.Date) @x.Time น. · เหลือ @x.Left</option> }
+                                    </select>
                                 </label>
                                 <label>จำนวนคน <input type="number" name="people" min="1" max="@Math.Min(HotelActivities.MaxPeople, a.Capacity)" value="1" required /></label>
                                 <button type="submit" class="cx-btn cx-btn--small">จองกิจกรรม</button>

@@ -17,7 +17,7 @@
         <fieldset class="sva-f sva-f--wide aca-days"><legend>วันที่เปิด</legend>
             @for (var d = 0; d < 7; d++) { <label><input type="checkbox" name="Days" value="@d" checked="@(a.Days.Contains(d))" /> @HotelActivities.DayNames[d]</label> }
         </fieldset>
-        <label class="sva-f sva-f--wide">คำอธิบาย (ไม่เกิน 500 ตัวอักษร)<textarea name="Description" maxlength="500" rows="2">@a.Description</textarea></label>
+        <label class="sva-f sva-f--wide">คำอธิบาย (ไม่เกิน 500 ตัวอักษร)<textarea name="Description" maxlength="500" rows="3">@a.Description</textarea></label>
         <label class="sva-check"><input type="checkbox" name="IsActive" value="true" checked="@a.IsActive" /> เปิดรับจอง</label>
         <input type="hidden" name="IsActive" value="false" />
         await Task.CompletedTask;
@@ -27,7 +27,7 @@
 <div class="dashboard">
     <h1>กิจกรรมของโรงแรม</h1>
     <partial name="_Flash" />
-    <p>กิจกรรมที่ "เปิดรับจอง" แสดงในหน้ากิจกรรม ผู้เข้าพักที่มีการจองห้องยืนยันแล้วจองรอบเวลาได้ (ค่ากิจกรรมชำระที่เคาน์เตอร์) · รายชื่อผู้ร่วมแต่ละรอบดูได้ที่ <a asp-controller="FrontDesk" asp-action="Activities">กิจกรรมวันนี้</a>
+    <p>กิจกรรมที่ "เปิดรับจอง" แสดงในหน้ากิจกรรม ผู้เข้าพักที่มีการจองห้องยืนยันแล้วจองรอบเวลาได้ (ค่ากิจกรรมรวมในบิลระหว่างพัก ชำระที่เคาน์เตอร์ก่อนเช็คเอาท์) · รายชื่อผู้ร่วมแต่ละรอบดูได้ที่ <a asp-controller="FrontDesk" asp-action="Activities">กิจกรรมวันนี้</a>
         · <a asp-controller="Activities" asp-action="Index" target="_blank" rel="noopener">ดูหน้าที่ลูกค้าเห็น</a></p>
 
     <details class="staff-card sva-new" @(Model.Count == 0 ? "open" : null)>

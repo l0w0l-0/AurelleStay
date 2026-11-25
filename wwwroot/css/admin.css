@@ -779,3 +779,23 @@ tr.dv-late > td { background: #fdf1f1; }
 
 .hk-issue__desc { flex: 1 1 280px; }
 .hk-issue__chk { display: flex !important; align-items: center; gap: 6px; padding-bottom: 8px; }
+
+/* ---- หน้าจัดการกิจกรรม: หัวการ์ด + เลือกวันที่เปิดเป็นปุ่มเม็ดยา ---- */
+.aca-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px 0; min-height: 56px; }
+.aca-head svg { flex: none; width: 40px; height: 40px; padding: 9px; border-radius: 12px; background: linear-gradient(135deg, var(--pine), #4b2d72); fill: none; stroke: #f3e6c3; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.aca-head .sva-tag, .aca-head .sva-off { position: static; }
+.aca-head .sva-tag { background: #f3ecfa; }
+.aca-head .sva-off { margin-left: auto; }
+.sva-f.aca-days { border: 0; margin: 0; padding: 0; display: flex; flex-flow: row wrap; gap: 6px; }
+.aca-days legend { float: left; width: 100%; margin: 0 0 2px; padding: 0; font-size: .82rem; color: var(--ink-2); }
+.aca-days label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 99px; background: #fff; color: var(--ink-2); font-size: .88rem; cursor: pointer; user-select: none; }
+.aca-days label input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.aca-days label:has(input:checked) { background: var(--pine); border-color: var(--pine); color: #f3e6c3; font-weight: 600; }
+.aca-days label:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(95, 61, 142, .25); }
+.sva-check input { width: 18px; height: 18px; accent-color: var(--pine); }
+.sva-card .sva-actions { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.sva-card { position: relative; }
+.sva-card .sva-form { flex: 1; }
+@media (max-width: 480px) { .aca-days label { flex: 1 0 calc(25% - 6px); } }
+.sva-f input:not([type=file]):not([type=checkbox]), .sva-f select { height: 42px; }
+.sva-f textarea { min-height: 76px; }

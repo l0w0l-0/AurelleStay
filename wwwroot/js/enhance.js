@@ -414,3 +414,16 @@
     });
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
+
+/* ---- หน้ากิจกรรม: กดรอบ (ชิป) เพื่อเลือกรอบนั้นในฟอร์มจองของการ์ดเดียวกัน ---- */
+(function () {
+    'use strict';
+    document.addEventListener('click', function (e) {
+        var chip = e.target.closest && e.target.closest('.ac-slot[data-slot]');
+        if (!chip) return;
+        var card = chip.closest('article'); var sel = card && card.querySelector('select[name="slot"]');
+        if (!sel) return;
+        sel.value = chip.getAttribute('data-slot');
+        sel.focus();
+    });
+})();

@@ -272,6 +272,7 @@
                     }
                 </ul>
                 <p class="mb-muted"><b>ยอดที่ต้องชำระที่เคาน์เตอร์ตอนเช็คเอาท์: @Model.StayLines.Where(l => l.PaidAt == null).Sum(l => l.Amount).ToString("N2") บาท</b> (เงินสด / โอน / บัตร)</p>
+                @if (Model.StayLines.Any(l => l.PaidAt != null)) { <a href="/Booking/StayReceipt/@Model.StayBookingId" class="mb-link">ใบเสร็จรายการที่ชำระแล้ว →</a> }
             }
         </section>
 

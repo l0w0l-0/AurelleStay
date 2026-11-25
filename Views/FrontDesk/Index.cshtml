@@ -72,6 +72,10 @@
                                 {
                                     <a asp-action="Bill" asp-route-id="@r.BookingId" class="cx-btn cx-btn--small cx-btn--ghost">บิลระหว่างพัก@(r.ExtraDue > 0 ? $" · ค้าง {r.ExtraDue:N0} ฿" : "")</a>
                                 }
+                                else if (r.Status == "CONFIRMED")
+                                {
+                                    <a asp-action="Bill" asp-route-id="@r.BookingId" asp-fragment="fd-act" class="cx-btn cx-btn--small cx-btn--ghost">จองกิจกรรม</a>
+                                }
                                 @if (r.CanCheckOut)
                                 {
                                     <form asp-action="CheckOut" method="post" class="staff-inline" data-msg="เช็คเอาท์การจอง #@r.BookingId ?" onsubmit="return confirm(this.dataset.msg);">

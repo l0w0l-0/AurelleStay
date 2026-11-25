@@ -879,6 +879,23 @@ public class BookingDetailsController : AppController
         return View(vm);
     }
 
+    /// <summary>Part 60: ใบเสร็จค่าใช้จ่ายระหว่างพัก (บริการที่สั่งเพิ่ม + ค่ากิจกรรม) — เฉพาะรายการที่รับชำระแล้ว · สิทธิ์เหมือนหน้ารายละเอียด</summary>
+    [HttpGet("/Booking/StayReceipt/{id:int}")]
+    public async Task<IActionResult> StayReceipt(int id, [FromServices] IConfiguration cfg)
+    {
+        var isCustomer = User.IsInRole(RoleNames.Customer);
+        var vm = await BookingQueries.LoadDetailAsync(_db, id, isCustomer ? CurrentUserId ?? 0 : null);
+        if (vm == null) return await Index(id);
+        if (!vm.StayLines.Any(l => l.PaidAt != null))
+        {
+            Flash("ยังไม่มีค่าใช้จ่ายระหว่างพักที่รับชำระแล้ว", true);
+            return RedirectToAction(nameof(Index), new { id });
+        }
+        Response.Headers.CacheControl = "private, no-store";
+        ViewData["Hotel"] = HotelInfo.From(cfg);
+        return View(vm);
+    }
+
     /// <summary>เปิดสลิปการโอน: ลูกค้าเห็นเฉพาะของตัวเอง พนักงานบัญชี/ฝ่ายบริการ/ผู้จัดการเห็นทุกรายการ</summary>
     [HttpGet("/Booking/Slip/{paymentId:int}")]
     public async Task<IActionResult> Slip(int paymentId)
@@ -1050,6 +1067,7 @@ public class ActivitiesController : AppController
         foreach (var s in stays)
             for (var d = s.CheckIn < today ? today : s.CheckIn; d <= s.CheckOut && d <= today.AddDays(HotelActivities.BookAheadDays); d = d.AddDays(1)) stayDays.Add(d);
 
+        var stayTaken = stayDays.Count == 0 ? new() : await HotelActivities.TakenAsync(_db, stayDays.Min, stayDays.Max);
         foreach (var a in acts)
         {
             var card = new ActivityCardViewModel
@@ -1067,6 +1085,13 @@ public class ActivitiesController : AppController
                 }
             }
             card.BookableDates = stayDays.Where(d => HotelActivities.OpenOn(a, d)).ToList();
+            // รอบที่จองได้จริงในช่วงเข้าพัก (ยังไม่เริ่ม · มีที่ว่าง) — แสดงที่นั่งคงเหลือของช่วงเข้าพักแทน 7 วันข้างหน้า
+            foreach (var d in card.BookableDates)
+                foreach (var t in card.Times)
+                {
+                    if (d.ToDateTime(TimeOnly.ParseExact(t, "HH:mm")) <= now.AddMinutes(30)) continue;
+                    card.StaySessions.Add((d, t, Math.Max(0, a.Capacity - stayTaken.GetValueOrDefault((a.ActivityId, d, t)))));
+                }
             vm.Cards.Add(card);
         }
         if (uid != 0)
@@ -1083,8 +1108,10 @@ public class ActivitiesController : AppController
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Book(int activityId, DateOnly? date, string? time, int people = 1)
+    public async Task<IActionResult> Book(int activityId, DateOnly? date, string? time, int people = 1, string? slot = null)
     {
+        // slot = "yyyy-MM-dd|HH:mm" (เลือกจากรายการรอบที่จองได้จริง)
+        if (slot?.Split('|') is [var sd, var st] && DateOnly.TryParseExact(sd, "yyyy-MM-dd", out var pd)) { date = pd; time = st; }
         var uid = CurrentUserId ?? 0;
         var (ok, msg, id) = await HotelActivities.BookAsync(_db, uid, activityId, date, time, people, AppClock.Now);
         Flash(msg, !ok);

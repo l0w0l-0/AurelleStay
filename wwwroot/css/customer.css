@@ -1926,3 +1926,6 @@ html, * { scrollbar-width: none; -ms-overflow-style: none; }
 .mb-req__form label { display: grid; gap: 4px; font-size: .88rem; color: #5c5468; }
 .mb-req__urgent { display: flex !important; align-items: center; gap: 6px; padding-bottom: 8px; }
 @media (max-width: 860px) { .mb-req__form { grid-template-columns: 1fr 1fr; } .mb-req__note { grid-column: 1 / -1; } }
+
+.ac-slot[data-slot] { cursor: pointer; }
+.ac-slot[data-slot]:hover { outline: 2px solid rgba(201, 161, 74, .6); }

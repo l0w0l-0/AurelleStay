@@ -652,8 +652,30 @@ public class FrontDeskController : AppController
             BookingId = b.BookingId, Status = b.Status, CheckIn = b.CheckIn, CheckOut = b.CheckOut, Customer = b.Customer, Phone = b.Phone,
             Rooms = b.Rooms.OrderBy(r => r.RoomNo).Select(r => (r.RoomId, r.RoomNo)).ToList(), Lines = lines,
             Services = (await _db.ExtraServices.AsNoTracking().Where(s => s.IsActive != false).OrderBy(s => s.ServiceName)
-                .Select(s => new { s.ServiceId, s.ServiceName, s.Price }).ToListAsync()).Select(s => (s.ServiceId, s.ServiceName, s.Price)).ToList()
+                .Select(s => new { s.ServiceId, s.ServiceName, s.Price }).ToListAsync()).Select(s => (s.ServiceId, s.ServiceName, s.Price)).ToList(),
+            Activities = (await _db.Activities.AsNoTracking().Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync())
+                .Select(a => (a.ActivityId, a.Name, a.Price, HotelActivities.ParseTimes(a.Times), HotelActivities.DaysLabel(a.Days))).ToList()
         });
+    }
+
+    /// <summary>จองกิจกรรมให้ลูกค้าที่มาถามที่เคาน์เตอร์ (ใช้กติกาเดียวกับลูกค้าจองเอง · ค่ากิจกรรมเข้าบิลระหว่างพัก)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> BookActivity(int id, string? slot, DateOnly? date, int people = 1)
+    {
+        // slot = "กิจกรรม|รอบเวลา" (เลือกรอบได้เฉพาะของกิจกรรมนั้น)
+        var sp = (slot ?? "").Split('|');
+        int activityId = sp.Length == 2 && int.TryParse(sp[0], out var aid) ? aid : 0;
+        string? time = sp.Length == 2 ? sp[1] : null;
+        var b = await _db.Bookings.AsNoTracking().Where(x => x.BookingId == id).Select(x => new { x.UserId, x.Status, x.CheckIn, x.CheckOut }).FirstOrDefaultAsync();
+        if (b == null) return NotFound();
+        if (b.Status is not ("CONFIRMED" or "CHECKED_IN")) { Flash("จองกิจกรรมได้เฉพาะการจองที่ยืนยันแล้วหรือกำลังเข้าพัก", true); return RedirectToAction(nameof(Bill), new { id }); }
+        if (date is not { } d || d < b.CheckIn || d > b.CheckOut) { Flash($"เลือกวันที่ในช่วงเข้าพัก {b.CheckIn:dd/MM} – {b.CheckOut:dd/MM}", true); return RedirectToAction(nameof(Bill), new { id }); }
+        var (ok, msg, abId) = await HotelActivities.BookAsync(_db, b.UserId, activityId, date, time, people, AppClock.Now);
+        if (ok && abId is int ab)   // ผูกกับการจองนี้แน่นอน (กรณีลูกค้ามีหลายการจองซ้อนวัน)
+            await _db.ActivityBookings.Where(x => x.AbId == ab).ExecuteUpdateAsync(x => x.SetProperty(y => y.BookingId, id));
+        Flash(msg, !ok);
+        return RedirectToAction(nameof(Bill), new { id });
     }
 
     [HttpPost, ValidateAntiForgeryToken]

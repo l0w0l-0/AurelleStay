@@ -87,6 +87,7 @@
                 <tbody>@foreach (var l in Model.StayLines) { <tr><td>@(l.Kind == "A" ? "กิจกรรม: " : "บริการ: ")@l.Title@(l.RoomNo != null ? " · ห้อง " + l.RoomNo : "")</td><td class="text-end">@l.Qty</td><td class="text-end">@l.Amount.ToString("N2")</td><td>@(l.PaidAt != null ? $"ชำระแล้ว ({pameka_7033_l005.Helpers.StayBill.MethodName(l.Method)})" : "รอชำระ")</td></tr> }</tbody>
                 <tfoot><tr><th colspan="2" class="text-end">ค้างชำระ</th><th class="text-end">@Model.StayLines.Where(l => l.PaidAt == null).Sum(l => l.Amount).ToString("N2")</th><th></th></tr></tfoot>
             </table></div>
+            @if (Model.StayLines.Any(l => l.PaidAt != null)) { <a href="/Booking/StayReceipt/@Model.BookingId" class="cx-btn cx-btn--ghost cx-btn--small">ใบเสร็จค่าใช้จ่ายระหว่างพัก</a> }
         }
     </section>
 
