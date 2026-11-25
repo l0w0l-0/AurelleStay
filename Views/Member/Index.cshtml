@@ -30,6 +30,16 @@
     <partial name="_MemberNav" />
     <partial name="_Flash" />
 
+    @if (Model.StayBookingId is int stayNow)
+    {
+        <div class="mb-alert mb-alert--stay" role="status">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V8l9-5 9 5v13M9 21v-6h6v6" /></svg>
+            <p><b>กำลังเข้าพัก ห้อง @string.Join(", ", Model.StayRooms.Select(r => r.RoomNo))</b> ต้องการอะไรเพิ่ม พนักงานนำไปส่งถึงห้อง</p>
+            <a href="#mb-req" class="cx-btn cx-btn--small">ขอของใช้เพิ่ม</a>
+            <a href="#mb-clean" class="cx-btn cx-btn--ghost cx-btn--small">ขอทำความสะอาด</a>
+        </div>
+    }
+
     @foreach (var b in Model.NeedAction)
     {
         <div class="mb-alert" role="status">
@@ -154,6 +164,13 @@
         </section>
     </div>
 
+    @if (Model.StayBookingId == null)
+    {
+        <section class="mb-card mb-req" id="mb-req" aria-labelledby="mb-req-h0">
+            <h2 id="mb-req-h0">ขอของใช้เพิ่ม / ขอทำความสะอาด</h2>
+            <p class="mb-muted">ใช้ได้ระหว่างเข้าพัก หลังพนักงานเช็คอินให้แล้ว เมนูนี้จะเปิดให้ขอผ้าเช็ดตัว น้ำดื่ม หมอน ฯลฯ ส่งถึงห้อง และขอทำความสะอาดห้องได้ หรือโทรแจ้งหน้าเคาน์เตอร์ได้ตลอด</p>
+        </section>
+    }
     @if (Model.StayBookingId is int stayId)
     {
         <section class="mb-card mb-req" id="mb-req" aria-labelledby="mb-req-h">

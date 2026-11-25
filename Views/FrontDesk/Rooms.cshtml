@@ -1,14 +1,60 @@
 @model List<pameka_7033_l005.ViewModels.RoomStatusRowViewModel>
 @using pameka_7033_l005.Helpers
 @{
-    ViewData["Title"] = "สถานะห้อง";
+    ViewData["Title"] = "สถานะห้อง / ส่งของไปห้อง";
     Layout = "_Adminlayout";
 }
 
 <div class="dashboard">
-    <h1>สถานะห้อง</h1>
+    <h1>สถานะห้อง / ส่งของไปห้อง</h1>
     <partial name="_Flash" />
     <p>ห้องที่มีผู้พักเปลี่ยนสถานะเองไม่ได้ ต้องเช็คเอาท์ที่หน้า "เช็คอิน / เช็คเอาท์" ก่อน</p>
+    @{
+        var inHouse = (List<(int RoomId, string RoomNo, int BookingId, string Guest)>)ViewBag.InHouse;
+        var openReq = (List<(string What, string RoomNo, string? Note, bool Urgent, string Label, string Status, DateTime CreatedAt)>)ViewBag.OpenRequests;
+    }
+    <div class="staff-card" id="fd-send">
+        <h2 class="h5">ส่งของไปห้องผู้เข้าพัก</h2>
+        @if (inHouse.Count == 0)
+        {
+            <p class="text-muted mb-0">ยังไม่มีห้องที่มีผู้เข้าพัก (ต้องเช็คอินก่อนจึงส่งของได้)</p>
+        }
+        else
+        {
+            <form asp-action="SendItem" method="post" class="row g-2 align-items-end">
+                <div class="col-md-3"><label class="form-label">ห้อง</label>
+                    <select name="target" class="form-select" required>
+                        @foreach (var h in inHouse) { <option value="@h.RoomId:@h.BookingId">@h.RoomNo · @h.Guest (#@h.BookingId)</option> }
+                    </select></div>
+                <div class="col-md-3"><label class="form-label">รายการ</label>
+                    <select name="item" class="form-select" required>
+                        @foreach (var (code, name) in RoomRequests.Items) { <option value="@code">@name</option> }
+                    </select></div>
+                <div class="col-md-1"><label class="form-label">จำนวน</label>
+                    <input type="number" name="qty" value="1" min="1" max="@RoomRequests.MaxQty" class="form-control" required /></div>
+                <div class="col-md-3"><label class="form-label">หมายเหตุ</label>
+                    <input type="text" name="note" maxlength="180" class="form-control" placeholder="เช่น ลูกค้าโทรขอ, วางหน้าห้อง" /></div>
+                <div class="col-md-1"><label class="form-check"><input type="checkbox" name="urgent" value="true" class="form-check-input" /> ด่วน</label></div>
+                <div class="col-md-1"><button type="submit" class="cx-btn cx-btn--small">ส่ง</button></div>
+            </form>
+        }
+        @if (openReq.Count > 0)
+        {
+            <div class="staff-table-wrap mt-3">
+                <table class="table table-sm staff-table">
+                    <thead><tr><th>ห้อง</th><th>รายการ</th><th>หมายเหตุ</th><th>ขอเมื่อ</th><th>สถานะ</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in openReq)
+                    {
+                        <tr><td>@r.RoomNo</td><td>@r.What @if (r.Urgent) { <span class="cx-badge cx-badge--PENDING">ด่วน</span> }</td><td>@r.Note</td>
+                            <td>@r.CreatedAt.ToString("HH:mm")</td><td><span class="cx-badge cx-badge--@r.Status">@r.Label</span></td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
 
     <div class="staff-card">
         <div class="staff-table-wrap">
@@ -51,3 +97,4 @@
         </div>
     </div>
 </div>
+

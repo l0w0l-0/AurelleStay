@@ -192,7 +192,7 @@ public static class RoleNames
     public static IReadOnlyList<(string Action, string Label)> Menu(string? role) => role?.ToLowerInvariant() switch
     {
         Accounting => [("Index", "ตรวจสอบการชำระเงิน"), ("Refunds", "คำขอคืนเงิน"), ("History", "ประวัติการเงิน"), ("Expenses", "รายจ่าย / กำไร")],
-        FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Activities", "กิจกรรมวันนี้"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง")],
+        FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Activities", "กิจกรรมวันนี้"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง / ส่งของ")],
         Delivery => [("Index", "ห้องที่ต้องส่ง"), ("Done", "ห้องที่ส่งสำเร็จ")],
         Housekeeping => [("Index", "ห้องที่ต้องทำความสะอาด"), ("Done", "ห้องที่ทำไปแล้ว"), ("Issues", "แจ้งซ่อม")],
         _ => []
@@ -875,7 +875,7 @@ public static class AuditTrail
         ["AdminPromotions.Delete"] = ("ลบโปรโมชั่น", "โปรโมชั่น"), ["AdminPromotions.SendCode"] = ("ส่งรหัสโปรโมชั่นให้ลูกค้า", "โปรโมชั่น"),
         ["FrontDesk.MarkNoShow"] = ("บันทึกไม่มาเข้าพัก", "การจอง"), ["FrontDesk.UndoNoShow"] = ("ยกเลิกสถานะไม่มาเข้าพัก", "การจอง"),
         ["FrontDesk.CheckOut"] = ("เช็คเอาท์", "การจอง"), ["FrontDesk.SendDelivery"] = ("ส่งงานให้ฝ่ายส่งของ", "การจอง"),
-        ["FrontDesk.SetRoomStatus"] = ("เปลี่ยนสถานะห้อง", "ห้อง"), ["FrontDesk.SendCleaning"] = ("ส่งงานทำความสะอาด", "ห้อง"),
+        ["FrontDesk.SetRoomStatus"] = ("เปลี่ยนสถานะห้อง", "ห้อง"), ["FrontDesk.SendCleaning"] = ("ส่งงานทำความสะอาด", "ห้อง"), ["FrontDesk.SendItem"] = ("ส่งของไปห้องผู้เข้าพัก", "ห้อง"),
         ["Delivery.Take"] = ("รับงานส่งของ", "งาน"), ["Delivery.Finish"] = ("ส่งของสำเร็จ", "งาน"),
         ["Housekeeping.Take"] = ("รับงานทำความสะอาด", "งาน"), ["Housekeeping.Finish"] = ("ทำความสะอาดเสร็จ", "งาน"),
         ["AdminBookings.Cancel"] = ("ผู้จัดการยกเลิกการจอง", "การจอง"),

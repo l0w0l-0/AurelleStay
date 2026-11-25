@@ -534,6 +534,15 @@ public class FrontDeskController : AppController
         var rooms = await _db.Rooms.AsNoTracking().OrderBy(r => r.RoomNo)
             .Select(r => new { r.RoomId, r.RoomNo, Type = r.Type.TypeName, r.Status }).ToListAsync();
 
+        // ส่งของไปห้องผู้เข้าพัก: ห้องที่มีผู้พักอยู่ (เช็คอินแล้ว) + คำขอที่ยังไม่ได้ส่ง
+        ViewBag.InHouse = (await _db.BookingRooms.AsNoTracking().Where(br => br.Booking.Status == "CHECKED_IN")
+            .Select(br => new { br.RoomId, br.Room.RoomNo, br.BookingId, br.Booking.User.FirstName, br.Booking.User.LastName }).ToListAsync())
+            .OrderBy(x => x.RoomNo).Select(x => (x.RoomId, x.RoomNo, x.BookingId, Guest: $"{x.FirstName} {x.LastName}")).ToList();
+        ViewBag.OpenRequests = (await _db.ItemRequests.AsNoTracking().Where(r => r.Status == "PENDING" || r.Status == "DELIVERING")
+            .OrderByDescending(r => r.Urgent).ThenBy(r => r.CreatedAt).Take(30)
+            .Select(r => new { r.Item, r.Qty, r.Room.RoomNo, r.Note, r.Urgent, r.Status, r.Missed, r.CreatedAt }).ToListAsync())
+            .Select(r => (What: $"{RoomRequests.ItemName(r.Item)} × {r.Qty}", r.RoomNo, r.Note, r.Urgent, Label: RoomRequests.StatusLabel(r.Status, r.Missed), r.Status, r.CreatedAt)).ToList();
+
         return View(rooms.Select(r =>
         {
             var open = openRoomIds.Contains(r.RoomId);
@@ -586,6 +595,31 @@ public class FrontDeskController : AppController
         await _db.SaveChangesAsync();
         Flash($"ส่งงานทำความสะอาดห้อง {room.RoomNo} แล้ว");
         return RedirectToAction(nameof(Rooms));
+    }
+
+    /// <summary>ผู้เข้าพักโทรขอของ / หน้าเคาน์เตอร์สั่งส่งของไปห้องที่มีผู้พักอยู่ → เข้าคิวฝ่ายส่งของทันที</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> SendItem(string? target, string? item, int qty = 1, string? note = null, bool urgent = false)
+    {
+        // target = "ห้อง:การจอง" (ห้องเดียวกันอาจผูกกับหลายการจองในข้อมูลเก่า จึงระบุการจองด้วย)
+        var parts = (target ?? "").Split(':');
+        int roomId = parts.Length == 2 && int.TryParse(parts[0], out var r0) ? r0 : 0, bookingId = parts.Length == 2 && int.TryParse(parts[1], out var b0) ? b0 : 0;
+        var stay = await _db.BookingRooms.AsNoTracking().Where(br => br.RoomId == roomId && br.BookingId == bookingId && br.Booking.Status == "CHECKED_IN")
+            .Select(br => new { br.BookingId, br.Booking.UserId, br.Room.RoomNo }).FirstOrDefaultAsync();
+        if (stay == null) { Flash("ส่งของได้เฉพาะห้องที่มีผู้เข้าพัก (เช็คอินแล้ว)", true); return Redirect(Url.Action(nameof(Rooms)) + "#fd-send"); }
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (!RoomRequests.IsItem(item) || qty < 1 || qty > RoomRequests.MaxQty || note?.Length > 180)
+        { Flash($"ข้อมูลไม่ถูกต้อง: เลือกรายการ จำนวน 1–{RoomRequests.MaxQty} หมายเหตุไม่เกิน 180 ตัวอักษร", true); return Redirect(Url.Action(nameof(Rooms)) + "#fd-send"); }
+        if (item == "OTHER" && note == null) { Flash("เลือก \"อื่น ๆ\" กรุณาระบุสิ่งที่ต้องส่งในหมายเหตุ", true); return Redirect(Url.Action(nameof(Rooms)) + "#fd-send"); }
+
+        _db.ItemRequests.Add(new ItemRequest { BookingId = stay.BookingId, UserId = stay.UserId, RoomId = roomId, Item = item!, Qty = (byte)qty,
+            Note = "หน้าเคาน์เตอร์" + (note != null ? ": " + note : ""), Urgent = urgent, Status = "PENDING", CreatedAt = AppClock.Now });
+        Notify.Add(_db, stay.UserId, $"กำลังนำ{RoomRequests.ItemName(item)}ไปส่งที่ห้อง {stay.RoomNo}",
+            $"หน้าเคาน์เตอร์ส่งคำขอ {RoomRequests.ItemName(item)} × {qty} ให้ฝ่ายส่งของแล้ว", "/Member#mb-req");
+        await _db.SaveChangesAsync();
+        Flash($"ส่งคำขอ{RoomRequests.ItemName(item)} × {qty} ไปห้อง {stay.RoomNo} ให้ฝ่ายส่งของแล้ว");
+        return Redirect(Url.Action(nameof(Rooms)) + "#fd-send");
     }
 
     // ---------------------------------------------------------------- ตัวช่วย

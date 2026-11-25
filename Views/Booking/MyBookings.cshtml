@@ -71,6 +71,10 @@
                         @if (b.Refunded) { <span class="cx-badge cx-badge--REFUNDED">คืนเงินแล้ว</span> }
                         @if (b.Reviewed) { <span class="cx-badge cx-badge--CONFIRMED">รีวิวแล้ว</span> }
                         <a asp-controller="BookingDetails" asp-action="Index" asp-route-id="@b.BookingId" class="cx-btn cx-btn--ghost cx-btn--small">รายละเอียด</a>
+                        @if (b.Status == "CHECKED_IN")
+                        {
+                            <a href="/Member#mb-req" class="cx-btn cx-btn--small">ขอของใช้เพิ่ม</a>
+                        }
                         @if (BookingWorkflow.CanReview(b.Status, b.Reviewed))
                         {
                             <a asp-controller="Reviews" asp-action="Create" asp-route-id="@b.BookingId" class="cx-btn cx-btn--small">เขียนรีวิว</a>
