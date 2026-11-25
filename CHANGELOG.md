@@ -697,6 +697,37 @@ powershell -ExecutionPolicy Bypass -File .\docker.ps1 status | logs | down
 - บริการเสริม 5 → 15 รายการ (อาหารกลางวัน ชุดอาหารว่าง เค้กวันเกิด ประคบสมุนไพร นวดเท้า เช็คเอาท์ล่าช้า ซักรีด ตกแต่งห้องวันพิเศษ รถรับส่งสนามบิน เช่าจักรยาน)
 - กิจกรรม 6 → 11 (ล่องเรือชมพระอาทิตย์ตก มวยไทยเบื้องต้น ทำสบู่และยาดมสมุนไพร ทัวร์ใส่บาตรยามเช้า คลาสทำขนมไทย)
 
+## Part 60–62: บิลระหว่างพัก · หน้าเคาน์เตอร์ส่งของ/จองกิจกรรม · รูปบริการและกิจกรรม
+- ลูกค้าสั่งบริการเสริมระหว่างพักได้ (คิดเงินในบิลระหว่างพัก) · ค่ากิจกรรมเข้าบิลเดียวกัน · หน้าเคาน์เตอร์รับชำระ (เงินสด/QR/บัตร) ก่อนเช็คเอาท์ ค้างชำระเช็คเอาท์ไม่ได้ · ใบเสร็จค่าใช้จ่ายระหว่างพัก
+- เช็คเอาท์ก่อนกำหนด / ยกเลิกการจอง / ไม่มาเข้าพัก → ยกเลิกกิจกรรมและบริการที่ยังไม่เกิดขึ้น ไม่คิดเงิน คืนที่นั่ง
+- หน้าเคาน์เตอร์ส่งของไปห้องผู้เข้าพัก และจองกิจกรรมแทนลูกค้า · หน้ากิจกรรมให้เลือกเฉพาะรอบที่จองได้จริงในช่วงเข้าพัก
+- คอลัมน์ใหม่ (เพิ่มอย่างเดียว): `booking_services.in_stay/paid_at/pay_method/paid_by`, `activity_bookings.paid_at/pay_method/paid_by`, `activities.image_url`
+- รูปบริการเสริม 10 รูป และรูปกิจกรรม 11 รูป จาก Wikimedia Commons (ฟรี: Public domain / CC0 / CC BY / CC BY-SA) ครอปและบันทึกใหม่เป็น JPEG (800×600 / 1280×720) · ระบบใส่รูปให้รายการตัวอย่างที่ชื่อตรงกันอัตโนมัติ (เฉพาะที่ยังไม่มีรูป) · เครดิตแสดงในหน้านโยบาย หัวข้อ "เครดิตภาพ"
+
+| ไฟล์ | ผู้ถ่าย / เจ้าของ | สัญญาอนุญาต | ต้นฉบับ |
+|---|---|---|---|
+| `wwwroot/images/services/lunch.jpg` | Vee Satayamas from Bangkok, Thailand | CC BY 2.0 | [Fried rice with chicken (17234644521).jpg](https://commons.wikimedia.org/wiki/File:Fried_rice_with_chicken_(17234644521).jpg) |
+| `wwwroot/images/services/afternoon-tea.jpg` | (Liyster) | CC BY 3.0 | [Devonshire tea.jpg](https://commons.wikimedia.org/wiki/File:Devonshire_tea.jpg) |
+| `wwwroot/images/services/birthday-cake.jpg` | Brassluff | CC0 | [Tim Tams and Nuts on a Birthday Cake With Candles.jpg](https://commons.wikimedia.org/wiki/File:Tim_Tams_and_Nuts_on_a_Birthday_Cake_With_Candles.jpg) |
+| `wwwroot/images/services/late-checkout.jpg` | Ounfs Robmmy 238 | CC0 | [TW 台湾 Taipei 台北 Hotel Metropolitan Premier Taipei 酒店房間 hotel](https://commons.wikimedia.org/wiki/File:TW_%E5%8F%B0%E6%B9%BE_Taipei_%E5%8F%B0%E5%8C%97_Hotel_Metropolitan_Premier_Taipei_%E9%85%92%E5%BA%97%E6%88%BF%E9%96%93_hotel_room_%E6%9E%95%E9%A0%AD_white_pillows_n_%E5%B7%A8%E5%BA%8A_big_big_bed_March_2024_R12S_02.jpg) |
+| `wwwroot/images/services/airport-transfer.jpg` | Elise240SX | CC BY-SA 4.0 | [2022 Mercedes-Benz Metris Passenger Van in Arctic White, Fro](https://commons.wikimedia.org/wiki/File:2022_Mercedes-Benz_Metris_Passenger_Van_in_Arctic_White,_Front_Right,_08-02-2023.jpg) |
+| `wwwroot/images/services/bicycle-rental.jpg` | Kotivalo | CC BY-SA 4.0 | [Rental bikes by Bore hostel ship, Turku, Finland.jpg](https://commons.wikimedia.org/wiki/File:Rental_bikes_by_Bore_hostel_ship,_Turku,_Finland.jpg) |
+| `wwwroot/images/services/foot-massage.jpg` | User:Mattes | Public domain | [Thai Massage-Fuesse.JPG](https://commons.wikimedia.org/wiki/File:Thai_Massage-Fuesse.JPG) |
+| `wwwroot/images/services/herbal-compress.jpg` | Tara Angkor Hotel | CC BY 2.0 | [Classical Thai Massage at Tara Angkor Hotel (5918685202).jpg](https://commons.wikimedia.org/wiki/File:Classical_Thai_Massage_at_Tara_Angkor_Hotel_(5918685202).jpg) |
+| `wwwroot/images/services/laundry.jpg` | Michael Slaten | CC BY-SA 4.0 | [Clothes iron on ironing board.jpg](https://commons.wikimedia.org/wiki/File:Clothes_iron_on_ironing_board.jpg) |
+| `wwwroot/images/services/room-decoration.jpg` | Henning Leweke from Kiel, Germany | CC BY-SA 2.0 | [Djerba-cool swan-sky walker.jpg](https://commons.wikimedia.org/wiki/File:Djerba-cool_swan-sky_walker.jpg) |
+| `wwwroot/images/activities/thai-cooking.jpg` | U.S. Navy photo by Chief Mass Communication Specialist John Harrington | Public domain | [US Navy 110809-N-JV466-035 Culinary Specialist 1st Class Res](https://commons.wikimedia.org/wiki/File:US_Navy_110809-N-JV466-035_Culinary_Specialist_1st_Class_Resty_Villacorta,_from_Nueva_Ecija,_Philippines,_reviews_a_recipe_with_Thai_chefs.jpg) |
+| `wwwroot/images/activities/yoga.jpg` | Vuemobi Media | CC BY-SA 2.0 | [Outdoor Yoga At the Park.jpg](https://commons.wikimedia.org/wiki/File:Outdoor_Yoga_At_the_Park.jpg) |
+| `wwwroot/images/activities/floating-market.jpg` | No(0)GoodNamesLeft | CC BY-SA 4.0 | [(02g) Damnoen Saduak Floating Market (NgnL)-07580.jpg](https://commons.wikimedia.org/wiki/File:(02g)_Damnoen_Saduak_Floating_Market_(NgnL)-07580.jpg) |
+| `wwwroot/images/activities/garland.jpg` | PEAK99 | CC BY-SA 4.0 | [Wiki Loves Folklore from Thailand DSCN0283.jpg](https://commons.wikimedia.org/wiki/File:Wiki_Loves_Folklore_from_Thailand_DSCN0283.jpg) |
+| `wwwroot/images/activities/bike-tour.jpg` | Luis de Sousa Spain | CC BY-SA 4.0 | [SpiceRoads Cycling - Bangkok to Phuket tour.jpg](https://commons.wikimedia.org/wiki/File:SpiceRoads_Cycling_-_Bangkok_to_Phuket_tour.jpg) |
+| `wwwroot/images/activities/kids-art.jpg` | Shixart1985 | CC BY 2.0 | [A young child concentrates on painting with watercolors on p](https://commons.wikimedia.org/wiki/File:A_young_child_concentrates_on_painting_with_watercolors_on_paper.jpg) |
+| `wwwroot/images/activities/sunset-cruise.jpg` | Nik Cyclist from Bangkok, Thailand | CC BY 2.0 | [Summer time... - Flickr - NikCyclist.jpg](https://commons.wikimedia.org/wiki/File:Summer_time..._-_Flickr_-_NikCyclist.jpg) |
+| `wwwroot/images/activities/muay-thai.jpg` | U.S. Navy photo by Petty Officer 1st Class Dakota David | Public domain | [U S Marines, Royal Thai Navy Conduct Train in Muay Thai Kick](https://commons.wikimedia.org/wiki/File:U_S_Marines,_Royal_Thai_Navy_Conduct_Train_in_Muay_Thai_Kickboxing_During_CARAT_Thailand_2026_(9809307).jpg) |
+| `wwwroot/images/activities/herbal-soap.jpg` | Durova | CC BY-SA 3.0 | [Soap and sachets.jpg](https://commons.wikimedia.org/wiki/File:Soap_and_sachets.jpg) |
+| `wwwroot/images/activities/alms.jpg` | shankar s. from Dubai, united arab emirates | CC BY 2.0 | [A man gives to the last monk in the line (14603806974).jpg](https://commons.wikimedia.org/wiki/File:A_man_gives_to_the_last_monk_in_the_line_(14603806974).jpg) |
+| `wwwroot/images/activities/thai-dessert.jpg` | Peachyeung316 | CC BY-SA 4.0 | [Thai Coconut Puddings and Green Pandan Puddings at Gold Basi](https://commons.wikimedia.org/wiki/File:Thai_Coconut_Puddings_and_Green_Pandan_Puddings_at_Gold_Basil_Thai_Restaurant.jpg) |
+
 ## ยังไม่รวม
 การตรวจฟอร์มฝั่งเบราว์เซอร์ด้วย jQuery (เดิมโหลดไม่ครบจึงไม่ทำงานอยู่แล้ว ถูกถอดออกพร้อมไลบรารีเทมเพลต — ฝั่งเซิร์ฟเวอร์ยังตรวจทุกฟอร์ม), โหมดมืด (สไตล์ทั้งเว็บใช้สีตายตัวจำนวนมาก ต้องทำใหม่อย่างระมัดระวังจึงไม่ใส่ไว้ในหน้าตั้งค่า), ลืมรหัสผ่านแบบรีเซ็ตเองทางอีเมล (ต้องมีระบบส่งอีเมล — ตอนนี้ลูกค้าส่งคำขอผ่านฟอร์มติดต่อ หัวข้อ "ลืมรหัสผ่าน" แล้วผู้จัดการตรวจตัวตนและออกรหัสใหม่ให้), ส่งอีเมลตอบกลับอัตโนมัติ (ตอบกลับเป็นการแจ้งเตือนในระบบสำหรับผู้มีบัญชี / ผู้ไม่มีบัญชีเจ้าหน้าที่ติดต่อกลับเอง), ชำระเงินผ่าน payment gateway (ใช้ QR + สลิป + ฝ่ายบัญชีตรวจ)
 

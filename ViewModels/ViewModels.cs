@@ -1149,6 +1149,7 @@ public class WaitlistItemViewModel
 // ---------------- Part 52: กิจกรรมของโรงแรม
 public class ActivityCardViewModel
 {
+    public string? ImageUrl { get; set; }
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public string Category { get; set; } = "";
@@ -1214,6 +1215,9 @@ public class ActivityEditViewModel
     [StringLength(100)]
     public string? Location { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? ImageUrl { get; set; }       // แสดงผลเท่านั้น (ไม่รับจากฟอร์ม)
+    public IFormFile? Image { get; set; }
+    public bool RemoveImage { get; set; }
     public int Upcoming { get; set; }
     public int TotalBooked { get; set; }
 }

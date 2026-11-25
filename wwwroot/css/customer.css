@@ -1929,3 +1929,8 @@ html, * { scrollbar-width: none; -ms-overflow-style: none; }
 
 .ac-slot[data-slot] { cursor: pointer; }
 .ac-slot[data-slot]:hover { outline: 2px solid rgba(201, 161, 74, .6); }
+
+/* Part 62: รูปกิจกรรม */
+.ac-card.has-media { padding-top: 0; overflow: hidden; }
+.ac-media { margin: 0 -22px 4px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #efe8f6, #f7f0de); }
+.ac-media img { width: 100%; height: 100%; object-fit: cover; display: block; }

@@ -89,7 +89,8 @@
         <div class="ac-grid">
             @foreach (var a in cards)
             {
-                <article class="ac-card" id="act-@a.Id" aria-labelledby="act-@a.Id-h">
+                <article class="ac-card @(a.ImageUrl != null ? "has-media" : "")" id="act-@a.Id" aria-labelledby="act-@a.Id-h">
+                    @if (a.ImageUrl != null) { <div class="ac-media"><img src="@a.ImageUrl" alt="@a.Name" loading="lazy" width="600" height="338" /></div> }
                     <header class="ac-card__head">
                         <span class="ac-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="@HotelActivities.CategoryIcon(a.Category)" /></svg></span>
                         <div>

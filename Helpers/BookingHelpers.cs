@@ -1661,6 +1661,7 @@ public static class HotelActivities
                 Description = "ระบายสีร่มกระดาษและงานประดิษฐ์ไทยสำหรับเด็ก 4–12 ปี มีพี่เลี้ยงดูแล (เสาร์–อาทิตย์)" },
         };
         foreach (var a in list) { a.IsActive = true; a.CreatedAt = now; }
+        foreach (var a in list) a.ImageUrl ??= SampleImages.ActivityImage(a.Name);   // Part 62: รูปตั้งต้น
         db.Activities.AddRange(list);
         await db.SaveChangesAsync();
         return list.Length;
@@ -1783,6 +1784,8 @@ public static class StayBill
         ("activity_bookings", "paid_at", "datetime NULL"),
         ("activity_bookings", "pay_method", "varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
         ("activity_bookings", "paid_by", "int NULL"),
+        // Part 62: รูปกิจกรรม
+        ("activities", "image_url", "varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL"),
     };
 
     /// <summary>วิธีรับชำระที่เคาน์เตอร์</summary>

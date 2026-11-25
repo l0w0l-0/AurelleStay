@@ -758,6 +758,7 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.Times).HasMaxLength(60).HasColumnName("times");
             entity.Property(e => e.Days).HasMaxLength(7).HasColumnName("days");
             entity.Property(e => e.Location).HasMaxLength(100).HasColumnName("location");
+            entity.Property(e => e.ImageUrl).HasMaxLength(255).HasColumnName("image_url");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
             entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
         });

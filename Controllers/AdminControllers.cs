@@ -1407,7 +1407,7 @@ public class AdminActivitiesController : AdminAreaController
             .Select(a => new ActivityEditViewModel
             {
                 ActivityId = a.ActivityId, Name = a.Name, Category = a.Category, Description = a.Description, Price = a.Price, DurationMin = a.DurationMin,
-                Capacity = a.Capacity, Times = a.Times, Days = a.Days.Select(c => c - '0').ToList(), Location = a.Location, IsActive = a.IsActive,
+                Capacity = a.Capacity, Times = a.Times, Days = a.Days.Select(c => c - '0').ToList(), Location = a.Location, IsActive = a.IsActive, ImageUrl = a.ImageUrl,
                 TotalBooked = stats.TryGetValue(a.ActivityId, out var s) ? s.Total : 0, Upcoming = stats.TryGetValue(a.ActivityId, out var s2) ? s2.Up : 0
             }).ToList();
         return View(list);
@@ -1424,15 +1424,26 @@ public class AdminActivitiesController : AdminAreaController
         if (days.Length == 0) ModelState.AddModelError(nameof(f.Days), "เลือกวันที่เปิดกิจกรรมอย่างน้อย 1 วัน");
         if (!ModelState.IsValid) { FlashModelErrors(); return RedirectToAction(nameof(Index)); }
 
+        string? newImage = null;
+        if (f.Image is { Length: > 0 })
+        {
+            var (name, error) = await UploadStore.SaveActivityImageAsync(f.Image);
+            if (error != null) { Flash(error, true); return RedirectToAction(nameof(Index)); }
+            newImage = "/images/activities/" + name;
+        }
         Activity? a;
         if (f.ActivityId == 0) { a = new Activity { CreatedAt = AppClock.Now }; Db.Activities.Add(a); }
-        else if ((a = await Db.Activities.FindAsync(f.ActivityId)) == null) return Stale(nameof(Index));
+        else if ((a = await Db.Activities.FindAsync(f.ActivityId)) == null) { UploadStore.DeleteActivityImage(newImage); return Stale(nameof(Index)); }
+        var oldImage = a.ImageUrl;
+        if (newImage != null) a.ImageUrl = newImage;
+        else if (f.RemoveImage) a.ImageUrl = null;
         a.Name = f.Name.Trim(); a.Category = f.Category; a.Price = f.Price; a.DurationMin = (short)f.DurationMin; a.Capacity = (short)f.Capacity;
         a.Times = string.Join(",", times); a.Days = days; a.IsActive = f.IsActive;
         a.Description = string.IsNullOrWhiteSpace(f.Description) ? null : f.Description.Trim();
         a.Location = string.IsNullOrWhiteSpace(f.Location) ? null : f.Location.Trim();
         try { await Db.SaveChangesAsync(); }
-        catch (DbUpdateException) { Flash("บันทึกไม่สำเร็จ (ชื่อกิจกรรมอาจซ้ำกับรายการเดิม)", true); return RedirectToAction(nameof(Index)); }
+        catch (DbUpdateException) { UploadStore.DeleteActivityImage(newImage); Flash("บันทึกไม่สำเร็จ (ชื่อกิจกรรมอาจซ้ำกับรายการเดิม)", true); return RedirectToAction(nameof(Index)); }
+        if (a.ImageUrl != oldImage) UploadStore.DeleteActivityImage(oldImage);
         await AuditTrail.WriteAsync(HttpContext, "AdminActivities.Save", a.ActivityId, true, a.Name);
         Flash($"บันทึกกิจกรรม \"{a.Name}\" แล้ว");
         return RedirectToAction(nameof(Index));

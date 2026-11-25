@@ -518,6 +518,8 @@ CALL `aurelle_add_column`('booking_services', 'paid_by', 'int NULL');
 CALL `aurelle_add_column`('activity_bookings', 'paid_at', 'datetime NULL');
 CALL `aurelle_add_column`('activity_bookings', 'pay_method', 'varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
 CALL `aurelle_add_column`('activity_bookings', 'paid_by', 'int NULL');
+-- Part 62: รูปกิจกรรม
+CALL `aurelle_add_column`('activities', 'image_url', 'varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
 DROP PROCEDURE IF EXISTS `aurelle_add_column`;
 
 -- Part 14: สถานะ REJECTED = ฝ่ายบัญชีปฏิเสธสลิป (เก็บไว้เป็นประวัติ ไม่ลบทิ้ง)

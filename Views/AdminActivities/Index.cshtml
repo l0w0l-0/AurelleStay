@@ -17,6 +17,8 @@
         <fieldset class="sva-f sva-f--wide aca-days"><legend>วันที่เปิด</legend>
             @for (var d = 0; d < 7; d++) { <label><input type="checkbox" name="Days" value="@d" checked="@(a.Days.Contains(d))" /> @HotelActivities.DayNames[d]</label> }
         </fieldset>
+        <label class="sva-f sva-f--wide">@(a.ImageUrl != null ? "เปลี่ยนรูป" : "รูป") (JPG / PNG / WEBP ไม่เกิน 3 MB)<input type="file" name="Image" accept="image/jpeg,image/png,image/webp" /></label>
+        @if (a.ImageUrl != null) { <label class="sva-check"><input type="checkbox" name="RemoveImage" value="true" /> ลบรูป</label> }
         <label class="sva-f sva-f--wide">คำอธิบาย (ไม่เกิน 500 ตัวอักษร)<textarea name="Description" maxlength="500" rows="3">@a.Description</textarea></label>
         <label class="sva-check"><input type="checkbox" name="IsActive" value="true" checked="@a.IsActive" /> เปิดรับจอง</label>
         <input type="hidden" name="IsActive" value="false" />
@@ -32,7 +34,7 @@
 
     <details class="staff-card sva-new" @(Model.Count == 0 ? "open" : null)>
         <summary><h2>เพิ่มกิจกรรมใหม่</h2></summary>
-        <form asp-action="Save" method="post" class="sva-form">
+        <form asp-action="Save" method="post" enctype="multipart/form-data" class="sva-form">
             <input type="hidden" name="ActivityId" value="0" />
             @{ await Fields(new pameka_7033_l005.ViewModels.ActivityEditViewModel { Days = new() { 0, 1, 2, 3, 4, 5, 6 } }, "new"); }
             <div class="sva-actions"><button type="submit" class="cx-btn">เพิ่มกิจกรรม</button></div>
@@ -48,12 +50,13 @@
         @foreach (var a in Model)
         {
             <article class="staff-card sva-card @(a.IsActive ? "" : "is-off")" aria-labelledby="aca-@a.ActivityId-n">
+                @if (a.ImageUrl != null) { <div class="aca-media"><img src="@a.ImageUrl" alt="" loading="lazy" width="400" height="225" /></div> }
                 <div class="aca-head">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="@HotelActivities.CategoryIcon(a.Category)" /></svg>
                     <span class="sva-tag">@HotelActivities.CategoryLabel(a.Category)</span>
                     @if (!a.IsActive) { <span class="sva-off">ปิดรับจอง</span> }
                 </div>
-                <form asp-action="Save" method="post" class="sva-form">
+                <form asp-action="Save" method="post" enctype="multipart/form-data" class="sva-form">
                     <input type="hidden" name="ActivityId" value="@a.ActivityId" />
                     @{ await Fields(a, "aca-" + a.ActivityId); }
                     <div class="sva-actions">

@@ -53,3 +53,26 @@ FROM (SELECT 'ล่องเรือชมพระอาทิตย์ตก
       UNION ALL SELECT 'ทัวร์ใส่บาตรยามเช้า', 'CULTURE', 'เดินไปวัดใกล้โรงแรม ใส่บาตรและฟังเรื่องเล่าชุมชน', 0, 60, 15, '06:00', '06', 'ล็อบบี้'
       UNION ALL SELECT 'คลาสทำขนมไทย', 'FOOD', 'ทำขนมชั้นและลูกชุบกับเชฟขนมไทย', 350, 120, 10, '10:00', '135', 'ครัวเรียนทำอาหาร') x
 WHERE NOT EXISTS (SELECT 1 FROM activities a WHERE a.name = x.n);
+
+-- ---------------------------------------------------------------- Part 62: รูปตั้งต้น (ใส่เฉพาะรายการที่ยังไม่มีรูป)
+UPDATE extra_services SET image_url = '/images/services/lunch.jpg' WHERE service_name = 'อาหารกลางวัน' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/afternoon-tea.jpg' WHERE service_name = 'ชุดอาหารว่างยามบ่าย (2 ที่)' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/birthday-cake.jpg' WHERE service_name = 'เค้กวันเกิด 1 ปอนด์' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/herbal-compress.jpg' WHERE service_name = 'ประคบสมุนไพร (60 นาที)' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/foot-massage.jpg' WHERE service_name = 'นวดเท้า (45 นาที)' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/late-checkout.jpg' WHERE service_name = 'เช็คเอาท์ล่าช้า (ถึง 15:00)' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/laundry.jpg' WHERE service_name = 'บริการซักรีด (ต่อถุง)' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/room-decoration.jpg' WHERE service_name = 'ตกแต่งห้องวันพิเศษ' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/airport-transfer.jpg' WHERE service_name = 'รถรับส่งสนามบิน (เที่ยวเดียว)' AND image_url IS NULL;
+UPDATE extra_services SET image_url = '/images/services/bicycle-rental.jpg' WHERE service_name = 'เช่าจักรยาน (1 วัน)' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/thai-cooking.jpg' WHERE name = 'คลาสทำอาหารไทย' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/yoga.jpg' WHERE name = 'โยคะยามเช้าริมสระ' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/floating-market.jpg' WHERE name = 'ทัวร์ตลาดน้ำครึ่งวัน' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/garland.jpg' WHERE name = 'เวิร์กช็อปพวงมาลัยและดอกไม้ไทย' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/bike-tour.jpg' WHERE name = 'ปั่นจักรยานชมเมืองเก่า' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/kids-art.jpg' WHERE name = 'ศิลปะเด็กวันหยุด' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/sunset-cruise.jpg' WHERE name = 'ล่องเรือชมพระอาทิตย์ตก' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/muay-thai.jpg' WHERE name = 'มวยไทยเบื้องต้น' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/herbal-soap.jpg' WHERE name = 'ทำสบู่และยาดมสมุนไพร' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/alms.jpg' WHERE name = 'ทัวร์ใส่บาตรยามเช้า' AND image_url IS NULL;
+UPDATE activities SET image_url = '/images/activities/thai-dessert.jpg' WHERE name = 'คลาสทำขนมไทย' AND image_url IS NULL;

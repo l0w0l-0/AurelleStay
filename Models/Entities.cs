@@ -627,6 +627,8 @@ public class Activity
     public string? Location { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+    /// <summary>Part 62: รูปกิจกรรม (/images/activities/...)</summary>
+    public string? ImageUrl { get; set; }
 }
 
 /// <summary>Part 52: การจองกิจกรรมของผู้เข้าพัก (ผูกกับการจองห้องที่พักอยู่ในวันนั้น)</summary>

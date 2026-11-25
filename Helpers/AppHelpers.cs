@@ -47,6 +47,8 @@ public static class AppSetup
         UploadStore.SlipRoot = config["Uploads:SlipsPath"] is { Length: > 0 } sp ? sp : Path.Combine(env.ContentRootPath, "App_Data", "slips");
         UploadStore.RoomImageRoot = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "images", "rooms");
         UploadStore.ServiceImageRoot = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "images", "services");
+        UploadStore.ActivityImageRoot = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "images", "activities");
+        SampleImages.WebRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
 
         // ยกเลิกการจองค้างชำระอัตโนมัติ + ตรวจสุขภาพระบบที่ /health (ตอบ Healthy/Unhealthy เท่านั้น ไม่เปิดเผยรายละเอียด)
         services.AddHostedService<BookingExpiryService>();
@@ -393,6 +395,14 @@ public static class UploadStore
 
     public static Task<(string? Name, string? Error)> SaveSlipAsync(IFormFile? f) => SaveAsync(f, SlipRoot, SlipMaxBytes, allowPdf: true, "สลิป");
     public static Task<(string? Name, string? Error)> SaveRoomImageAsync(IFormFile? f) => SaveAsync(f, RoomImageRoot, ImageMaxBytes, allowPdf: false, "รูปห้อง");
+    public static string ActivityImageRoot { get; set; } = Path.Combine(AppContext.BaseDirectory, "wwwroot", "images", "activities");
+    public static Task<(string? Name, string? Error)> SaveActivityImageAsync(IFormFile? f) => SaveAsync(f, ActivityImageRoot, ImageMaxBytes, allowPdf: false, "รูปกิจกรรม");
+    /// <summary>ลบรูปกิจกรรมที่ระบบเคยอัปโหลด (ไม่แตะรูปตั้งต้นที่มากับโปรเจกต์)</summary>
+    public static void DeleteActivityImage(string? url)
+    {
+        var name = url?.Split('/').LastOrDefault();
+        if (url != null && url.StartsWith("/images/activities/") && IsSafeName(name)) TryDelete(Path.Combine(ActivityImageRoot, name!));
+    }
     public static Task<(string? Name, string? Error)> SaveServiceImageAsync(IFormFile? f) => SaveAsync(f, ServiceImageRoot, ImageMaxBytes, allowPdf: false, "รูปบริการ");
 
     private static async Task<(string? Name, string? Error)> SaveAsync(IFormFile? f, string root, long max, bool allowPdf, string label)
@@ -451,6 +461,67 @@ public static class UploadStore
 /// 3) ถ้ายังไม่มีประเภทห้องเลย → ใส่ข้อมูลตัวอย่างจาก Database/aurellestay_sample_catalog.sql
 ///    (ปิดได้ด้วย Database:SeedSampleCatalog = false) แก้ราคา/ห้องจริงได้ที่หน้าผู้จัดการ
 /// </summary>
+/// <summary>
+/// Part 62: รูปตั้งต้นของบริการ/กิจกรรมตัวอย่าง (ไฟล์อยู่ใน wwwroot/images — ภาพจาก Wikimedia Commons ใช้ได้ฟรี ดูเครดิตใน CHANGELOG)
+/// ใส่เฉพาะแถวที่ยังไม่มีรูป และมีไฟล์อยู่จริง
+/// </summary>
+public static class SampleImages
+{
+    public static string WebRoot { get; set; } = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+    public static readonly (string Name, string Url)[] Services =
+    {
+        ("อาหารกลางวัน", "/images/services/lunch.jpg"), ("ชุดอาหารว่างยามบ่าย (2 ที่)", "/images/services/afternoon-tea.jpg"),
+        ("เค้กวันเกิด 1 ปอนด์", "/images/services/birthday-cake.jpg"), ("ประคบสมุนไพร (60 นาที)", "/images/services/herbal-compress.jpg"),
+        ("นวดเท้า (45 นาที)", "/images/services/foot-massage.jpg"), ("เช็คเอาท์ล่าช้า (ถึง 15:00)", "/images/services/late-checkout.jpg"),
+        ("บริการซักรีด (ต่อถุง)", "/images/services/laundry.jpg"), ("ตกแต่งห้องวันพิเศษ", "/images/services/room-decoration.jpg"),
+        ("รถรับส่งสนามบิน (เที่ยวเดียว)", "/images/services/airport-transfer.jpg"), ("เช่าจักรยาน (1 วัน)", "/images/services/bicycle-rental.jpg"),
+    };
+    public static readonly (string Name, string Url)[] Activities =
+    {
+        ("คลาสทำอาหารไทย", "/images/activities/thai-cooking.jpg"), ("โยคะยามเช้าริมสระ", "/images/activities/yoga.jpg"),
+        ("ทัวร์ตลาดน้ำครึ่งวัน", "/images/activities/floating-market.jpg"), ("เวิร์กช็อปพวงมาลัยและดอกไม้ไทย", "/images/activities/garland.jpg"),
+        ("ปั่นจักรยานชมเมืองเก่า", "/images/activities/bike-tour.jpg"), ("ศิลปะเด็กวันหยุด", "/images/activities/kids-art.jpg"),
+        ("ล่องเรือชมพระอาทิตย์ตก", "/images/activities/sunset-cruise.jpg"), ("มวยไทยเบื้องต้น", "/images/activities/muay-thai.jpg"),
+        ("ทำสบู่และยาดมสมุนไพร", "/images/activities/herbal-soap.jpg"), ("ทัวร์ใส่บาตรยามเช้า", "/images/activities/alms.jpg"),
+        ("คลาสทำขนมไทย", "/images/activities/thai-dessert.jpg"),
+    };
+    /// <summary>เครดิตภาพ (ไฟล์ · ผู้ถ่าย · สัญญาอนุญาต · หน้าต้นฉบับ) — แสดงในหน้านโยบาย ตามเงื่อนไข CC BY / CC BY-SA</summary>
+    public static readonly (string File, string Author, string License, string Source)[] Credits =
+    {
+        ("/images/services/lunch.jpg", "Vee Satayamas from Bangkok, Thailand", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Fried_rice_with_chicken_(17234644521).jpg"),
+        ("/images/services/afternoon-tea.jpg", "(Liyster)", "CC BY 3.0", "https://commons.wikimedia.org/wiki/File:Devonshire_tea.jpg"),
+        ("/images/services/birthday-cake.jpg", "Brassluff", "CC0", "https://commons.wikimedia.org/wiki/File:Tim_Tams_and_Nuts_on_a_Birthday_Cake_With_Candles.jpg"),
+        ("/images/services/late-checkout.jpg", "Ounfs Robmmy 238", "CC0", "https://commons.wikimedia.org/wiki/File:TW_%E5%8F%B0%E6%B9%BE_Taipei_%E5%8F%B0%E5%8C%97_Hotel_Metropolitan_Premier_Taipei_%E9%85%92%E5%BA%97%E6%88%BF%E9%96%93_hotel_room_%E6%9E%95%E9%A0%AD_white_pillows_n_%E5%B7%A8%E5%BA%8A_big_big_bed_March_2024_R12S_02.jpg"),
+        ("/images/services/airport-transfer.jpg", "Elise240SX", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:2022_Mercedes-Benz_Metris_Passenger_Van_in_Arctic_White,_Front_Right,_08-02-2023.jpg"),
+        ("/images/services/bicycle-rental.jpg", "Kotivalo", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Rental_bikes_by_Bore_hostel_ship,_Turku,_Finland.jpg"),
+        ("/images/services/foot-massage.jpg", "User:Mattes", "Public domain", "https://commons.wikimedia.org/wiki/File:Thai_Massage-Fuesse.JPG"),
+        ("/images/services/herbal-compress.jpg", "Tara Angkor Hotel", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Classical_Thai_Massage_at_Tara_Angkor_Hotel_(5918685202).jpg"),
+        ("/images/services/laundry.jpg", "Michael Slaten", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Clothes_iron_on_ironing_board.jpg"),
+        ("/images/services/room-decoration.jpg", "Henning Leweke from Kiel, Germany", "CC BY-SA 2.0", "https://commons.wikimedia.org/wiki/File:Djerba-cool_swan-sky_walker.jpg"),
+        ("/images/activities/thai-cooking.jpg", "U.S. Navy photo by Chief Mass Communication Specialist John Harrington", "Public domain", "https://commons.wikimedia.org/wiki/File:US_Navy_110809-N-JV466-035_Culinary_Specialist_1st_Class_Resty_Villacorta,_from_Nueva_Ecija,_Philippines,_reviews_a_recipe_with_Thai_chefs.jpg"),
+        ("/images/activities/yoga.jpg", "Vuemobi Media", "CC BY-SA 2.0", "https://commons.wikimedia.org/wiki/File:Outdoor_Yoga_At_the_Park.jpg"),
+        ("/images/activities/floating-market.jpg", "No(0)GoodNamesLeft", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:(02g)_Damnoen_Saduak_Floating_Market_(NgnL)-07580.jpg"),
+        ("/images/activities/garland.jpg", "PEAK99", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Wiki_Loves_Folklore_from_Thailand_DSCN0283.jpg"),
+        ("/images/activities/bike-tour.jpg", "Luis de Sousa Spain", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:SpiceRoads_Cycling_-_Bangkok_to_Phuket_tour.jpg"),
+        ("/images/activities/kids-art.jpg", "Shixart1985", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:A_young_child_concentrates_on_painting_with_watercolors_on_paper.jpg"),
+        ("/images/activities/sunset-cruise.jpg", "Nik Cyclist from Bangkok, Thailand", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Summer_time..._-_Flickr_-_NikCyclist.jpg"),
+        ("/images/activities/muay-thai.jpg", "U.S. Navy photo by Petty Officer 1st Class Dakota David", "Public domain", "https://commons.wikimedia.org/wiki/File:U_S_Marines,_Royal_Thai_Navy_Conduct_Train_in_Muay_Thai_Kickboxing_During_CARAT_Thailand_2026_(9809307).jpg"),
+        ("/images/activities/herbal-soap.jpg", "Durova", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:Soap_and_sachets.jpg"),
+        ("/images/activities/alms.jpg", "shankar s. from Dubai, united arab emirates", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:A_man_gives_to_the_last_monk_in_the_line_(14603806974).jpg"),
+        ("/images/activities/thai-dessert.jpg", "Peachyeung316", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Thai_Coconut_Puddings_and_Green_Pandan_Puddings_at_Gold_Basil_Thai_Restaurant.jpg"),
+    };
+    static bool Exists(string url) => File.Exists(Path.Combine(WebRoot, url.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
+    public static string? ActivityImage(string name) => Activities.Where(a => a.Name == name && Exists(a.Url)).Select(a => a.Url).FirstOrDefault();
+
+    public static async Task FillAsync(Csi402dbContext db)
+    {
+        foreach (var (name, url) in Services.Where(x => Exists(x.Url)))
+            await db.Database.ExecuteSqlRawAsync("UPDATE `extra_services` SET `image_url` = {0} WHERE `service_name` = {1} AND `image_url` IS NULL", url, name);
+        foreach (var (name, url) in Activities.Where(x => Exists(x.Url)))
+            await db.Database.ExecuteSqlRawAsync("UPDATE `activities` SET `image_url` = {0} WHERE `name` = {1} AND `image_url` IS NULL", url, name);
+    }
+}
+
 public static class DbSetup
 {
     private static readonly (string Table, string Column, string Ddl)[] Columns =
@@ -701,6 +772,8 @@ public static class DbSetup
             await db.Database.ExecuteSqlRawAsync($"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}");
             log.LogWarning("อัปเกรดฐานข้อมูล: เพิ่มคอลัมน์ {Table}.{Column}", table, column);
         }
+        // Part 62: เพิ่งมีคอลัมน์รูปกิจกรรม → ใส่รูปตั้งต้นให้กิจกรรม/บริการตัวอย่างที่ชื่อตรงกันและยังไม่มีรูป (ทำครั้งเดียว)
+        if (!have.Contains("activities.image_url")) await SampleImages.FillAsync(db);
 
         if (!have.Contains("audit_logs.audit_id"))
         {

@@ -799,3 +799,6 @@ tr.dv-late > td { background: #fdf1f1; }
 @media (max-width: 480px) { .aca-days label { flex: 1 0 calc(25% - 6px); } }
 .sva-f input:not([type=file]):not([type=checkbox]), .sva-f select { height: 42px; }
 .sva-f textarea { min-height: 76px; }
+
+.aca-media { aspect-ratio: 16 / 9; background: linear-gradient(135deg, #efe8f6, #f7f0de); }
+.aca-media img { width: 100%; height: 100%; object-fit: cover; display: block; }

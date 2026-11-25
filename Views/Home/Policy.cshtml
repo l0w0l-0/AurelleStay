@@ -79,6 +79,20 @@
         </ul>
     </section>
 
+    <section class="cx-box" id="image-credits">
+        <h2>เครดิตภาพ</h2>
+        <p>ภาพประกอบบริการและกิจกรรมมาจาก Wikimedia Commons ใช้ได้ฟรีตามสัญญาอนุญาตที่ระบุ (ครอปและย่อขนาดให้เข้ากับหน้าเว็บ) ภาพห้องพักและบริการชุดแรกมาจาก Unsplash (Unsplash License)</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="ตารางเครดิตภาพ"><table class="table table-sm">
+            <thead><tr><th>ภาพ</th><th>ผู้ถ่าย / เจ้าของ</th><th>สัญญาอนุญาต</th></tr></thead>
+            <tbody>
+            @foreach (var c in pameka_7033_l005.Helpers.SampleImages.Credits)
+            {
+                <tr><td><a href="@c.Source" target="_blank" rel="noopener nofollow">@c.File.Split('/').Last()</a></td><td>@c.Author</td><td>@c.License</td></tr>
+            }
+            </tbody>
+        </table></div>
+    </section>
+
     @if (Model.HasContact)
     {
         <p><a href="@Url.Action("About", "Home")#contact" class="cx-btn cx-btn--ghost">ติดต่อเรา</a></p>

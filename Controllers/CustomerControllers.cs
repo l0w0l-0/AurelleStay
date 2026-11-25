@@ -1072,7 +1072,7 @@ public class ActivitiesController : AppController
         {
             var card = new ActivityCardViewModel
             {
-                Id = a.ActivityId, Name = a.Name, Category = a.Category, Description = a.Description, Price = a.Price,
+                Id = a.ActivityId, ImageUrl = a.ImageUrl, Name = a.Name, Category = a.Category, Description = a.Description, Price = a.Price,
                 DurationMin = a.DurationMin, Capacity = a.Capacity, Times = HotelActivities.ParseTimes(a.Times), Days = a.Days, Location = a.Location
             };
             for (var d = today; d <= today.AddDays(6); d = d.AddDays(1))
