@@ -17,7 +17,9 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     DOTNET_RUNNING_IN_CONTAINER=true
 COPY --from=build /out ./
 # โฟลเดอร์ที่ระบบเขียนไฟล์ (สลิป รูปห้อง รูปบริการ กุญแจคุกกี้) — ให้ผู้ใช้ app (ไม่ใช่ root) เขียนได้
-RUN mkdir -p /app/App_Data/slips /app/wwwroot/images/rooms /app/wwwroot/images/services /home/app/.aspnet/DataProtection-Keys \
+# Part 62: สำเนารูปตั้งต้นไว้ที่ /app/seed-images — โฟลเดอร์รูปเป็น volume (ข้อมูลเดิมไม่หาย) ระบบจะคัดลอกรูปตั้งต้นที่ยังไม่มีเข้าไปเองตอนเปิด
+RUN mkdir -p /app/App_Data/slips /app/wwwroot/images/rooms /app/wwwroot/images/services /app/wwwroot/images/activities /home/app/.aspnet/DataProtection-Keys \
+    && cp -r /app/wwwroot/images /app/seed-images \
     && chown -R app:app /app/App_Data /app/wwwroot/images /home/app/.aspnet
 USER app
 EXPOSE 8080

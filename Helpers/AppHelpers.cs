@@ -513,6 +513,25 @@ public static class SampleImages
     static bool Exists(string url) => File.Exists(Path.Combine(WebRoot, url.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
     public static string? ActivityImage(string name) => Activities.Where(a => a.Name == name && Exists(a.Url)).Select(a => a.Url).FirstOrDefault();
 
+    /// <summary>
+    /// Docker: โฟลเดอร์รูปเป็น volume ที่ถูกเติมแค่ครั้งแรก รูปตั้งต้นที่เพิ่มในเวอร์ชันใหม่จึงไม่เข้าไป
+    /// → คัดลอกจาก /app/seed-images เฉพาะไฟล์ที่ยังไม่มี (ไม่ทับ/ไม่ลบไฟล์เดิม)
+    /// </summary>
+    public static int SyncSeedFiles(string seedRoot)
+    {
+        if (!Directory.Exists(seedRoot)) return 0;
+        var n = 0;
+        foreach (var src in Directory.EnumerateFiles(seedRoot, "*.jpg", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(seedRoot, src);
+            var dst = Path.Combine(WebRoot, "images", rel);
+            if (File.Exists(dst)) continue;
+            try { Directory.CreateDirectory(Path.GetDirectoryName(dst)!); File.Copy(src, dst); n++; }
+            catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+        return n;
+    }
+
     public static async Task FillAsync(Csi402dbContext db)
     {
         foreach (var (name, url) in Services.Where(x => Exists(x.Url)))
@@ -772,8 +791,10 @@ public static class DbSetup
             await db.Database.ExecuteSqlRawAsync($"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}");
             log.LogWarning("อัปเกรดฐานข้อมูล: เพิ่มคอลัมน์ {Table}.{Column}", table, column);
         }
-        // Part 62: เพิ่งมีคอลัมน์รูปกิจกรรม → ใส่รูปตั้งต้นให้กิจกรรม/บริการตัวอย่างที่ชื่อตรงกันและยังไม่มีรูป (ทำครั้งเดียว)
-        if (!have.Contains("activities.image_url")) await SampleImages.FillAsync(db);
+        // Part 62: รูปตั้งต้นที่เพิ่มในเวอร์ชันใหม่ → คัดลอกเข้า volume (Docker) แล้วใส่ให้รายการตัวอย่างที่ชื่อตรงกันและยังไม่มีรูป
+        var copied = SampleImages.SyncSeedFiles(Path.Combine(AppContext.BaseDirectory, "seed-images"));
+        if (copied > 0) log.LogWarning("คัดลอกรูปตั้งต้นใหม่ {Count} ไฟล์", copied);
+        if (!have.Contains("activities.image_url") || copied > 0) await SampleImages.FillAsync(db);
 
         if (!have.Contains("audit_logs.audit_id"))
         {

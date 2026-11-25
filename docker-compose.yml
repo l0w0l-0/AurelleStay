@@ -62,6 +62,7 @@ services:
       - slips:/app/App_Data/slips                    # สลิปการชำระเงิน
       - room-images:/app/wwwroot/images/rooms        # รูปห้อง (ครั้งแรกคัดลอกรูปตัวอย่างให้)
       - service-images:/app/wwwroot/images/services
+      - activity-images:/app/wwwroot/images/activities   # รูปกิจกรรม (Part 62)
       - keys:/home/app/.aspnet/DataProtection-Keys   # กุญแจคุกกี้: รีสตาร์ตแล้วไม่ต้องเข้าสู่ระบบใหม่
 
 volumes:
@@ -69,4 +70,5 @@ volumes:
   slips:
   room-images:
   service-images:
+  activity-images:
   keys:
