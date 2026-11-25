@@ -410,6 +410,7 @@ public class BookingController : AppController
 
         booking.Status = "CANCELLED";
         await _db.SaveChangesAsync();
+        await StayBill.SweepAsync(_db, AppClock.Now);   // Part 60: ยกเลิกกิจกรรมที่ผูกกับการจองนี้
         await pameka_7033_l005.Helpers.Waitlist.CheckAsync(_db, DateOnly.FromDateTime(AppClock.Today));   // Part 51: ห้องว่างแล้ว → แจ้งคนที่รอทันที
         Flash("ยกเลิกการจองแล้ว");
         return RedirectToAction(nameof(MyBookings));

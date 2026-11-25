@@ -854,6 +854,7 @@ public static class BookingExpiry
                 "การจองเลยวันเข้าพักโดยที่ยังไม่ได้รับการยืนยันการชำระเงิน หากคุณโอนเงินแล้ว กรุณาติดต่อโรงแรมพร้อมหลักฐาน", Notify.BookingLink(b.BookingId));
         }
         if (expired.Count > 0 || staleList.Count > 0) await db.SaveChangesAsync();
+        await StayBill.SweepAsync(db, now);
         return expired.Count + staleList.Count + noShows;
     }
 
@@ -1867,6 +1868,41 @@ public static class StayBill
         foreach (var a in act) { a.PaidAt = now; a.PayMethod = method; a.PaidBy = staffId; }
         await db.SaveChangesAsync();
         return svc.Sum(s => s.UnitPrice * s.Quantity) + act.Sum(a => a.Total);
+    }
+
+    /// <summary>
+    /// เก็บกวาดให้สอดคล้องกับสถานะการจอง (รันได้ซ้ำ):
+    /// การจองถูกยกเลิก / ไม่มาเข้าพัก → ยกเลิกกิจกรรมที่ยังไม่จ่าย (คืนที่นั่ง ไม่คิดเงิน)
+    /// เช็คเอาท์แล้ว → ยกเลิกกิจกรรมรอบที่ยังไม่เริ่ม (ออกก่อนกำหนด)
+    /// </summary>
+    public static async Task<int> SweepAsync(Csi402dbContext db, DateTime now)
+    {
+        var n = await db.Database.ExecuteSqlRawAsync(@"UPDATE activity_bookings ab JOIN bookings b ON b.booking_id = ab.booking_id
+            SET ab.status = 'CANCELLED', ab.cancelled_at = {0}
+            WHERE ab.status = 'CONFIRMED' AND ab.paid_at IS NULL AND b.status IN ('CANCELLED', 'NO_SHOW')", now);
+        n += await db.Database.ExecuteSqlRawAsync(@"UPDATE activity_bookings ab JOIN bookings b ON b.booking_id = ab.booking_id
+            SET ab.status = 'CANCELLED', ab.cancelled_at = {0}
+            WHERE ab.status = 'CONFIRMED' AND ab.paid_at IS NULL AND b.status = 'CHECKED_OUT'
+              AND TIMESTAMP(ab.act_date, ab.start_time) > {0}", now);
+        return n;
+    }
+
+    /// <summary>
+    /// ก่อนเช็คเอาท์: ยกเลิกสิ่งที่ยังไม่เกิดขึ้น เพื่อไม่ให้คิดเงินสิ่งที่ลูกค้าไม่ได้รับ
+    /// กิจกรรมรอบที่ยังไม่เริ่ม · บริการที่สั่งระหว่างพักที่ยังไม่มีพนักงานรับงาน · ของใช้ที่ขอแล้วยังไม่มีคนรับ
+    /// </summary>
+    public static async Task CloseOpenAsync(Csi402dbContext db, int bookingId, DateTime now)
+    {
+        var acts = await db.ActivityBookings.Where(a => a.BookingId == bookingId && a.Status == "CONFIRMED" && a.PaidAt == null).ToListAsync();
+        foreach (var a in acts.Where(a => a.ActDate.ToDateTime(TimeOnly.ParseExact(a.StartTime, "HH:mm")) > now))
+        { a.Status = "CANCELLED"; a.CancelledAt = now; }
+        var svc = await db.BookingServices.Include(s => s.DeliveryTasks)
+            .Where(s => s.BookingId == bookingId && s.InStay && s.PaidAt == null).ToListAsync();
+        foreach (var s in svc.Where(s => !s.DeliveryTasks.Any(t => t.Status != "PENDING" || t.AssignedTo != null)))
+        { db.DeliveryTasks.RemoveRange(s.DeliveryTasks); db.BookingServices.Remove(s); }
+        await db.ItemRequests.Where(r => r.BookingId == bookingId && r.Status == "PENDING" && r.AssignedTo == null)
+            .ExecuteUpdateAsync(x => x.SetProperty(r => r.Status, "CANCELLED"));
+        await db.SaveChangesAsync();
     }
 
     /// <summary>รายรับระหว่างพักที่รับชำระแล้วในช่วงเวลา (รวมในรายงานรายรับ)</summary>

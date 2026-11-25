@@ -281,6 +281,7 @@ public class AdminBookingsController : AdminAreaController
             Notify.Add(Db, b.UserId, $"การจอง #{id} ถูกยกเลิกโดยโรงแรม",
                 "หากคุณโอนเงินแล้ว กรุณาติดต่อโรงแรมเพื่อตรวจสอบ", Notify.BookingLink(id));
             await Db.SaveChangesAsync();
+        await StayBill.SweepAsync(Db, AppClock.Now);   // Part 60: ยกเลิกกิจกรรมที่ผูกกับการจองนี้
             Flash($"ยกเลิกการจอง #{id} แล้ว");
         }
         else if (BookingWorkflow.CanRequestRefund(b.Status, flags))

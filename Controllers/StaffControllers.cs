@@ -101,6 +101,7 @@ public class AccountingController : AppController
         Notify.Add(_db, r.Booking.UserId, $"อนุมัติคืนเงินแล้ว · การจอง #{r.BookingId}",
             noShow ? $"คืนเงิน {r.Amount:N2} บาท" : $"คืนเงิน {r.Amount:N2} บาท การจองนี้ถูกยกเลิกแล้ว", Notify.BookingLink(r.BookingId));
         await _db.SaveChangesAsync();
+        await StayBill.SweepAsync(_db, AppClock.Now);   // Part 60: ยกเลิกกิจกรรมที่ผูกกับการจองนี้
         if (!noShow) await Waitlist.CheckAsync(_db, DateOnly.FromDateTime(AppClock.Today));   // Part 51
         Flash($"อนุมัติคืนเงิน {r.Amount:N2} บาท ของการจอง #{r.BookingId} แล้ว" + (noShow ? "" : " (การจองถูกยกเลิก)"));
         return RedirectToAction(nameof(Refunds));
@@ -450,6 +451,7 @@ public class FrontDeskController : AppController
         Notify.Add(_db, b.UserId, $"การจอง #{b.BookingId}: ไม่ได้เข้าพักตามกำหนด",
             "โรงแรมบันทึกว่าไม่มาเข้าพัก หากเดินทางมาแล้วหรือมีเหตุจำเป็น กรุณาติดต่อเคาน์เตอร์ต้อนรับ", Notify.BookingLink(b.BookingId));
         await _db.SaveChangesAsync();
+        await StayBill.SweepAsync(_db, AppClock.Now);   // Part 60: ยกเลิกกิจกรรมที่ผูกกับการจองนี้
         Flash($"บันทึกการจอง #{b.BookingId} ว่าไม่มาเข้าพักแล้ว ห้องเปิดให้จองต่อได้");
         return RedirectToAction(nameof(Index), new { view = "late" });
     }
@@ -488,6 +490,8 @@ public class FrontDeskController : AppController
         var (b, rooms) = await LoadBookingWithRooms(id);
         if (b == null || !BookingWorkflow.CanCheckOut(b.Status)) return Stale();
         // Part 60: ต้องรับชำระค่าใช้จ่ายระหว่างพัก (บริการที่สั่งเพิ่ม / ค่ากิจกรรม) ให้ครบก่อนเช็คเอาท์
+        //          สิ่งที่ยังไม่เกิดขึ้น (กิจกรรมรอบหลัง / บริการที่ยังไม่มีคนรับงาน) ยกเลิกก่อน ไม่คิดเงิน
+        await StayBill.CloseOpenAsync(_db, b.BookingId, AppClock.Now);
         var due = await StayBill.UnpaidAsync(_db, b.BookingId);
         if (due > 0)
         {
