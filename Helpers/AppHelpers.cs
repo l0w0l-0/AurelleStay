@@ -35,6 +35,7 @@ public static class AppSetup
         {
             o.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
             o.Filters.Add<AuditFilter>();   // บันทึกกิจกรรมทุกคำสั่งที่เปลี่ยนข้อมูล (POST) ของผู้ใช้ที่ล็อกอิน
+            o.Filters.Add<BusyRetryFilter>(); // ฐานข้อมูลล็อกชนกันชั่วคราว (deadlock) → แจ้งให้กดใหม่ แทนหน้าผิดพลาด
         });
         services.AddMemoryCache();
         AppClock.Configure(config["App:TimeZone"]);
@@ -1593,5 +1594,38 @@ public static class ReturnUrlGuard
             if (ok) return true;
         }
         return false;
+    }
+}
+
+
+/// <summary>
+/// Part 67: คำสั่ง POST ที่ชนล็อกฐานข้อมูลกับงานอื่นพร้อมกัน (MySQL deadlock 1213 / lock wait timeout 1205)
+/// ข้อมูลไม่ถูกบันทึกเพราะทรานแซกชันถูกยกเลิกทั้งก้อน → พากลับหน้าเดิมพร้อมข้อความให้กดอีกครั้ง (ไม่โชว์หน้าผิดพลาด)
+/// </summary>
+public sealed class BusyRetryFilter : Microsoft.AspNetCore.Mvc.Filters.IExceptionFilter
+{
+    private readonly ILogger<BusyRetryFilter> _log;
+    private readonly Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataDictionaryFactory _temp;
+    public BusyRetryFilter(ILogger<BusyRetryFilter> log, Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataDictionaryFactory temp) { _log = log; _temp = temp; }
+
+    public static bool IsBusy(Exception? ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+            if (e is MySqlConnector.MySqlException m && (m.Number == 1213 || m.Number == 1205)) return true;
+        return false;
+    }
+
+    public void OnException(Microsoft.AspNetCore.Mvc.Filters.ExceptionContext ctx)
+    {
+        var req = ctx.HttpContext.Request;
+        if (!HttpMethods.IsPost(req.Method) || !IsBusy(ctx.Exception)) return;
+        _log.LogWarning(ctx.Exception, "ฐานข้อมูลล็อกชนกันชั่วคราว: {Path}", req.Path);
+        var td = _temp.GetTempData(ctx.HttpContext);
+        td["Status"] = "ระบบกำลังบันทึกงานอื่นพร้อมกันอยู่ รายการนี้ยังไม่ถูกบันทึก กรุณากดอีกครั้ง";
+        td["StatusError"] = true;
+        var back = req.Headers.Referer.ToString();
+        var local = Uri.TryCreate(back, UriKind.Absolute, out var u) && u.Host == req.Host.Host ? u.PathAndQuery : "/";
+        ctx.Result = new Microsoft.AspNetCore.Mvc.RedirectResult(local);
+        ctx.ExceptionHandled = true;
     }
 }

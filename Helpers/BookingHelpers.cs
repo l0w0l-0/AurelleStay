@@ -899,6 +899,8 @@ public sealed class BookingExpiryService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stop)
     {
         if (_every == TimeSpan.Zero) return;
+        // รอให้ระบบเริ่มเสร็จและรับผู้ใช้ก่อนค่อยรันรอบแรก (กันชนล็อกกับคำสั่งแรก ๆ ของผู้ใช้ตอนเพิ่งเปิดระบบ)
+        try { await Task.Delay(TimeSpan.FromSeconds(20), stop); } catch (OperationCanceledException) { return; }
         using var timer = new PeriodicTimer(_every);
         try
         {
