@@ -409,6 +409,7 @@ public static class BookingQueries
                 case RoleNames.FrontDesk:   // ต้องเช็คอินวันนี้ (ยืนยันแล้ว ถึงวันเข้าพัก) + ต้องเช็คเอาท์ (ถึง/เลยวันออก)
                     c["Index"] = await db.Bookings.CountAsync(b => (b.Status == "CONFIRMED" && b.CheckIn <= today && b.CheckOut > today) || (b.Status == "CHECKED_IN" && b.CheckOut <= today));
                     c["Activities"] = await db.ActivityBookings.CountAsync(b => b.ActDate == today && b.Status == "CONFIRMED");
+                    c["Requests"] = await db.StayRequests.CountAsync(r => r.Status == "PENDING") + await db.LostItems.CountAsync(i => i.Status == "CLAIMED");
                     break;
                 case RoleNames.Delivery:
                     c["Index"] = await db.DeliveryTasks.CountAsync(t => t.Status != "DONE")
@@ -417,6 +418,7 @@ public static class BookingQueries
                 case RoleNames.Housekeeping:
                     c["Index"] = await db.HousekeepingTasks.CountAsync(t => t.Status != "DONE");
                     c["Issues"] = await db.RoomIssues.CountAsync(i => i.Status == "OPEN");
+                    c["LostFound"] = await db.LostItems.CountAsync(i => i.Status == "STORED");
                     break;
                 case RoleNames.Admin:
                     c["AdminBookings"] = await db.Bookings.CountAsync(b => b.Status == "PENDING");
@@ -2096,5 +2098,75 @@ public static class StayChanges
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return (true, $"ย้ายการจอง #{bookingId} จากห้อง {oldRoom.RoomNo} ไปห้อง {newRoom.RoomNo} แล้ว (ราคาเดิม) ห้อง {oldRoom.RoomNo} ส่งทำความสะอาดแล้ว");
+    }
+}
+
+
+/// <summary>Part 66: คำขอต่อคืนจากผู้เข้าพัก + ของลืมในห้อง</summary>
+public static class GuestServices
+{
+    public const string StayRequestsTableSql = @"CREATE TABLE IF NOT EXISTS `stay_requests` (
+    `request_id` int NOT NULL AUTO_INCREMENT,
+    `booking_id` int NOT NULL,
+    `user_id` int NOT NULL,
+    `nights` smallint NOT NULL,
+    `quoted_amount` decimal(10,2) NOT NULL DEFAULT 0,
+    `note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+    `reply` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `handled_by` int NULL,
+    `handled_at` datetime NULL,
+    PRIMARY KEY (`request_id`),
+    KEY `ix_sr_status` (`status`, `created_at`),
+    KEY `ix_sr_booking` (`booking_id`),
+    CONSTRAINT `stay_requests_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `stay_requests_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `stay_requests_ibfk_3` FOREIGN KEY (`handled_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_sr_nights` CHECK (`nights` BETWEEN 1 AND 14),
+    CONSTRAINT `chk_sr_status` CHECK (`status` IN ('PENDING','APPROVED','REJECTED','CANCELLED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public const string LostItemsTableSql = @"CREATE TABLE IF NOT EXISTS `lost_items` (
+    `item_id` int NOT NULL AUTO_INCREMENT,
+    `room_id` int NOT NULL,
+    `booking_id` int NULL,
+    `description` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'STORED',
+    `claim_note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `found_by` int NULL,
+    `found_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `claimed_at` datetime NULL,
+    `closed_by` int NULL,
+    `closed_at` datetime NULL,
+    PRIMARY KEY (`item_id`),
+    KEY `ix_li_status` (`status`, `found_at`),
+    KEY `ix_li_booking` (`booking_id`),
+    KEY `ix_li_room` (`room_id`),
+    CONSTRAINT `lost_items_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`),
+    CONSTRAINT `lost_items_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE SET NULL,
+    CONSTRAINT `lost_items_ibfk_3` FOREIGN KEY (`found_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `lost_items_ibfk_4` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_li_status` CHECK (`status` IN ('STORED','CLAIMED','RETURNED','DISPOSED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /// <summary>เก็บของลืมไว้กี่วันก่อนจำหน่าย (ทิ้ง/บริจาค) ได้</summary>
+    public const int KeepDays = 30;
+
+    public static string RequestStatus(string s) => s switch
+    { "PENDING" => "รอเคาน์เตอร์ตอบ", "APPROVED" => "อนุมัติแล้ว", "REJECTED" => "ไม่อนุมัติ", "CANCELLED" => "ยกเลิกแล้ว", _ => s };
+
+    public static string LostStatus(string s) => s switch
+    { "STORED" => "เก็บไว้ที่โรงแรม", "CLAIMED" => "ลูกค้าแจ้งรับคืน", "RETURNED" => "ส่งคืนแล้ว", "DISPOSED" => "จำหน่ายแล้ว", _ => s };
+
+    /// <summary>การจองที่น่าจะเป็นเจ้าของของ: ผู้เข้าพักที่อยู่ / เพิ่งออกจากห้องนี้ (ภายใน 3 วัน)</summary>
+    public static async Task<(int BookingId, int UserId)?> OwnerOfAsync(Csi402dbContext db, int roomId, DateOnly today)
+    {
+        var b = await db.BookingRooms.AsNoTracking()
+            .Where(br => br.RoomId == roomId && (br.Booking.Status == "CHECKED_IN" || (br.Booking.Status == "CHECKED_OUT" && br.Booking.CheckOut >= today.AddDays(-3))))
+            .OrderByDescending(br => br.Booking.Status == "CHECKED_IN" && br.Booking.CheckIn <= today)
+            .ThenByDescending(br => br.Booking.Status == "CHECKED_IN").ThenByDescending(br => br.Booking.CheckOut)
+            .Select(br => new { br.BookingId, br.Booking.UserId }).FirstOrDefaultAsync();
+        return b == null ? null : (b.BookingId, b.UserId);
     }
 }

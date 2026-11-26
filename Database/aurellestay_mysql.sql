@@ -424,6 +424,53 @@ CREATE TABLE IF NOT EXISTS `stay_extensions` (
     CONSTRAINT `chk_ext_amount` CHECK (`amount` >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Part 66: คำขอต่อคืนจากผู้เข้าพัก (เคาน์เตอร์อนุมัติ/ปฏิเสธ)
+CREATE TABLE IF NOT EXISTS `stay_requests` (
+    `request_id` int NOT NULL AUTO_INCREMENT,
+    `booking_id` int NOT NULL,
+    `user_id` int NOT NULL,
+    `nights` smallint NOT NULL,
+    `quoted_amount` decimal(10,2) NOT NULL DEFAULT 0,
+    `note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+    `reply` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `handled_by` int NULL,
+    `handled_at` datetime NULL,
+    PRIMARY KEY (`request_id`),
+    KEY `ix_sr_status` (`status`, `created_at`),
+    KEY `ix_sr_booking` (`booking_id`),
+    CONSTRAINT `stay_requests_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `stay_requests_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `stay_requests_ibfk_3` FOREIGN KEY (`handled_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_sr_nights` CHECK (`nights` BETWEEN 1 AND 14),
+    CONSTRAINT `chk_sr_status` CHECK (`status` IN ('PENDING','APPROVED','REJECTED','CANCELLED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Part 66: ของลืมในห้องพัก (แม่บ้านบันทึก → แจ้งลูกค้า → ส่งคืน/จำหน่าย)
+CREATE TABLE IF NOT EXISTS `lost_items` (
+    `item_id` int NOT NULL AUTO_INCREMENT,
+    `room_id` int NOT NULL,
+    `booking_id` int NULL,
+    `description` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    `status` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'STORED',
+    `claim_note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `found_by` int NULL,
+    `found_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `claimed_at` datetime NULL,
+    `closed_by` int NULL,
+    `closed_at` datetime NULL,
+    PRIMARY KEY (`item_id`),
+    KEY `ix_li_status` (`status`, `found_at`),
+    KEY `ix_li_booking` (`booking_id`),
+    KEY `ix_li_room` (`room_id`),
+    CONSTRAINT `lost_items_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`),
+    CONSTRAINT `lost_items_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE SET NULL,
+    CONSTRAINT `lost_items_ibfk_3` FOREIGN KEY (`found_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `lost_items_ibfk_4` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_li_status` CHECK (`status` IN ('STORED','CLAIMED','RETURNED','DISPOSED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ข้อความติดต่อโรงแรมจากหน้า "ติดต่อเรา" (Part 30) รวมคำขอรีเซ็ตรหัสผ่าน — ผู้ส่งที่มีบัญชีผูก user_id (ลบบัญชีแล้วข้อความยังอยู่)
 CREATE TABLE IF NOT EXISTS `contact_messages` (
     `message_id` bigint NOT NULL AUTO_INCREMENT,

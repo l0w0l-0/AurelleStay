@@ -193,10 +193,10 @@ public static class RoleNames
     /// <summary>เมนูข้างของพนักงานแต่ละฝ่าย: (ชื่อ action ใน controller ของฝ่ายนั้น, ข้อความ) — รายการแรกคือหน้าหลัก</summary>
     public static IReadOnlyList<(string Action, string Label)> Menu(string? role) => role?.ToLowerInvariant() switch
     {
-        Accounting => [("Index", "ตรวจสอบการชำระเงิน"), ("Refunds", "คำขอคืนเงิน"), ("History", "ประวัติการเงิน"), ("Expenses", "รายจ่าย / กำไร")],
-        FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Activities", "กิจกรรมวันนี้"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง / ส่งของ")],
+        Accounting => [("Index", "ตรวจสอบการชำระเงิน"), ("Refunds", "คำขอคืนเงิน"), ("History", "ประวัติการเงิน"), ("Expenses", "รายจ่าย / กำไร"), ("Daily", "สรุปเงินเข้ารายวัน")],
+        FrontDesk => [("Index", "เช็คอิน / เช็คเอาท์"), ("WalkIn", "จองห้องให้ลูกค้า"), ("Activities", "กิจกรรมวันนี้"), ("Availability", "ปฏิทินห้องว่าง"), ("Rooms", "สถานะห้อง / ส่งของ"), ("Requests", "คำขอต่อคืน / ของลืม")],
         Delivery => [("Index", "ห้องที่ต้องส่ง"), ("Done", "ห้องที่ส่งสำเร็จ")],
-        Housekeeping => [("Index", "ห้องที่ต้องทำความสะอาด"), ("Done", "ห้องที่ทำไปแล้ว"), ("Issues", "แจ้งซ่อม")],
+        Housekeeping => [("Index", "ห้องที่ต้องทำความสะอาด"), ("Done", "ห้องที่ทำไปแล้ว"), ("Issues", "แจ้งซ่อม"), ("LostFound", "ของลืมในห้อง")],
         _ => []
     };
 }
@@ -785,6 +785,17 @@ public static class DbSetup
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง item_requests");
         }
 
+        // Part 66: คำขอต่อคืนจากลูกค้า / ของลืม
+        if (!have.Contains("stay_requests.request_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(GuestServices.StayRequestsTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง stay_requests");
+        }
+        if (!have.Contains("lost_items.item_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(GuestServices.LostItemsTableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง lost_items");
+        }
         // Part 65: ต่อคืนระหว่างพัก
         if (!have.Contains("stay_extensions.ext_id"))
         {

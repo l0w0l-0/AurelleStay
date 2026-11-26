@@ -124,6 +124,29 @@ public class AccountingController : AppController
     }
 
     // ---------------------------------------------------------------- รายจ่าย / กำไรรายเดือน
+    /// <summary>Part 66: สรุปเงินเข้า-ออกรายวัน แยกตามวิธีชำระ (ปิดยอดประจำวัน/กระทบยอดเงินสดในลิ้นชัก)</summary>
+    [HttpGet]
+    public async Task<IActionResult> Daily(DateOnly? date)
+    {
+        var d = date ?? DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);
+        var (start, end) = (d.ToDateTime(TimeOnly.MinValue), d.AddDays(1).ToDateTime(TimeOnly.MinValue));
+        var lines = new List<DailyLineViewModel>();
+        lines.AddRange(await _db.Payments.AsNoTracking()
+            .Where(p => p.PaidAt >= start && p.PaidAt < end && ((p.PaymentType == BookingWorkflow.PaymentType && (p.Status == "PAID" || p.Status == "REFUNDED"))
+                                                               || (p.PaymentType == BookingWorkflow.RefundType && p.Status == "REFUNDED")))
+            .Select(p => new DailyLineViewModel { At = p.PaidAt!.Value, Kind = p.PaymentType == BookingWorkflow.RefundType ? "คืนเงิน" : "ค่าห้อง/การจอง",
+                BookingId = p.BookingId, Method = p.Method, Amount = p.PaymentType == BookingWorkflow.RefundType ? -p.Amount : p.Amount }).ToListAsync());
+        lines.AddRange(await _db.BookingServices.AsNoTracking().Where(x => x.InStay && x.PaidAt >= start && x.PaidAt < end)
+            .Select(x => new DailyLineViewModel { At = x.PaidAt!.Value, Kind = "บริการระหว่างพัก", BookingId = x.BookingId, Method = x.PayMethod ?? "", Amount = x.UnitPrice * x.Quantity }).ToListAsync());
+        lines.AddRange(await _db.ActivityBookings.AsNoTracking().Where(x => x.PaidAt >= start && x.PaidAt < end && x.Total > 0)
+            .Select(x => new DailyLineViewModel { At = x.PaidAt!.Value, Kind = "กิจกรรม", BookingId = x.BookingId ?? 0, Method = x.PayMethod ?? "", Amount = x.Total }).ToListAsync());
+        lines.AddRange((await _db.Database.SqlQueryRaw<StayChanges.ExtLine>(
+                "SELECT ext_id AS ExtId, booking_id AS BookingId, from_date AS FromDate, nights AS Nights, amount AS Amount, created_at AS CreatedAt, paid_at AS PaidAt, pay_method AS PayMethod FROM stay_extensions WHERE paid_at >= {0} AND paid_at < {1}",
+                start, end).ToListAsync())
+            .Select(e => new DailyLineViewModel { At = e.PaidAt!.Value, Kind = "ค่าห้องต่อคืน", BookingId = e.BookingId, Method = e.PayMethod ?? "", Amount = e.Amount }));
+        return View(new DailyCashViewModel { Date = d, Lines = lines.OrderBy(l => l.At).ToList() });
+    }
+
     [HttpGet]
     public async Task<IActionResult> Expenses(int? year, int? month)
     {
@@ -504,6 +527,9 @@ public class FrontDeskController : AppController
         }
 
         b.Status = "CHECKED_OUT"; b.DoNotDisturb = false;
+        // Part 66: คำขอต่อคืนที่ยังไม่ได้ตอบ ปิดอัตโนมัติเมื่อเช็คเอาท์
+        await _db.StayRequests.Where(r => r.BookingId == b.BookingId && r.Status == "PENDING")
+            .ExecuteUpdateAsync(x => x.SetProperty(r => r.Status, "CANCELLED").SetProperty(r => r.HandledAt, AppClock.Now).SetProperty(r => r.Reply, "เช็คเอาท์แล้ว"));
         // คำขอทำความสะอาดระหว่างพักที่ยังค้าง → ปิด (ห้องจะถูกทำความสะอาดหลังเช็คเอาท์อยู่แล้ว)
         await _db.HousekeepingTasks.Where(t => t.BookingId == b.BookingId && t.Kind == "REQUEST" && t.Status != "DONE")
             .ExecuteUpdateAsync(x => x.SetProperty(t => t.Status, "DONE").SetProperty(t => t.DoneAt, AppClock.Now).SetProperty(t => t.Note, "ปิดอัตโนมัติเมื่อเช็คเอาท์"));
@@ -718,6 +744,72 @@ public class FrontDeskController : AppController
         var ok = await StayBill.CancelServiceAsync(_db, bsId, id);
         Flash(ok ? "ยกเลิกรายการแล้ว" : "ยกเลิกไม่ได้ (พนักงานรับงานไปแล้ว หรือชำระแล้ว)", !ok);
         return RedirectToAction(nameof(Bill), new { id });
+    }
+
+    // ---------------------------------------------------------------- Part 66: คำขอจากผู้เข้าพัก (ต่อคืน) + ของลืม
+    [HttpGet]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> Requests()
+    {
+        var vm = new GuestRequestsViewModel();
+        var pend = await _db.StayRequests.AsNoTracking().Where(r => r.Status == "PENDING").OrderBy(r => r.RequestId)
+            .Select(r => new { R = r, Guest = r.Booking.User.FirstName + " " + r.Booking.User.LastName + " · " + r.Booking.User.Phone,
+                Rooms = r.Booking.BookingRooms.Select(x => x.Room.RoomNo).ToList(), r.Booking.CheckOut }).ToListAsync();
+        foreach (var p in pend)
+            vm.Pending.Add((p.R, p.Guest, string.Join(", ", p.Rooms.OrderBy(x => x)), p.CheckOut, await StayChanges.QuoteAsync(_db, p.R.BookingId, p.R.Nights)));
+        vm.Recent = (await _db.StayRequests.AsNoTracking().Where(r => r.Status != "PENDING").OrderByDescending(r => r.RequestId).Take(15)
+            .Select(r => new { R = r, Guest = r.Booking.User.FirstName + " " + r.Booking.User.LastName }).ToListAsync()).Select(x => (x.R, x.Guest)).ToList();
+        vm.Lost = await LostRows(_db, onlyOpen: true);
+        return View(vm);
+    }
+
+    internal static Task<List<LostItemRowViewModel>> LostRows(Csi402dbContext db, bool onlyOpen) =>
+        db.LostItems.AsNoTracking().Where(i => !onlyOpen || i.Status == "STORED" || i.Status == "CLAIMED")
+            .OrderBy(i => i.Status == "CLAIMED" ? 0 : i.Status == "STORED" ? 1 : 2).ThenByDescending(i => i.ItemId).Take(60)
+            .Select(i => new LostItemRowViewModel { Id = i.ItemId, Description = i.Description, RoomNo = i.Room.RoomNo, BookingId = i.BookingId,
+                Guest = i.Booking != null ? i.Booking.User.FirstName + " " + i.Booking.User.LastName : null, Phone = i.Booking != null ? i.Booking.User.Phone : null,
+                Status = i.Status, FoundAt = i.FoundAt, Finder = i.Finder != null ? i.Finder.FirstName : null, ClaimNote = i.ClaimNote, ClosedAt = i.ClosedAt }).ToListAsync();
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> ApproveStay(int id)
+    {
+        var r = await _db.StayRequests.FirstOrDefaultAsync(x => x.RequestId == id && x.Status == "PENDING");
+        if (r == null) return Stale();
+        var (ok, msg) = await StayChanges.ExtendAsync(_db, r.BookingId, r.Nights, CurrentUserId ?? 0);
+        if (ok) { r.Status = "APPROVED"; r.HandledBy = CurrentUserId; r.HandledAt = AppClock.Now; await _db.SaveChangesAsync(); }
+        await AuditTrail.WriteAsync(HttpContext, "FrontDesk.ApproveStay", r.BookingId, ok, msg);
+        Flash(ok ? msg : msg + " — ปฏิเสธคำขอพร้อมเหตุผล หรือย้ายห้องให้ก่อน", !ok);
+        return RedirectToAction(nameof(Requests));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> RejectStay(int id, string? reply)
+    {
+        reply = string.IsNullOrWhiteSpace(reply) ? null : reply.Trim();
+        if (reply == null || reply.Length > 200) { Flash("ระบุเหตุผลที่ไม่อนุมัติ (ไม่เกิน 200 ตัวอักษร) ลูกค้าจะเห็นข้อความนี้", true); return RedirectToAction(nameof(Requests)); }
+        var r = await _db.StayRequests.Include(x => x.Booking).FirstOrDefaultAsync(x => x.RequestId == id && x.Status == "PENDING");
+        if (r == null) return Stale();
+        r.Status = "REJECTED"; r.Reply = reply; r.HandledBy = CurrentUserId; r.HandledAt = AppClock.Now;
+        Notify.Add(_db, r.UserId, $"ขอต่อคืนไม่สำเร็จ · การจอง #{r.BookingId}", reply, "/Member#mb-ext");
+        await _db.SaveChangesAsync();
+        await AuditTrail.WriteAsync(HttpContext, "FrontDesk.RejectStay", r.BookingId, true, reply);
+        Flash("ตอบปฏิเสธแล้ว ลูกค้าได้รับแจ้งเตือน");
+        return RedirectToAction(nameof(Requests));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> ReturnLost(int id)
+    {
+        var i = await _db.LostItems.Include(x => x.Booking).FirstOrDefaultAsync(x => x.ItemId == id && (x.Status == "STORED" || x.Status == "CLAIMED"));
+        if (i == null) return Stale();
+        i.Status = "RETURNED"; i.ClosedBy = CurrentUserId; i.ClosedAt = AppClock.Now;
+        if (i.Booking != null) Notify.Add(_db, i.Booking.UserId, "ส่งคืนของลืมแล้ว", i.Description, "/Member#mb-lost");
+        await _db.SaveChangesAsync();
+        Flash($"บันทึกส่งคืน \"{i.Description}\" แล้ว");
+        return Redirect(Url.Action(nameof(Requests))! + "#lost");
     }
 
     // ---------------------------------------------------------------- Part 65: ต่อคืน / ย้ายห้อง
@@ -1043,6 +1135,44 @@ public class HousekeepingController : AppController
         if (n == 0) return Stale();
         Flash("ปรับความด่วนของงานแล้ว");
         return RedirectToAction(nameof(Index));
+    }
+
+    // ---------------------------------------------------------------- Part 66: ของลืมในห้อง
+    [HttpGet]
+    public async Task<IActionResult> LostFound()
+    {
+        ViewBag.Rooms = await _db.Rooms.AsNoTracking().OrderBy(r => r.RoomNo).Select(r => new ValueTuple<int, string>(r.RoomId, r.RoomNo)).ToListAsync();
+        return View(await FrontDeskController.LostRows(_db, onlyOpen: false));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> LogLost(int roomId, string? description)
+    {
+        description = description?.Trim();
+        var room = await _db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.RoomId == roomId);
+        if (room == null || string.IsNullOrEmpty(description) || description.Length > 200)
+        { Flash("เลือกห้องและบอกว่าพบอะไร (ไม่เกิน 200 ตัวอักษร)", true); return RedirectToAction(nameof(LostFound)); }
+        var owner = await GuestServices.OwnerOfAsync(_db, roomId, DateOnly.FromDateTime(AppClock.Today));
+        _db.LostItems.Add(new LostItem { RoomId = roomId, BookingId = owner?.BookingId, Description = description, Status = "STORED", FoundBy = CurrentUserId, FoundAt = AppClock.Now });
+        if (owner is { } o)
+            Notify.Add(_db, o.UserId, $"พบของในห้อง {room.RoomNo}", $"{description} — เก็บไว้ที่โรงแรม {GuestServices.KeepDays} วัน แจ้งรับคืนได้ที่หน้าสมาชิก", "/Member#mb-lost");
+        await _db.SaveChangesAsync();
+        Flash(owner != null ? $"บันทึกของลืมห้อง {room.RoomNo} แล้ว แจ้งผู้เข้าพักการจอง #{owner.Value.BookingId} ให้แล้ว"
+                            : $"บันทึกของลืมห้อง {room.RoomNo} แล้ว (ไม่พบผู้เข้าพักล่าสุดใน 3 วัน — เก็บไว้ที่เคาน์เตอร์)");
+        return RedirectToAction(nameof(LostFound));
+    }
+
+    /// <summary>เก็บครบกำหนดแล้วไม่มีใครมารับ → จำหน่าย (ทิ้ง/บริจาค)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DisposeLost(int id)
+    {
+        var i = await _db.LostItems.FirstOrDefaultAsync(x => x.ItemId == id && x.Status == "STORED");
+        if (i == null || i.FoundAt > AppClock.Now.AddDays(-GuestServices.KeepDays))
+        { Flash($"จำหน่ายได้เมื่อเก็บครบ {GuestServices.KeepDays} วันและยังไม่มีใครแจ้งรับ", true); return RedirectToAction(nameof(LostFound)); }
+        i.Status = "DISPOSED"; i.ClosedBy = CurrentUserId; i.ClosedAt = AppClock.Now;
+        await _db.SaveChangesAsync();
+        Flash("บันทึกจำหน่ายแล้ว");
+        return RedirectToAction(nameof(LostFound));
     }
 
     // ---------------------------------------------------------------- แจ้งซ่อม

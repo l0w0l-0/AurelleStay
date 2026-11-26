@@ -1,0 +1,77 @@
+@model pameka_7033_l005.ViewModels.GuestRequestsViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "คำขอต่อคืน / ของลืม";
+    Layout = "_Adminlayout";
+}
+
+<div class="dashboard">
+    <h1 class="fd-title">คำขอต่อคืน / ของลืม</h1>
+    <partial name="_Flash" />
+
+    <div class="staff-card">
+        <h2 class="h5">ผู้เข้าพักขอต่อคืน (@Model.Pending.Count)</h2>
+        <p class="text-muted mb-2">อนุมัติ = ต่อคืนจริงทันที (ตรวจห้องว่างและคิดราคาของคืนนั้นอีกครั้ง) ค่าห้องเข้าบิลระหว่างพัก · ห้องไม่ว่าง: ย้ายห้องให้ก่อนจากหน้าบิล หรือปฏิเสธพร้อมเหตุผล</p>
+        @if (!Model.Pending.Any())
+        {
+            <p class="mb-0">ไม่มีคำขอที่รอตอบ</p>
+        }
+        else
+        {
+            <div class="staff-table-wrap">
+                <table class="table staff-table">
+                    <thead><tr><th>การจอง</th><th>ผู้เข้าพัก</th><th>ห้อง</th><th>ขอต่อ</th><th>ตรวจตอนนี้</th><th>จัดการ</th></tr></thead>
+                    <tbody>
+                    @foreach (var p in Model.Pending)
+                    {
+                        <tr>
+                            <td><a asp-action="Bill" asp-route-id="@p.R.BookingId">#@p.R.BookingId</a><br /><small class="text-muted">@p.R.CreatedAt.ToString("dd/MM HH:mm")</small></td>
+                            <td>@p.Guest@if (p.R.Note != null) { <br /><small>“@p.R.Note”</small> }</td>
+                            <td>@p.Rooms</td>
+                            <td>@p.R.Nights คืน<br /><small class="text-muted">ออก @p.CheckOut.ToString("dd/MM") → @p.CheckOut.AddDays(p.R.Nights).ToString("dd/MM")</small></td>
+                            <td>@if (p.Quote.Ok) { <span class="cx-badge cx-badge--PAID">ว่าง · @p.Quote.Amount.ToString("N2") บาท</span> } else { <span class="cx-badge cx-badge--CANCELLED">@p.Quote.Message</span> }</td>
+                            <td>
+                                @if (p.Quote.Ok)
+                                {
+                                    <form asp-action="ApproveStay" method="post" class="staff-inline" data-msg="อนุมัติต่อ @p.R.Nights คืน ค่าห้อง @p.Quote.Amount.ToString("N2") บาท ?" onsubmit="return confirm(this.dataset.msg);">
+                                        <input type="hidden" name="id" value="@p.R.RequestId" /><button type="submit" class="cx-btn cx-btn--small">อนุมัติ</button>
+                                    </form>
+                                }
+                                <form asp-action="RejectStay" method="post" class="staff-inline mt-1">
+                                    <input type="hidden" name="id" value="@p.R.RequestId" />
+                                    <input type="text" name="reply" maxlength="200" required placeholder="เหตุผล (ลูกค้าเห็น)" aria-label="เหตุผลที่ไม่อนุมัติ" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ไม่อนุมัติ</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="staff-card" id="lost">
+        <h2 class="h5">ของลืมที่ยังไม่ส่งคืน (@Model.Lost.Count)</h2>
+        <p class="text-muted mb-2">แม่บ้านบันทึกของที่พบ ระบบแจ้งผู้เข้าพักคนล่าสุดของห้องนั้นให้อัตโนมัติ ลูกค้าแจ้งวิธีรับคืนจากหน้าสมาชิก · ส่งคืนแล้วกด "ส่งคืนแล้ว"</p>
+        <partial name="_LostTable" model="Model.Lost" />
+    </div>
+
+    @if (Model.Recent.Any())
+    {
+        <div class="staff-card">
+            <h2 class="h5">คำขอต่อคืนที่ตอบแล้ว</h2>
+            <div class="staff-table-wrap">
+                <table class="table staff-table">
+                    <thead><tr><th>การจอง</th><th>ผู้เข้าพัก</th><th>ขอต่อ</th><th>ผล</th><th>เมื่อ</th></tr></thead>
+                    <tbody>
+                    @foreach (var (r, g) in Model.Recent)
+                    {
+                        <tr><td>#@r.BookingId</td><td>@g</td><td>@r.Nights คืน</td><td>@GuestServices.RequestStatus(r.Status)@(r.Reply != null ? " · " + r.Reply : "")</td><td>@r.HandledAt?.ToString("dd/MM HH:mm")</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>

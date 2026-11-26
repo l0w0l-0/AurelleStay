@@ -28,6 +28,10 @@ public partial class Csi402dbContext : DbContext
 
     public virtual DbSet<RoomIssue> RoomIssues { get; set; }
 
+    public virtual DbSet<StayRequest> StayRequests { get; set; }
+
+    public virtual DbSet<LostItem> LostItems { get; set; }
+
     public virtual DbSet<ExtraService> ExtraServices { get; set; }
 
     public virtual DbSet<Expense> Expenses { get; set; }
@@ -826,6 +830,49 @@ public partial class Csi402dbContext : DbContext
             entity.Property(e => e.FixedAt).HasColumnType("datetime").HasColumnName("fixed_at");
             entity.HasOne(d => d.Room).WithMany().HasForeignKey(d => d.RoomId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("room_issues_ibfk_1");
             entity.HasOne(d => d.Reporter).WithMany().HasForeignKey(d => d.ReportedBy).OnDelete(DeleteBehavior.SetNull).HasConstraintName("room_issues_ibfk_2");
+        });
+
+        modelBuilder.Entity<StayRequest>(entity =>
+        {
+            entity.HasKey(e => e.RequestId);
+            entity.ToTable("stay_requests");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "ix_sr_status");
+            entity.Property(e => e.RequestId).HasColumnName("request_id");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Nights).HasColumnName("nights");
+            entity.Property(e => e.QuotedAmount).HasPrecision(10, 2).HasColumnName("quoted_amount");
+            entity.Property(e => e.Note).HasMaxLength(200).HasColumnName("note");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.Reply).HasMaxLength(200).HasColumnName("reply");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.HandledBy).HasColumnName("handled_by");
+            entity.Property(e => e.HandledAt).HasColumnType("datetime").HasColumnName("handled_at");
+            entity.HasOne(d => d.Booking).WithMany().HasForeignKey(d => d.BookingId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("stay_requests_ibfk_1");
+            entity.HasOne<User>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade).HasConstraintName("stay_requests_ibfk_2");
+            entity.HasOne(d => d.Handler).WithMany().HasForeignKey(d => d.HandledBy).OnDelete(DeleteBehavior.SetNull).HasConstraintName("stay_requests_ibfk_3");
+        });
+
+        modelBuilder.Entity<LostItem>(entity =>
+        {
+            entity.HasKey(e => e.ItemId);
+            entity.ToTable("lost_items");
+            entity.HasIndex(e => new { e.Status, e.FoundAt }, "ix_li_status");
+            entity.Property(e => e.ItemId).HasColumnName("item_id");
+            entity.Property(e => e.RoomId).HasColumnName("room_id");
+            entity.Property(e => e.BookingId).HasColumnName("booking_id");
+            entity.Property(e => e.Description).HasMaxLength(200).HasColumnName("description");
+            entity.Property(e => e.Status).HasMaxLength(10).HasColumnName("status");
+            entity.Property(e => e.ClaimNote).HasMaxLength(200).HasColumnName("claim_note");
+            entity.Property(e => e.FoundBy).HasColumnName("found_by");
+            entity.Property(e => e.FoundAt).HasColumnType("datetime").HasColumnName("found_at");
+            entity.Property(e => e.ClaimedAt).HasColumnType("datetime").HasColumnName("claimed_at");
+            entity.Property(e => e.ClosedBy).HasColumnName("closed_by");
+            entity.Property(e => e.ClosedAt).HasColumnType("datetime").HasColumnName("closed_at");
+            entity.HasOne(d => d.Room).WithMany().HasForeignKey(d => d.RoomId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("lost_items_ibfk_1");
+            entity.HasOne(d => d.Booking).WithMany().HasForeignKey(d => d.BookingId).OnDelete(DeleteBehavior.SetNull).HasConstraintName("lost_items_ibfk_2");
+            entity.HasOne(d => d.Finder).WithMany().HasForeignKey(d => d.FoundBy).OnDelete(DeleteBehavior.SetNull).HasConstraintName("lost_items_ibfk_3");
+            entity.HasOne<User>().WithMany().HasForeignKey(d => d.ClosedBy).OnDelete(DeleteBehavior.SetNull).HasConstraintName("lost_items_ibfk_4");
         });
 
         OnModelCreatingPartial(modelBuilder);

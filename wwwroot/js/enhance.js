@@ -16,20 +16,26 @@
         if (!window.Notyf) return;
         var flashes = document.querySelectorAll('.cx-alert[data-toast]');
         var mobile = window.matchMedia('(max-width: 640px)').matches;
+        // แถบการ์ดสีขาว ขีดสีด้านซ้าย หัวข้อ + ข้อความ + แถบนับเวลาถอยหลัง (ไม่ใช้ ripple ของ Notyf ที่ทำให้พื้นหลังสีเพี้ยน)
         var notyf = new Notyf({
-            duration: 5500, dismissible: true, ripple: !reduceMotion,
+            duration: 5500, dismissible: true, ripple: false,
             position: { x: mobile ? 'center' : 'right', y: 'top' },
             types: [
-                { type: 'success', background: '#2d1b47', className: 'as-toast as-toast--ok', icon: { className: 'as-toast__ico', tagName: 'span', text: '✓' } },
-                { type: 'error', background: '#8e2f3c', duration: 8000, className: 'as-toast as-toast--err', icon: { className: 'as-toast__ico', tagName: 'span', text: '!' } }
+                { type: 'success', background: '#fff', className: 'as-toast as-toast--ok', icon: { className: 'as-toast__ico', tagName: 'span', text: '' } },
+                { type: 'error', background: '#fff', duration: 8000, className: 'as-toast as-toast--err', icon: { className: 'as-toast__ico', tagName: 'span', text: '' } }
             ]
         });
+        var escT = function (t) { return String(t).replace(/[<>&"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]; }); };
+        var show = function (ok, text) {
+            notyf.open({ type: ok ? 'success' : 'error',
+                message: '<b class="as-toast__t">' + (ok ? 'เรียบร้อย' : 'ทำรายการไม่สำเร็จ') + '</b><span class="as-toast__m">' + escT(text) + '</span>' });
+        };
         // ให้ส่วนอื่นเรียกใช้แถบแจ้งผลได้ (เช่น กดเก็บคูปอง)
-        window.asToast = function (ok, text) { notyf.open({ type: ok ? 'success' : 'error', message: String(text).replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }) }); };
+        window.asToast = function (ok, text) { show(ok, text); };
         Array.prototype.forEach.call(flashes, function (el) {
             var text = (el.textContent || '').trim();
             if (!text) return;
-            notyf.open({ type: el.classList.contains('cx-alert--error') ? 'error' : 'success', message: text.replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }) });
+            show(!el.classList.contains('cx-alert--error'), text);
             // ข้อความเดิมยังอยู่ในหน้า (โปรแกรมอ่านจอ/พิมพ์หน้า) แต่ซ่อนจากสายตาเพื่อไม่ให้ซ้ำกับแถบที่เด้ง
             el.classList.add('is-toasted');
         });

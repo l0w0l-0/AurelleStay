@@ -2008,3 +2008,72 @@ html, * { scrollbar-width: none; -ms-overflow-style: none; }
 #fd-send .ts-wrapper .ts-control { min-height: 40px; padding-top: 6px; padding-bottom: 6px; }
 .ts-wrapper.single .ts-control { flex-wrap: nowrap; }
 .ts-wrapper.single .ts-control > .item { min-width: 0; flex: 0 1 auto; }
+/* Part 66: ขอต่อคืน / ของลืม (หน้าสมาชิก) */
+.mb-ext__form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 12px; }
+.mb-ext__form label { display: grid; gap: 4px; font-size: .88rem; color: #5c5468; max-width: 160px; }
+.mb-ext__quote { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; padding: 14px 16px; margin-bottom: 12px; border-radius: 14px; background: #fbf6ea; border: 1px solid #eadcb8; }
+.mb-ext__quote p { grid-column: 1 / -1; margin: 0; }
+.mb-ext__quote label { display: grid; gap: 4px; font-size: .88rem; color: #5c5468; }
+.mb-lost__item { flex-wrap: wrap; }
+.mb-lost__claim { flex: 1 1 100%; display: flex; gap: 8px; }
+.mb-lost__claim input { flex: 1; }
+@media (max-width: 640px) { .mb-ext__quote { grid-template-columns: 1fr; } .mb-lost__claim { flex-direction: column; } }
+
+/* ===== Part 67: ป้ายแจ้งเตือนทั้งระบบ (แถบเด้ง · กล่องแจ้งในหน้า · รายการแจ้งเตือน) ===== */
+/* --- แถบเด้งมุมจอ (Notyf) --- */
+.notyf__toast.as-toast { position: relative; overflow: hidden; max-width: 420px; padding: 0 14px 0 18px; border-radius: 16px; color: var(--ink, #1d1726);
+    border: 1px solid #ece4f3; box-shadow: 0 22px 44px -20px rgba(29, 23, 38, .5), 0 3px 10px rgba(45, 27, 71, .08); }
+.notyf__toast.as-toast::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--toast-accent, #b08a35); }
+.notyf__toast.as-toast::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--toast-accent, #b08a35); opacity: .35;
+    transform-origin: left; animation: asToastBar var(--toast-time, 5.5s) linear forwards; }
+@keyframes asToastBar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.as-toast--ok { --toast-accent: #b08a35; --toast-time: 5.5s; }
+.as-toast--err { --toast-accent: #b4323f; --toast-time: 8s; }
+.notyf__toast.as-toast .notyf__ripple { display: none; }
+.notyf__toast.as-toast .notyf__wrapper { padding: 14px 36px 16px 0; align-items: flex-start; }
+.notyf__toast.as-toast .notyf__icon { margin: 1px 12px 0 0; }
+.notyf__toast.as-toast .notyf__message { display: grid; gap: 2px; font-weight: 400; color: var(--ink-2, #4a4257); }
+.as-toast__t { font-size: .95rem; font-weight: 700; color: var(--pine, #2d1b47); }
+.as-toast--err .as-toast__t { color: #8e2330; }
+.as-toast__m { font-size: .9rem; line-height: 1.5; }
+.notyf__toast.as-toast .as-toast__ico { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #f7efdc; color: #8a6a22; font-size: 0; }
+.notyf__toast.as-toast .as-toast__ico::before { content: ""; width: 16px; height: 16px; background: currentColor;
+    -webkit-mask: var(--ico) no-repeat center / contain; mask: var(--ico) no-repeat center / contain; }
+.as-toast--ok .as-toast__ico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 10 17 19 7'/%3E%3C/svg%3E"); }
+.as-toast--err .as-toast__ico { background: #fbe9ea; color: #b4323f;
+    --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 6v8M12 18.5v.5'/%3E%3C/svg%3E"); }
+.notyf__toast.as-toast .notyf__dismiss { position: absolute; top: 8px; right: 6px; height: auto; }
+.notyf__toast.as-toast .notyf__dismiss-btn { width: 30px; height: 30px; border-radius: 50%; opacity: 1; background: transparent; }
+.notyf__toast.as-toast .notyf__dismiss-btn::before, .notyf__toast.as-toast .notyf__dismiss-btn::after { background: #8b8296; }
+.notyf__toast.as-toast .notyf__dismiss-btn:hover { background: #f3eef8; }
+@media (prefers-reduced-motion: reduce) { .notyf__toast.as-toast::after { animation: none; } }
+@media (max-width: 640px) { .notyf__toast.as-toast { max-width: calc(100vw - 24px); } }
+
+/* --- กล่องแจ้งในหน้า (cx-alert) --- */
+.cx-alert:not(.is-toasted) { display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px; margin: 14px 0; border: 1px solid; border-left-width: 1px;
+    border-radius: 14px !important; font-weight: 500; line-height: 1.55; box-shadow: 0 6px 16px -12px rgba(45, 27, 71, .35); }
+.cx-alert:not(.is-toasted)::before { content: ""; flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; background: var(--al-c);
+    -webkit-mask: var(--al-i) no-repeat center / 22px; mask: var(--al-i) no-repeat center / 22px; }
+.cx-alert--ok { --al-c: #2f7a4f; background: #eef7f1; border-color: #cfe5d7; color: #1f5236;
+    --al-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22Zm-1.4 15.2-4.3-4.3 1.4-1.4 2.9 2.9 6-6 1.4 1.4-7.4 7.4Z'/%3E%3C/svg%3E"); }
+.cx-alert--error { --al-c: #b4323f; background: #fcf0f0; border-color: #f0cfd2; color: #7d1f2a;
+    --al-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22Zm1 17h-2v-2h2v2Zm0-4h-2V6h2v8Z'/%3E%3C/svg%3E"); }
+.cx-alert--info { --al-c: #5f3d8e; background: #f5f0fb; border-color: #e2d6f0; color: #3a2559;
+    --al-i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22Zm1 17h-2v-7h2v7Zm0-9h-2V7h2v2Z'/%3E%3C/svg%3E"); }
+.cx-alert:not(.is-toasted) > * { margin: 0; }
+
+/* --- หน้าการแจ้งเตือน --- */
+.nt-list { gap: 12px; }
+.nt-item { display: grid; grid-template-columns: 40px 1fr; column-gap: 14px; padding: 16px 52px 16px 16px; border-radius: 16px; background: #fff; border-color: #ebe4f2;
+    box-shadow: 0 8px 20px -16px rgba(45, 27, 71, .35); transition: box-shadow .15s, transform .15s; }
+.nt-item:hover { box-shadow: 0 14px 28px -18px rgba(45, 27, 71, .45); }
+.nt-item::before { content: ""; grid-row: 1 / span 3; width: 40px; height: 40px; border-radius: 12px; background: #f4eefa url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%235f3d8e' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") no-repeat center; }
+.nt-item > h2, .nt-item > p, .nt-item > time { grid-column: 2; }
+.nt-item--new { border-color: #e6d3a6; box-shadow: inset 4px 0 0 var(--brass), 0 10px 24px -18px rgba(176, 138, 53, .55); background: linear-gradient(90deg, #fffaf0, #fff 60%); }
+.nt-item--new::before { background-color: #f7efdc; }
+.nt-new { background: linear-gradient(135deg, #c9a14a, #a8822f); font-weight: 600; }
+@media (max-width: 640px) { .nt-item { grid-template-columns: 32px 1fr; column-gap: 10px; } .nt-item::before { width: 32px; height: 32px; border-radius: 10px; } }
+/* Notyf ใส่สีไอคอน = สีพื้นการ์ด (ขาว) → กำหนดสีไอคอนเอง */
+.notyf__toast.as-toast .as-toast__ico::before { background: #8a6a22 !important; }
+.as-toast--err .as-toast__ico::before { background: #b4323f !important; }
+.notyf__toast.as-toast { margin-bottom: 10px; }

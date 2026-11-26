@@ -688,3 +688,41 @@ public class RoomIssue
     public virtual Room Room { get; set; } = null!;
     public virtual User? Reporter { get; set; }
 }
+
+
+/// <summary>Part 66: ผู้เข้าพักขอต่อคืนจากหน้าสมาชิก → ฝ่ายบริการอนุมัติ (ต่อคืนจริง) หรือปฏิเสธ</summary>
+public class StayRequest
+{
+    public int RequestId { get; set; }
+    public int BookingId { get; set; }
+    public int UserId { get; set; }
+    public short Nights { get; set; }
+    public decimal QuotedAmount { get; set; }
+    public string? Note { get; set; }
+    public string Status { get; set; } = "PENDING";   // PENDING / APPROVED / REJECTED / CANCELLED
+    public string? Reply { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public int? HandledBy { get; set; }
+    public DateTime? HandledAt { get; set; }
+    public virtual Booking Booking { get; set; } = null!;
+    public virtual User? Handler { get; set; }
+}
+
+/// <summary>Part 66: ของลืม / ของที่พบในห้อง (แม่บ้านบันทึก → แจ้งผู้เข้าพักคนล่าสุด → ลูกค้าแจ้งรับคืน → เคาน์เตอร์ส่งคืน)</summary>
+public class LostItem
+{
+    public int ItemId { get; set; }
+    public int RoomId { get; set; }
+    public int? BookingId { get; set; }
+    public string Description { get; set; } = "";
+    public string Status { get; set; } = "STORED";   // STORED / CLAIMED / RETURNED / DISPOSED
+    public string? ClaimNote { get; set; }
+    public int? FoundBy { get; set; }
+    public DateTime FoundAt { get; set; }
+    public DateTime? ClaimedAt { get; set; }
+    public int? ClosedBy { get; set; }
+    public DateTime? ClosedAt { get; set; }
+    public virtual Room Room { get; set; } = null!;
+    public virtual Booking? Booking { get; set; }
+    public virtual User? Finder { get; set; }
+}

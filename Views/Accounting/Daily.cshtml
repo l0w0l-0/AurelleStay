@@ -1,0 +1,63 @@
+@model pameka_7033_l005.ViewModels.DailyCashViewModel
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "สรุปเงินเข้ารายวัน";
+    Layout = "_Adminlayout";
+    var th = new System.Globalization.CultureInfo("th-TH");
+    var today = DateOnly.FromDateTime(AppClock.Today);
+}
+
+<div class="dashboard">
+    <div class="fd-head">
+        <h1 class="fd-title">สรุปเงินเข้ารายวัน — @Model.Date.ToString("dddd d MMMM yyyy", th)</h1>
+        <div class="d-flex gap-2 flex-wrap no-print">
+            <a asp-action="Daily" asp-route-date="@Model.Date.AddDays(-1).ToString("yyyy-MM-dd")" class="cx-btn cx-btn--ghost cx-btn--small">‹ วันก่อน</a>
+            @if (Model.Date < today) { <a asp-action="Daily" asp-route-date="@Model.Date.AddDays(1).ToString("yyyy-MM-dd")" class="cx-btn cx-btn--ghost cx-btn--small">วันถัดไป ›</a> }
+            <button type="button" class="cx-btn cx-btn--small" onclick="window.print()">พิมพ์ / บันทึก PDF</button>
+        </div>
+    </div>
+    <form method="get" asp-action="Daily" class="staff-inline no-print mb-3">
+        <input type="date" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" max="@today.ToString("yyyy-MM-dd")" aria-label="วันที่" />
+        <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ดูวันนี้</button>
+    </form>
+    <p class="text-muted">ใช้ปิดยอดประจำวัน: เทียบยอด "เงินสด" กับเงินในลิ้นชักเคาน์เตอร์ และยอด QR/บัตร กับบัญชีธนาคาร · นับตามเวลาที่รับชำระ/คืนเงินจริง</p>
+
+    <div class="ex-sum">
+        <div class="pos"><span>เงินเข้า</span><b>฿@Model.In.ToString("N2")</b></div>
+        <div class="neg"><span>คืนเงิน</span><b>฿@Model.Out.ToString("N2")</b></div>
+        <div class="@(Model.Net < 0 ? "neg" : "pos")"><span>สุทธิ</span><b>@(Model.Net < 0 ? "-" : "")฿@Math.Abs(Model.Net).ToString("N2")</b></div>
+    </div>
+
+    <div class="staff-card">
+        <h2 class="h5">แยกตามวิธีชำระ</h2>
+        <div class="staff-table-wrap">
+            <table class="table staff-table">
+                <thead><tr><th>วิธีชำระ</th><th class="text-end">รายการ</th><th class="text-end">เงินเข้า</th><th class="text-end">คืนเงิน</th><th class="text-end">สุทธิ</th></tr></thead>
+                <tbody>
+                @if (!Model.Lines.Any()) { <tr><td colspan="5" class="text-muted">ไม่มีการรับ/คืนเงินในวันนี้</td></tr> }
+                @foreach (var m in Model.ByMethod)
+                {
+                    <tr><td>@ThaiLabels.PaymentMethod(m.Method)</td><td class="text-end">@m.Count</td><td class="text-end">@m.In.ToString("N2")</td>
+                        <td class="text-end">@(m.Out > 0 ? m.Out.ToString("N2") : "—")</td><td class="text-end"><b>@((m.In - m.Out).ToString("N2"))</b></td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="staff-card">
+        <h2 class="h5">รายการทั้งหมด (@Model.Lines.Count)</h2>
+        <div class="staff-table-wrap">
+            <table class="table staff-table">
+                <thead><tr><th>เวลา</th><th>ประเภท</th><th>การจอง</th><th>วิธีชำระ</th><th class="text-end">จำนวนเงิน (บาท)</th></tr></thead>
+                <tbody>
+                @foreach (var l in Model.Lines)
+                {
+                    <tr><td>@l.At.ToString("HH:mm")</td><td>@l.Kind</td><td>@(l.BookingId > 0 ? "#" + l.BookingId : "—")</td><td>@ThaiLabels.PaymentMethod(l.Method)</td>
+                        <td class="text-end @(l.Amount < 0 ? "text-danger" : "")">@l.Amount.ToString("N2")</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

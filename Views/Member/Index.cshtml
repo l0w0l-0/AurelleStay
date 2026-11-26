@@ -38,6 +38,7 @@
             <a href="#mb-req" class="cx-btn cx-btn--small">ขอของใช้เพิ่ม</a>
             <a href="#mb-svc" class="cx-btn cx-btn--ghost cx-btn--small">สั่งบริการ / ดูยอด</a>
             <a href="#mb-clean" class="cx-btn cx-btn--ghost cx-btn--small">ขอทำความสะอาด</a>
+            <a href="#mb-ext" class="cx-btn cx-btn--ghost cx-btn--small">ขอต่อคืน</a>
             <button type="button" class="mb-alert__x" data-dismiss-alert aria-label="ปิดแถบนี้">×</button>
         </div>
     }
@@ -337,6 +338,58 @@
             }
             <p class="mb-muted">สถานะ: รอรับงาน → กำลังทำ → เสร็จแล้ว · ทำเสร็จจะมีการแจ้งเตือน</p>
         </section>
+
+        @* Part 66: ขอต่อคืนเอง (ดูราคาก่อน → ส่งคำขอ → เคาน์เตอร์ยืนยัน) *@
+        var pendingExt = Model.StayRequests.FirstOrDefault(r => r.Status == "PENDING");
+        <section class="mb-card mb-req" id="mb-ext" aria-labelledby="mb-ext-h">
+            <h2 id="mb-ext-h">ขอต่อคืน <span class="mb-pill">ชำระตอนเช็คเอาท์</span></h2>
+            <p class="mb-muted mb-2">เช็คเอาท์ปัจจุบัน @Model.StayCheckOut?.ToString("dd/MM/yyyy") · ดูราคาและห้องว่างได้ทันที เคาน์เตอร์ยืนยันแล้วค่าห้องที่เพิ่มเข้าบิลระหว่างพัก</p>
+            @if (pendingExt == null)
+            {
+                <form method="get" asp-controller="Member" asp-action="Index" asp-fragment="mb-ext" class="mb-ext__form">
+                    <label>ต่ออีก (คืน)
+                        <input type="number" name="extend" min="1" max="@StayChanges.MaxExtendNights" value="@Model.ExtendNights" class="form-control" required />
+                    </label>
+                    <button type="submit" class="cx-btn cx-btn--ghost">ดูราคา</button>
+                </form>
+                @if (Model.ExtendQuote is { } eq)
+                {
+                    if (eq.Ok)
+                    {
+                        <form method="post" asp-controller="Member" asp-action="RequestExtend" class="mb-ext__quote">
+                            <input type="hidden" name="bookingId" value="@cleanStay" /><input type="hidden" name="nights" value="@Model.ExtendNights" />
+                            <p>เช็คเอาท์ใหม่ <b>@eq.NewCheckOut.ToString("dd/MM/yyyy")</b> · ค่าห้องเพิ่ม <b>@eq.Amount.ToString("N2") บาท</b>@(eq.Rooms.Count > 1 ? " (" + string.Join(", ", eq.Rooms.Select(r => $"ห้อง {r.RoomNo} {r.Amount:N0}")) + ")" : "")</p>
+                            <label class="mb-req__note">ข้อความถึงเคาน์เตอร์ (ถ้ามี)
+                                <input type="text" name="note" maxlength="200" class="form-control" placeholder="เช่น ขอเช็คเอาท์บ่ายได้ไหม" />
+                            </label>
+                            <button type="submit" class="cx-btn">ส่งคำขอต่อ @Model.ExtendNights คืน</button>
+                        </form>
+                    }
+                    else { <div class="cx-alert cx-alert--error mt-2">@eq.Message.Replace(" (ย้ายไปห้องอื่นที่ว่างก่อน แล้วค่อยต่อคืน)", " ติดต่อเคาน์เตอร์เพื่อย้ายห้องแล้วต่อคืน")</div> }
+                }
+            }
+            @if (Model.StayRequests.Any())
+            {
+                <ul class="mb-list mb-req__list">
+                    @foreach (var r in Model.StayRequests)
+                    {
+                        <li>
+                            <span><b>ต่อ @r.Nights คืน · ประมาณ @r.QuotedAmount.ToString("N2") บาท</b>
+                                <span>ขอเมื่อ @r.CreatedAt.ToString("dd/MM HH:mm")@(r.Note != null ? " · " + r.Note : "")@(r.Reply != null ? " · เคาน์เตอร์: " + r.Reply : "")</span></span>
+                            <span class="mb-wait__act">
+                                <span class="cx-badge cx-badge--@(r.Status == "APPROVED" ? "CONFIRMED" : r.Status == "PENDING" ? "PENDING" : "CANCELLED")">@GuestServices.RequestStatus(r.Status)</span>
+                                @if (r.Status == "PENDING")
+                                {
+                                    <form method="post" asp-controller="Member" asp-action="CancelStayRequest" asp-route-id="@r.RequestId" class="d-inline" onsubmit="return confirm('ยกเลิกคำขอต่อคืน?')">
+                                        <button type="submit" class="cx-btn cx-btn--ghost cx-btn--small">ยกเลิก</button>
+                                    </form>
+                                }
+                            </span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
     }
 
     @if (Model.Waiting.Any())
@@ -365,6 +418,32 @@
                 }
             </ul>
             <p class="mb-muted">ระบบตรวจทุก 10 นาที และแจ้งเตือนทันทีเมื่อมีห้องว่างครบช่วงที่ต้องการ (ในเว็บและทางอีเมล)</p>
+        </section>
+    }
+    @* Part 66: ของลืมที่โรงแรมเก็บไว้ (แจ้งวิธีรับคืน) *@
+    @if (Model.LostItems.Any())
+    {
+        <section class="mb-card mb-req" id="mb-lost" aria-labelledby="mb-lost-h">
+            <h2 id="mb-lost-h">ของลืมในห้องพัก <span class="mb-pill">เก็บไว้ @GuestServices.KeepDays วัน</span></h2>
+            <ul class="mb-list mb-req__list">
+                @foreach (var i in Model.LostItems)
+                {
+                    <li class="mb-lost__item">
+                        <span><b>@i.Description · ห้อง @i.RoomNo</b>
+                            <span>พบเมื่อ @i.FoundAt.ToString("dd/MM/yyyy HH:mm")@(i.BookingId != null ? " · การจอง #" + i.BookingId : "")@(i.ClaimNote != null ? " · แจ้งรับ: " + i.ClaimNote : "")</span></span>
+                        <span class="mb-wait__act">
+                            <span class="cx-badge cx-badge--@(i.Status == "RETURNED" ? "CHECKED_OUT" : i.Status == "CLAIMED" ? "CONFIRMED" : "PENDING")">@GuestServices.LostStatus(i.Status)</span>
+                        </span>
+                        @if (i.Status == "STORED")
+                        {
+                            <form method="post" asp-controller="Member" asp-action="ClaimLost" asp-route-id="@i.Id" class="mb-lost__claim">
+                                <input type="text" name="note" maxlength="200" required class="form-control" aria-label="วิธีรับคืน" placeholder="มารับเองวันที่… / หรือที่อยู่จัดส่ง (ชำระค่าส่งปลายทาง)" />
+                                <button type="submit" class="cx-btn cx-btn--small">แจ้งรับคืน</button>
+                            </form>
+                        }
+                    </li>
+                }
+            </ul>
         </section>
     }
 </div>

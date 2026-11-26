@@ -1,0 +1,27 @@
+@model List<pameka_7033_l005.ViewModels.LostItemRowViewModel>
+@using pameka_7033_l005.Helpers
+@{
+    ViewData["Title"] = "ของลืมในห้อง";
+    Layout = "_Adminlayout";
+    var rooms = (List<(int, string)>)ViewBag.Rooms;
+}
+
+<div class="dashboard">
+    <h1 class="fd-title">ของลืมในห้อง</h1>
+    <partial name="_Flash" />
+    <div class="staff-card">
+        <h2 class="h5">บันทึกของที่พบ</h2>
+        <p class="text-muted mb-2">ระบบผูกกับผู้เข้าพักที่อยู่ / เพิ่งออกจากห้องนี้ (ภายใน 3 วัน) และแจ้งเตือนเขาให้อัตโนมัติ นำของไปฝากที่เคาน์เตอร์ · เก็บ @GuestServices.KeepDays วันก่อนจำหน่าย</p>
+        <form asp-action="LogLost" method="post" class="row g-2 align-items-end">
+            <div class="col-6 col-md-3"><label class="form-label">ห้อง</label>
+                <select name="roomId" class="form-select" required>@foreach (var (id, no) in rooms) { <option value="@id">@no</option> }</select></div>
+            <div class="col-12 col-md-6"><label class="form-label">พบอะไร</label>
+                <input type="text" name="description" maxlength="200" class="form-control" required placeholder="เช่น ที่ชาร์จโทรศัพท์สีขาว ในลิ้นชักข้างเตียง" /></div>
+            <div class="col-12 col-md-3"><button type="submit" class="cx-btn">บันทึก</button></div>
+        </form>
+    </div>
+    <div class="staff-card">
+        <h2 class="h5">รายการทั้งหมด</h2>
+        <partial name="_LostTable" model="Model" />
+    </div>
+</div>

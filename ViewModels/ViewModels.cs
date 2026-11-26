@@ -343,6 +343,12 @@ public class MyBookingItemViewModel
 // ---------- หน้าสมาชิก (Part 36)
 public class MemberDashboardViewModel
 {
+    /// <summary>Part 66: ขอต่อคืน / ของลืม</summary>
+    public int ExtendNights { get; set; } = 1;
+    public pameka_7033_l005.Helpers.StayChanges.ExtendQuote? ExtendQuote { get; set; }
+    public List<pameka_7033_l005.Models.StayRequest> StayRequests { get; set; } = new();
+    public DateOnly? StayCheckOut { get; set; }
+    public List<LostItemRowViewModel> LostItems { get; set; } = new();
     /// <summary>Part 60: ค่าใช้จ่ายระหว่างพัก + บริการที่สั่งเพิ่มได้</summary>
     public List<pameka_7033_l005.Helpers.StayBill.Line> StayLines { get; set; } = new();
     public List<(int Id, string Name, decimal Price)> StayServices { get; set; } = new();
@@ -1248,4 +1254,50 @@ public class StayBillViewModel
     public int ExtendNights { get; set; } = 1;
     public pameka_7033_l005.Helpers.StayChanges.ExtendQuote? Quote { get; set; }
     public List<(int RoomId, string RoomNo, string Type, int MaxGuests)> MoveTargets { get; set; } = new();
+}
+
+
+/// <summary>Part 66: แถวของลืม (ลูกค้า / เคาน์เตอร์ / แม่บ้าน)</summary>
+public class LostItemRowViewModel
+{
+    public int Id { get; set; }
+    public string Description { get; set; } = "";
+    public string RoomNo { get; set; } = "";
+    public int? BookingId { get; set; }
+    public string? Guest { get; set; }
+    public string? Phone { get; set; }
+    public string Status { get; set; } = "";
+    public DateTime FoundAt { get; set; }
+    public string? Finder { get; set; }
+    public string? ClaimNote { get; set; }
+    public DateTime? ClosedAt { get; set; }
+}
+
+/// <summary>Part 66: หน้าคำขอจากผู้เข้าพัก (เคาน์เตอร์)</summary>
+public class GuestRequestsViewModel
+{
+    public List<(pameka_7033_l005.Models.StayRequest R, string Guest, string Rooms, DateOnly CheckOut, pameka_7033_l005.Helpers.StayChanges.ExtendQuote Quote)> Pending { get; set; } = new();
+    public List<(pameka_7033_l005.Models.StayRequest R, string Guest)> Recent { get; set; } = new();
+    public List<LostItemRowViewModel> Lost { get; set; } = new();
+}
+
+/// <summary>Part 66: สรุปเงินเข้ารายวัน (ฝ่ายบัญชี)</summary>
+public class DailyLineViewModel
+{
+    public DateTime At { get; set; }
+    public string Kind { get; set; } = "";
+    public int BookingId { get; set; }
+    public string Method { get; set; } = "";
+    public decimal Amount { get; set; }
+}
+public class DailyCashViewModel
+{
+    public DateOnly Date { get; set; }
+    public List<DailyLineViewModel> Lines { get; set; } = new();
+    public decimal In => Lines.Where(l => l.Amount > 0).Sum(l => l.Amount);
+    public decimal Out => -Lines.Where(l => l.Amount < 0).Sum(l => l.Amount);
+    public decimal Net => In - Out;
+    public List<(string Method, decimal In, decimal Out, int Count)> ByMethod =>
+        Lines.GroupBy(l => l.Method).OrderBy(g => g.Key)
+            .Select(g => (g.Key, g.Where(l => l.Amount > 0).Sum(l => l.Amount), -g.Where(l => l.Amount < 0).Sum(l => l.Amount), g.Count())).ToList();
 }

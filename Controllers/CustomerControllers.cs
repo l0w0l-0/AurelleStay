@@ -551,7 +551,7 @@ public class MemberController : AppController
     public MemberController(Csi402dbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int? extend)
     {
         var uid = CurrentUserId ?? 0;
         await BookingExpiry.RunAsync(_db, pameka_7033_l005.Helpers.AppClock.Now, uid);
@@ -637,8 +637,71 @@ public class MemberController : AppController
                 .OrderByDescending(t => t.TaskId).Take(10)
                 .Select(t => new ItemRequestRowViewModel { Id = t.TaskId, What = "ทำความสะอาดห้อง", RoomNo = t.Room.RoomNo, Note = t.PrefTime,
                     Status = t.Status, Missed = t.Missed, CreatedAt = t.CreatedAt ?? DateTime.MinValue, DoneAt = t.DoneAt }).ToListAsync();
+            // Part 66: ขอต่อคืน (ดูราคาก่อนส่ง) + สถานะคำขอ
+            vm.ExtendNights = extend is >= 1 and <= StayChanges.MaxExtendNights ? extend.Value : 1;
+            if (extend != null) vm.ExtendQuote = await StayChanges.QuoteAsync(_db, stay.BookingId, vm.ExtendNights);
+            vm.StayRequests = await _db.StayRequests.AsNoTracking().Where(r => r.BookingId == stay.BookingId)
+                .OrderByDescending(r => r.RequestId).Take(5).ToListAsync();
+            vm.StayCheckOut = await _db.Bookings.AsNoTracking().Where(b => b.BookingId == stay.BookingId).Select(b => b.CheckOut).FirstAsync();
         }
+        // Part 66: ของลืมที่พบในห้องของฉัน (ยังไม่ส่งคืน / เพิ่งส่งคืน)
+        var since = AppClock.Now.AddDays(-GuestServices.KeepDays);
+        vm.LostItems = await _db.LostItems.AsNoTracking()
+            .Where(i => i.Booking != null && i.Booking.UserId == uid && (i.Status == "STORED" || i.Status == "CLAIMED" || (i.Status == "RETURNED" && i.ClosedAt >= since)))
+            .OrderByDescending(i => i.ItemId).Take(10)
+            .Select(i => new LostItemRowViewModel { Id = i.ItemId, Description = i.Description, RoomNo = i.Room.RoomNo, BookingId = i.BookingId,
+                Status = i.Status, FoundAt = i.FoundAt, ClaimNote = i.ClaimNote, ClosedAt = i.ClosedAt }).ToListAsync();
         return View(vm);
+    }
+
+    /// <summary>Part 66: ขอต่อคืน → เคาน์เตอร์อนุมัติ (ระบบต่อคืนจริงตอนอนุมัติ) · คำขอค้างได้ครั้งละ 1</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestExtend(int bookingId, int nights, string? note)
+    {
+        var uid = CurrentUserId ?? 0;
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (!await _db.Bookings.AnyAsync(b => b.BookingId == bookingId && b.UserId == uid && b.Status == "CHECKED_IN"))
+        { Flash("ขอต่อคืนได้เฉพาะระหว่างเข้าพัก", true); return Redirect("/Member#mb-ext"); }
+        if (note?.Length > 200) { Flash("หมายเหตุไม่เกิน 200 ตัวอักษร", true); return Redirect("/Member#mb-ext"); }
+        if (await _db.StayRequests.AnyAsync(r => r.BookingId == bookingId && r.Status == "PENDING"))
+        { Flash("มีคำขอต่อคืนที่รอเคาน์เตอร์ตอบอยู่แล้ว", true); return Redirect("/Member#mb-ext"); }
+        var q = await StayChanges.QuoteAsync(_db, bookingId, nights);
+        if (!q.Ok) { Flash(q.Message.Replace(" (ย้ายไปห้องอื่นที่ว่างก่อน แล้วค่อยต่อคืน)", " ติดต่อเคาน์เตอร์เพื่อย้ายห้องแล้วต่อคืน"), true); return Redirect($"/Member?extend={nights}#mb-ext"); }
+        _db.StayRequests.Add(new StayRequest { BookingId = bookingId, UserId = uid, Nights = (short)nights, QuotedAmount = q.Amount, Note = note, Status = "PENDING", CreatedAt = AppClock.Now });
+        foreach (var fid in await _db.Users.Where(u => u.Role.RoleName == RoleNames.FrontDesk).Select(u => u.UserId).ToListAsync())
+            Notify.Add(_db, fid, $"ผู้เข้าพักขอต่อ {nights} คืน · การจอง #{bookingId}", note ?? $"ค่าห้องประมาณ {q.Amount:N2} บาท", "/FrontDesk/Requests");
+        await _db.SaveChangesAsync();
+        Flash($"ส่งคำขอต่อ {nights} คืนแล้ว (ค่าห้องประมาณ {q.Amount:N2} บาท) เคาน์เตอร์จะยืนยันและแจ้งกลับ");
+        return Redirect("/Member#mb-ext");
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelStayRequest(int id)
+    {
+        var uid = CurrentUserId ?? 0;
+        var r = await _db.StayRequests.FirstOrDefaultAsync(x => x.RequestId == id && x.UserId == uid && x.Status == "PENDING");
+        if (r == null) { Flash("ยกเลิกไม่ได้ (เคาน์เตอร์ตอบแล้ว)", true); return Redirect("/Member#mb-ext"); }
+        r.Status = "CANCELLED"; r.HandledAt = AppClock.Now;
+        await _db.SaveChangesAsync();
+        Flash("ยกเลิกคำขอต่อคืนแล้ว");
+        return Redirect("/Member#mb-ext");
+    }
+
+    /// <summary>Part 66: แจ้งรับของลืมคืน (มารับที่เคาน์เตอร์ / ให้ส่งไปที่อยู่ ระบุในหมายเหตุ)</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ClaimLost(int id, string? note)
+    {
+        var uid = CurrentUserId ?? 0;
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        var i = await _db.LostItems.Include(x => x.Room).FirstOrDefaultAsync(x => x.ItemId == id && x.Booking != null && x.Booking.UserId == uid && x.Status == "STORED");
+        if (i == null) { Flash("แจ้งรับไม่ได้ (ส่งคืนแล้ว หรือไม่ใช่ของคุณ)", true); return Redirect("/Member#mb-lost"); }
+        if (note == null || note.Length > 200) { Flash("ระบุวิธีรับคืน เช่น มารับเองวันที่… หรือที่อยู่จัดส่ง (ไม่เกิน 200 ตัวอักษร)", true); return Redirect("/Member#mb-lost"); }
+        i.Status = "CLAIMED"; i.ClaimNote = note; i.ClaimedAt = AppClock.Now;
+        foreach (var fid in await _db.Users.Where(u => u.Role.RoleName == RoleNames.FrontDesk).Select(u => u.UserId).ToListAsync())
+            Notify.Add(_db, fid, $"ลูกค้าแจ้งรับของลืมคืน · ห้อง {i.Room.RoomNo}", $"{i.Description} — {note}", "/FrontDesk/Requests#lost");
+        await _db.SaveChangesAsync();
+        Flash("แจ้งรับคืนแล้ว เคาน์เตอร์จะติดต่อกลับ");
+        return Redirect("/Member#mb-lost");
     }
 
     /// <summary>Part 53: ขอของใช้เพิ่มระหว่างเข้าพัก (เฉพาะการจองของตัวเองที่เช็คอินแล้ว) → เข้าคิวฝ่ายส่งของทันที</summary>

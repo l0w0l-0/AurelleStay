@@ -1,0 +1,47 @@
+@model List<pameka_7033_l005.ViewModels.LostItemRowViewModel>
+@using pameka_7033_l005.Helpers
+@using System.Security.Claims
+@{
+    var role = User.FindFirstValue(ClaimTypes.Role);
+    var isFront = string.Equals(role, RoleNames.FrontDesk, StringComparison.OrdinalIgnoreCase);
+    var isHk = string.Equals(role, RoleNames.Housekeeping, StringComparison.OrdinalIgnoreCase);
+    var cutoff = AppClock.Now.AddDays(-GuestServices.KeepDays);
+}
+@if (!Model.Any())
+{
+    <p class="mb-0">ยังไม่มีรายการ</p>
+}
+else
+{
+    <div class="staff-table-wrap">
+        <table class="table staff-table">
+            <thead><tr><th>พบเมื่อ</th><th>ห้อง</th><th>สิ่งของ</th><th>เจ้าของ (ผู้เข้าพักล่าสุด)</th><th>สถานะ</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var i in Model)
+            {
+                <tr>
+                    <td>@i.FoundAt.ToString("dd/MM/yy HH:mm")@if (i.Finder != null) { <br /><small class="text-muted">โดย @i.Finder</small> }</td>
+                    <td>@i.RoomNo</td>
+                    <td>@i.Description</td>
+                    <td>@if (i.BookingId != null) { <span>#@i.BookingId · @i.Guest</span>@if (isFront && i.Phone != null) { <br /><small>@i.Phone</small> } } else { <span class="text-muted">ไม่ทราบ</span> }</td>
+                    <td><span class="li-status li-status--@i.Status">@GuestServices.LostStatus(i.Status)</span>@if (i.ClaimNote != null) { <br /><small>“@i.ClaimNote”</small> }</td>
+                    <td>
+                        @if (isFront && i.Status is "STORED" or "CLAIMED")
+                        {
+                            <form asp-controller="FrontDesk" asp-action="ReturnLost" method="post" class="staff-inline" data-msg="ยืนยันส่งคืน @i.Description ?" onsubmit="return confirm(this.dataset.msg);">
+                                <input type="hidden" name="id" value="@i.Id" /><button type="submit" class="cx-btn cx-btn--small">ส่งคืนแล้ว</button>
+                            </form>
+                        }
+                        @if (isHk && i.Status == "STORED" && i.FoundAt <= cutoff)
+                        {
+                            <form asp-controller="Housekeeping" asp-action="DisposeLost" method="post" class="staff-inline" data-msg="เก็บครบ @GuestServices.KeepDays วันแล้ว บันทึกจำหน่าย ?" onsubmit="return confirm(this.dataset.msg);">
+                                <input type="hidden" name="id" value="@i.Id" /><button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">จำหน่าย</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
