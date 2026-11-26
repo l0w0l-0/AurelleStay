@@ -435,3 +435,25 @@
         if (sel.tomselect) { sel.tomselect.setValue(v); sel.tomselect.focus(); } else { sel.value = v; sel.focus(); }
     });
 })();
+
+/* ---- Part 67: กล่องแจ้งในหน้า (cx-alert) ทุกกล่องกด × ปิดได้ ---- */
+(function () {
+    'use strict';
+    function add() {
+        Array.prototype.forEach.call(document.querySelectorAll('.cx-alert:not(.is-toasted):not([data-no-close])'), function (el) {
+            if (el.querySelector('.cx-alert__x')) return;
+            var b = document.createElement('button');
+            b.type = 'button'; b.className = 'cx-alert__x'; b.setAttribute('aria-label', 'ปิดข้อความนี้'); b.textContent = '×';
+            el.appendChild(b);
+        });
+    }
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('.cx-alert__x');
+        if (!b) return;
+        var box = b.closest('.cx-alert');
+        if (!box) return;
+        box.classList.add('is-closing');
+        setTimeout(function () { box.remove(); }, 180);
+    });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(add, 0); }); else setTimeout(add, 0);
+})();

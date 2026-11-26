@@ -2077,3 +2077,11 @@ html, * { scrollbar-width: none; -ms-overflow-style: none; }
 .notyf__toast.as-toast .as-toast__ico::before { background: #8a6a22 !important; }
 .as-toast--err .as-toast__ico::before { background: #b4323f !important; }
 .notyf__toast.as-toast { margin-bottom: 10px; }
+/* ปุ่มปิดกล่องแจ้งในหน้า */
+.cx-alert:not(.is-toasted) { position: relative; padding-right: 44px; }
+.cx-alert__x { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: inherit;
+    font-size: 1.25rem; line-height: 1; cursor: pointer; opacity: .6; }
+.cx-alert__x:hover, .cx-alert__x:focus-visible { opacity: 1; background: rgba(0, 0, 0, .06); }
+.cx-alert.is-closing { opacity: 0; transform: translateY(-4px); transition: opacity .18s, transform .18s; }
+@media print { .cx-alert__x { display: none; } }
+.mb-alert__x { position: relative; z-index: 2; }
