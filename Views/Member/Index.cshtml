@@ -277,7 +277,7 @@
                     @foreach (var l in Model.StayLines)
                     {
                         <li>
-                            <span><b>@(l.Kind == "A" ? "กิจกรรม: " : "")@l.Title × @l.Qty@(l.RoomNo != null ? " · ห้อง " + l.RoomNo : "")</b>
+                            <span><b>@StayBill.Prefix(l.Kind)@l.Title × @l.Qty@StayBill.Unit(l.Kind)@(l.RoomNo != null ? " · ห้อง " + l.RoomNo : "")</b>
                                 <span>@l.Amount.ToString("N2") บาท@(l.Date is { } dd ? " · " + dd.ToString("dd/MM") : "")</span></span>
                             <span class="mb-wait__act">
                                 <span class="cx-badge cx-badge--@(l.PaidAt != null ? "PAID" : "PENDING")">@(l.PaidAt != null ? "ชำระแล้ว" : "รอชำระ")</span>

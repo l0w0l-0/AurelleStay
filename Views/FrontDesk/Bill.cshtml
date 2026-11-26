@@ -11,7 +11,7 @@
     <partial name="_Flash" />
     <p>@Model.Customer · @Model.Phone · ห้อง @string.Join(", ", Model.Rooms.Select(r => r.RoomNo)) · @Model.CheckIn.ToString("dd/MM/yy") – @Model.CheckOut.ToString("dd/MM/yy")
         <span class="cx-badge cx-badge--@Model.Status">@ThaiLabels.BookingStatus(Model.Status)</span></p>
-    <p class="text-muted">ค่าห้องและบริการที่จองล่วงหน้าชำระแล้วตอนจอง บิลนี้คือค่าบริการที่สั่งเพิ่มระหว่างพักและค่ากิจกรรม ของใช้ที่ขอเพิ่ม (ผ้าเช็ดตัว น้ำดื่ม ฯลฯ) ไม่มีค่าใช้จ่าย</p>
+    <p class="text-muted">ค่าห้องและบริการที่จองล่วงหน้าชำระแล้วตอนจอง บิลนี้คือค่าห้องคืนที่ต่อเพิ่ม ค่าบริการที่สั่งเพิ่มระหว่างพัก และค่ากิจกรรม ของใช้ที่ขอเพิ่ม (ผ้าเช็ดตัว น้ำดื่ม ฯลฯ) ไม่มีค่าใช้จ่าย</p>
 
     <div class="staff-card">
         <div class="staff-table-wrap">
@@ -25,13 +25,20 @@
                 @foreach (var l in Model.Lines)
                 {
                     <tr>
-                        <td>@(l.Kind == "A" ? "กิจกรรม: " : "บริการ: ")@l.Title</td>
+                        <td>@StayBill.Prefix(l.Kind)@l.Title</td>
                         <td>@(l.RoomNo != null ? "ห้อง " + l.RoomNo : l.Date?.ToString("dd/MM/yy"))</td>
-                        <td class="text-end">@l.Qty@(l.Kind == "A" ? " คน" : "")</td>
+                        <td class="text-end">@l.Qty@StayBill.Unit(l.Kind)</td>
                         <td class="text-end">@l.Amount.ToString("N2")</td>
                         <td>@if (l.PaidAt is { } pa) { <span class="cx-badge cx-badge--PAID">ชำระแล้ว · @StayBill.MethodName(l.Method) @pa.ToString("dd/MM HH:mm")</span> } else { <span class="cx-badge cx-badge--PENDING">รอชำระ</span> }</td>
                         <td>
-                            @if (l.CanCancel && inStay)
+                            @if (l.CanCancel && inStay && l.Kind == "E")
+                            {
+                                <form asp-action="CancelExtension" method="post" class="staff-inline" data-msg="ยกเลิกการต่อคืน (กลับไปเช็คเอาท์วันเดิม) ?" onsubmit="return confirm(this.dataset.msg);">
+                                    <input type="hidden" name="id" value="@Model.BookingId" /><input type="hidden" name="extId" value="@l.Id" />
+                                    <button type="submit" class="cx-btn cx-btn--small cx-btn--ghost">ยกเลิกต่อคืน</button>
+                                </form>
+                            }
+                            else if (l.CanCancel && inStay)
                             {
                                 <form asp-action="CancelService" method="post" class="staff-inline" data-msg="ยกเลิก @l.Title ?" onsubmit="return confirm(this.dataset.msg);">
                                     <input type="hidden" name="id" value="@Model.BookingId" /><input type="hidden" name="bsId" value="@l.Id" />
@@ -65,6 +72,54 @@
             </form>
         }
     </div>
+
+    @if (inStay)
+    {
+        <div class="fd-stay">
+            <div class="staff-card" id="fd-extend">
+                <h2 class="h5">ต่อคืน (ขยายวันเช็คเอาท์)</h2>
+                <p class="text-muted mb-2">ตรวจว่าห้องเดิมว่างต่อ และคิดราคาตามเรทของคืนนั้น (วันหยุด/เทศกาล) ค่าห้องที่เพิ่มเข้าบิลนี้</p>
+                <form method="get" asp-action="Bill" asp-route-id="@Model.BookingId" class="row g-2 align-items-end">
+                    <div class="col-5"><label class="form-label">ต่ออีก (คืน)</label>
+                        <input type="number" name="extend" min="1" max="@StayChanges.MaxExtendNights" value="@Model.ExtendNights" class="form-control" required /></div>
+                    <div class="col-auto"><button type="submit" class="cx-btn cx-btn--ghost cx-btn--small text-nowrap">ตรวจห้องว่าง / ดูราคา</button></div>
+                </form>
+                @if (Model.Quote is { } q)
+                {
+                    if (q.Ok)
+                    {
+                        <div class="fd-quote">
+                            <p class="mb-1">เช็คเอาท์ใหม่ <b>@q.NewCheckOut.ToString("dd/MM/yyyy")</b> · @string.Join(" · ", q.Rooms.Select(r => $"ห้อง {r.RoomNo} {r.Amount:N2}")) บาท</p>
+                            <form asp-action="Extend" method="post" data-msg="ต่ออีก @Model.ExtendNights คืน ค่าห้อง @q.Amount.ToString("N2") บาท ?" onsubmit="return confirm(this.dataset.msg);">
+                                <input type="hidden" name="id" value="@Model.BookingId" /><input type="hidden" name="nights" value="@Model.ExtendNights" />
+                                <button type="submit" class="cx-btn cx-btn--small">ยืนยันต่อ @Model.ExtendNights คืน · @q.Amount.ToString("N2") บาท</button>
+                            </form>
+                        </div>
+                    }
+                    else { <div class="cx-alert cx-alert--error mt-2">@q.Message</div> }
+                }
+            </div>
+
+            <div class="staff-card" id="fd-move">
+                <h2 class="h5">ย้ายห้อง</h2>
+                <p class="text-muted mb-2">ห้องปลายทางต้องว่างตอนนี้และว่างถึงวันเช็คเอาท์ ราคาคงเดิม ห้องเดิมส่งทำความสะอาดอัตโนมัติ งานส่งของ/คำขอที่ค้างย้ายตามไป</p>
+                @if (Model.MoveTargets.Any())
+                {
+                    <form asp-action="MoveRoom" method="post" class="row g-2 align-items-end" data-msg="ยืนยันย้ายห้อง ?" onsubmit="return confirm(this.dataset.msg);">
+                        <input type="hidden" name="id" value="@Model.BookingId" />
+                        <div class="col-5"><label class="form-label">จากห้อง</label>
+                            <select name="fromRoomId" class="form-select" required>@foreach (var r in Model.Rooms) { <option value="@r.RoomId">@r.RoomNo</option> }</select></div>
+                        <div class="col-7"><label class="form-label">ไปห้อง</label>
+                            <select name="toRoomId" class="form-select" required>@foreach (var t in Model.MoveTargets) { <option value="@t.RoomId">@t.RoomNo · @t.Type (@t.MaxGuests คน)</option> }</select></div>
+                        <div class="col-12"><label class="form-label">เหตุผล (แจ้งลูกค้า)</label>
+                            <input type="text" name="reason" maxlength="150" class="form-control" placeholder="เช่น แอร์เสีย, ลูกค้าขอห้องเงียบกว่า" /></div>
+                        <div class="col-12"><button type="submit" class="cx-btn cx-btn--small">ย้ายห้อง</button></div>
+                    </form>
+                }
+                else { <p class="mb-0">ตอนนี้ไม่มีห้องที่ว่างและพร้อมเข้าพักถึงวันเช็คเอาท์</p> }
+            </div>
+        </div>
+    }
 
     @if (inStay && Model.Services.Any())
     {

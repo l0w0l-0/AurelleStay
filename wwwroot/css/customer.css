@@ -1972,3 +1972,39 @@ html, * { scrollbar-width: none; -ms-overflow-style: none; }
     .mb-count--text b { font-size: 2rem; white-space: nowrap; }
 }
 @media (max-width: 640px) { .mb-alert p { flex: 1 1 calc(100% - 40px); } .mb-alert .cx-btn { flex: 1 1 auto; text-align: center; } }
+
+/* --- ดรอปดาวน์ทั้งระบบ (Part 64): ทุก <select> ใช้ Tom Select ธีมม่วง-ทอง --- */
+.ts-wrapper.form-select, .ts-wrapper.form-control { padding: 0; border: 0; background: none; box-shadow: none; height: auto; }
+.ts-wrapper.single .ts-control { transition: border-color .15s, box-shadow .15s, background-color .15s; }
+.ts-wrapper.single .ts-control > .item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ts-wrapper.single.dropdown-active .ts-control {
+    border-color: var(--pine-2, #45296b); box-shadow: 0 0 0 3px var(--pine-soft, #ece6f4);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b08a35' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 15 6-6 6 6'/%3E%3C/svg%3E");
+}
+.ts-wrapper.disabled .ts-control { background-color: #f4f1f7; color: #9a93a6; cursor: not-allowed; opacity: 1; }
+.ts-wrapper.invalid .ts-control, .ts-wrapper.single.input-invalid .ts-control { border-color: #c0392b; }
+.ts-dropdown { margin-top: 8px; border-color: #e5dcf0; border-top: 3px solid var(--brass, #b08a35); border-radius: 16px;
+    box-shadow: 0 24px 48px -20px rgba(45, 27, 71, .5), 0 2px 6px rgba(45, 27, 71, .08); animation: tsIn .16s ease-out; }
+@keyframes tsIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ts-dropdown { animation: none; } }
+.ts-dropdown .ts-dropdown-content { max-height: 300px; scrollbar-width: thin; scrollbar-color: #cbbbe0 transparent; }
+.ts-dropdown .option { position: relative; padding: 10px 36px 10px 14px; line-height: 1.4; cursor: pointer; transition: background-color .12s; }
+.ts-dropdown .option + .option { margin-top: 2px; }
+.ts-dropdown .option.active { background: #f3eefa; color: var(--pine, #2d1b47); }
+.ts-dropdown .option.selected { background: linear-gradient(90deg, #f6f0fc, #fbf6ea); color: var(--pine, #2d1b47); }
+.ts-dropdown .option.selected::after { content: ""; position: absolute; right: 14px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b08a35' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 10 17 19 7'/%3E%3C/svg%3E") no-repeat center / contain; }
+.ts-dropdown .option[data-value=""] { color: var(--muted, #655f73); }
+.ts-dropdown .optgroup-header { padding: 8px 14px 4px; font-size: .76rem; font-weight: 700; letter-spacing: .04em; color: var(--brass-2, #8a6a22); background: none; }
+.ts-dropdown .dropdown-input { border: 1px solid #e5dcf0; border-radius: 10px; padding: 8px 12px; }
+.ts-dropdown .dropdown-input:focus { outline: none; border-color: var(--pine-2, #45296b); box-shadow: 0 0 0 3px var(--pine-soft, #ece6f4); }
+/* ขนาดเล็กในตาราง/แถบกรอง */
+.staff-table .ts-wrapper .ts-control, .staff-inline .ts-wrapper .ts-control, .aca-head .ts-wrapper .ts-control { min-height: 38px; padding-top: 5px; padding-bottom: 5px; font-size: .92rem; border-radius: 10px; }
+.staff-table .ts-wrapper { min-width: 130px; }
+.sva-f .ts-wrapper .ts-control, .pr-f .ts-wrapper .ts-control { min-height: 42px; }
+.ts-wrapper.single .ts-control, .ts-wrapper.single.dropdown-active .ts-control { background-repeat: no-repeat; background-position: right 14px center; background-size: 14px; }
+.ts-wrapper .ts-control, .ts-wrapper .ts-control:focus, .ts-wrapper .ts-control:focus-visible { outline: none; }
+.ts-wrapper.focus .ts-control { outline: none; }
+#fd-send .ts-wrapper .ts-control { min-height: 40px; padding-top: 6px; padding-bottom: 6px; }
+.ts-wrapper.single .ts-control { flex-wrap: nowrap; }
+.ts-wrapper.single .ts-control > .item { min-width: 0; flex: 0 1 auto; }

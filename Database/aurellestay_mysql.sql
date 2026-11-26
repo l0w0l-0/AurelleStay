@@ -402,6 +402,28 @@ CREATE TABLE IF NOT EXISTS `item_requests` (
     CONSTRAINT `chk_ir_qty` CHECK (`qty` BETWEEN 1 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Part 65: ต่อคืนระหว่างพัก (ค่าห้องคืนที่ต่อ เข้าบิลระหว่างพัก ชำระก่อนเช็คเอาท์)
+CREATE TABLE IF NOT EXISTS `stay_extensions` (
+    `ext_id` int NOT NULL AUTO_INCREMENT,
+    `booking_id` int NOT NULL,
+    `from_date` date NOT NULL,
+    `nights` smallint NOT NULL,
+    `amount` decimal(10,2) NOT NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` int NULL,
+    `paid_at` datetime NULL,
+    `pay_method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `paid_by` int NULL,
+    PRIMARY KEY (`ext_id`),
+    KEY `ix_ext_booking` (`booking_id`),
+    KEY `ix_ext_paid` (`paid_at`),
+    CONSTRAINT `stay_extensions_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `stay_extensions_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `stay_extensions_ibfk_3` FOREIGN KEY (`paid_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_ext_nights` CHECK (`nights` BETWEEN 1 AND 14),
+    CONSTRAINT `chk_ext_amount` CHECK (`amount` >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ข้อความติดต่อโรงแรมจากหน้า "ติดต่อเรา" (Part 30) รวมคำขอรีเซ็ตรหัสผ่าน — ผู้ส่งที่มีบัญชีผูก user_id (ลบบัญชีแล้วข้อความยังอยู่)
 CREATE TABLE IF NOT EXISTS `contact_messages` (
     `message_id` bigint NOT NULL AUTO_INCREMENT,

@@ -49,8 +49,8 @@
             <tbody>
                 @foreach (var l in paid)
                 {
-                    <tr><td>@(l.Kind == "A" ? "กิจกรรม: " : "บริการ: ")@l.Title@(l.RoomNo != null ? $" (ห้อง {l.RoomNo})" : "")@(l.Date is { } d ? $" · {d:dd/MM/yyyy}" : "")</td>
-                        <td class="num">@l.Qty@(l.Kind == "A" ? " คน" : "")</td><td class="num">@StayBill.MethodName(l.Method)</td><td class="num">@l.Amount.ToString("N2")</td></tr>
+                    <tr><td>@StayBill.Prefix(l.Kind)@l.Title@(l.RoomNo != null ? $" (ห้อง {l.RoomNo})" : "")@(l.Date is { } d ? $" · {d:dd/MM/yyyy}" : "")</td>
+                        <td class="num">@l.Qty@StayBill.Unit(l.Kind)</td><td class="num">@StayBill.MethodName(l.Method)</td><td class="num">@l.Amount.ToString("N2")</td></tr>
                 }
             </tbody>
         </table>

@@ -785,6 +785,12 @@ public static class DbSetup
             log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง item_requests");
         }
 
+        // Part 65: ต่อคืนระหว่างพัก
+        if (!have.Contains("stay_extensions.ext_id"))
+        {
+            await db.Database.ExecuteSqlRawAsync(StayChanges.TableSql);
+            log.LogWarning("อัปเกรดฐานข้อมูล: สร้างตาราง stay_extensions");
+        }
         // Part 60: บิลระหว่างพัก — บริการที่สั่งเพิ่มระหว่างพัก + ค่ากิจกรรม ชำระที่เคาน์เตอร์ตอนเช็คเอาท์
         foreach (var (table, column, ddl) in StayBill.Columns.Where(c => !have.Contains($"{c.Table}.{c.Column}")))
         {

@@ -1796,6 +1796,10 @@ public static class StayBill
     public const int MaxQty = 5;
     public const int MaxUnpaidLines = 15;
 
+    /// <summary>คำนำหน้า / หน่วยของรายการในบิล (S = บริการ, A = กิจกรรม, E = ค่าห้องต่อคืน)</summary>
+    public static string Prefix(string kind) => kind switch { "A" => "กิจกรรม: ", "S" => "บริการ: ", _ => "" };
+    public static string Unit(string kind) => kind switch { "A" => " คน", "E" => " คืน", _ => "" };
+
     public record Line(string Kind, int Id, string Title, string? RoomNo, DateOnly? Date, int Qty, decimal Amount, DateTime At, DateTime? PaidAt, string? Method, bool CanCancel);
 
     /// <summary>ค่ากิจกรรมที่ถูกนับ: ยืนยันแล้ว / เข้าร่วมแล้ว (ยกเลิก = ไม่คิด, ไม่มาตามนัด = ไม่คิด)</summary>
@@ -1808,9 +1812,16 @@ public static class StayBill
         var act = await db.ActivityBookings.AsNoTracking()
             .Where(a => a.BookingId == bookingId && (a.Status == "CONFIRMED" || a.Status == "ATTENDED") && a.Total > 0)
             .Select(a => new { a.AbId, a.Activity.Name, a.ActDate, a.StartTime, a.People, a.Total, a.CreatedAt, a.PaidAt, a.PayMethod }).ToListAsync();
+        // Part 65: ค่าห้องคืนที่ต่อเพิ่ม
+        var ext = await StayChanges.ExtLinesAsync(db, new[] { bookingId });
+        var co = await db.Bookings.AsNoTracking().Where(b => b.BookingId == bookingId).Select(b => b.CheckOut).FirstOrDefaultAsync();
+        var today = DateOnly.FromDateTime(AppClock.Today);
         return svc.Select(s => new Line("S", s.BsId, s.ServiceName, s.RoomNo, null, s.Quantity, s.UnitPrice * s.Quantity, s.At ?? DateTime.MinValue,
                     s.PaidAt, s.PayMethod, s.PaidAt == null && !s.Sent))
             .Concat(act.Select(a => new Line("A", a.AbId, $"{a.Name} ({a.StartTime} น.)", null, a.ActDate, a.People, a.Total, a.CreatedAt, a.PaidAt, a.PayMethod, false)))
+            .Concat(ext.Select(e => new Line("E", e.ExtId, $"ค่าห้องต่อคืน {DateOnly.FromDateTime(e.FromDate):dd/MM} – {DateOnly.FromDateTime(e.FromDate).AddDays(e.Nights):dd/MM}",
+                    null, DateOnly.FromDateTime(e.FromDate), e.Nights, e.Amount, e.CreatedAt, e.PaidAt, e.PayMethod,
+                    e.PaidAt == null && today < DateOnly.FromDateTime(e.FromDate) && co == DateOnly.FromDateTime(e.FromDate).AddDays(e.Nights))))
             .OrderBy(l => l.PaidAt != null).ThenBy(l => l.At).ToList();
     }
 
@@ -1825,7 +1836,8 @@ public static class StayBill
         var a = await db.ActivityBookings.AsNoTracking().Where(x => x.BookingId != null && ids.Contains(x.BookingId.Value)
                 && (x.Status == "CONFIRMED" || x.Status == "ATTENDED") && x.Total > 0 && x.PaidAt == null)
             .Select(x => new { BookingId = x.BookingId!.Value, Amt = x.Total }).ToListAsync();
-        return s.Concat(a).GroupBy(x => x.BookingId).ToDictionary(g => g.Key, g => g.Sum(x => x.Amt));
+        var e = (await StayChanges.ExtLinesAsync(db, ids)).Where(x => x.PaidAt == null).Select(x => new { x.BookingId, Amt = x.Amount });
+        return s.Concat(a).Concat(e).GroupBy(x => x.BookingId).ToDictionary(g => g.Key, g => g.Sum(x => x.Amt));
     }
 
     /// <summary>สั่งบริการเสริมเพิ่มระหว่างพัก → บันทึกในบิล + ส่งงานให้ฝ่ายส่งของทันที</summary>
@@ -1870,7 +1882,10 @@ public static class StayBill
         foreach (var s in svc) { s.PaidAt = now; s.PayMethod = method; s.PaidBy = staffId; }
         foreach (var a in act) { a.PaidAt = now; a.PayMethod = method; a.PaidBy = staffId; }
         await db.SaveChangesAsync();
-        return svc.Sum(s => s.UnitPrice * s.Quantity) + act.Sum(a => a.Total);
+        var extDue = (await StayChanges.ExtLinesAsync(db, new[] { bookingId })).Where(x => x.PaidAt == null).Sum(x => x.Amount);
+        await db.Database.ExecuteSqlRawAsync("UPDATE stay_extensions SET paid_at = {0}, pay_method = {1}, paid_by = {2} WHERE booking_id = {3} AND paid_at IS NULL",
+            now, method, staffId, bookingId);
+        return svc.Sum(s => s.UnitPrice * s.Quantity) + act.Sum(a => a.Total) + extDue;
     }
 
     /// <summary>
@@ -1915,6 +1930,171 @@ public static class StayBill
             .Select(x => new { x.PaidAt, Amt = x.UnitPrice * x.Quantity }).ToListAsync();
         var a = await db.ActivityBookings.AsNoTracking().Where(x => x.PaidAt >= start && x.PaidAt < end && x.Total > 0)
             .Select(x => new { x.PaidAt, Amt = x.Total }).ToListAsync();
-        return s.Select(x => (x.PaidAt!.Value, x.Amt)).Concat(a.Select(x => (x.PaidAt!.Value, x.Amt))).ToList();
+        var e = await db.Database.SqlQueryRaw<StayChanges.ExtLine>(
+            "SELECT ext_id AS ExtId, booking_id AS BookingId, from_date AS FromDate, nights AS Nights, amount AS Amount, created_at AS CreatedAt, paid_at AS PaidAt, pay_method AS PayMethod FROM stay_extensions WHERE paid_at >= {0} AND paid_at < {1}",
+            start, end).ToListAsync();
+        return s.Select(x => (x.PaidAt!.Value, x.Amt)).Concat(a.Select(x => (x.PaidAt!.Value, x.Amt))).Concat(e.Select(x => (x.PaidAt!.Value, x.Amount))).ToList();
+    }
+}
+
+/// <summary>
+/// Part 65: งานหน้าเคาน์เตอร์ระหว่างพักที่โรงแรมจริงต้องมี
+/// · ต่อคืน (ขยายวันเช็คเอาท์) — ตรวจห้องว่างจริง คิดราคาตามเรท/เทศกาลของคืนนั้น ค่าคืนที่เพิ่มเข้าบิลระหว่างพัก (ชำระก่อนเช็คเอาท์)
+/// · ย้ายห้อง — ห้องปลายทางต้องว่างตลอดช่วงที่เหลือและพร้อมเข้าพักตอนนี้ ราคาเดิม ห้องเก่าส่งทำความสะอาด งานที่ค้างย้ายตามไป
+/// </summary>
+public static class StayChanges
+{
+    public const int MaxExtendNights = 14;
+
+    public const string TableSql = @"CREATE TABLE IF NOT EXISTS `stay_extensions` (
+    `ext_id` int NOT NULL AUTO_INCREMENT,
+    `booking_id` int NOT NULL,
+    `from_date` date NOT NULL,
+    `nights` smallint NOT NULL,
+    `amount` decimal(10,2) NOT NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` int NULL,
+    `paid_at` datetime NULL,
+    `pay_method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+    `paid_by` int NULL,
+    PRIMARY KEY (`ext_id`),
+    KEY `ix_ext_booking` (`booking_id`),
+    KEY `ix_ext_paid` (`paid_at`),
+    CONSTRAINT `stay_extensions_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+    CONSTRAINT `stay_extensions_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `stay_extensions_ibfk_3` FOREIGN KEY (`paid_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+    CONSTRAINT `chk_ext_nights` CHECK (`nights` BETWEEN 1 AND 14),
+    CONSTRAINT `chk_ext_amount` CHECK (`amount` >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    private static readonly List<string> Active = new() { "PENDING", "CONFIRMED", "CHECKED_IN" };   // List (ไม่ใช่ array): EF แปล Contains เป็น IN ได้
+
+    public record ExtendQuote(bool Ok, string Message, DateOnly NewCheckOut, decimal Amount, List<(string RoomNo, decimal Amount)> Rooms);
+
+    /// <summary>ตรวจว่าต่อคืนได้ไหม + ราคา (ไม่บันทึก)</summary>
+    public static async Task<ExtendQuote> QuoteAsync(Csi402dbContext db, int bookingId, int nights)
+    {
+        var b = await db.Bookings.AsNoTracking().Where(x => x.BookingId == bookingId)
+            .Select(x => new { x.Status, x.CheckOut, Rooms = x.BookingRooms.Select(r => new { r.RoomId, r.Room.RoomNo, r.Room.Status, r.Room.Type.BasePrice, r.Room.Type.WeekendPrice }).ToList() })
+            .FirstOrDefaultAsync();
+        var none = new List<(string, decimal)>();
+        if (b == null) return new(false, "ไม่พบการจอง", default, 0, none);
+        if (b.Status != "CHECKED_IN") return new(false, "ต่อคืนได้เฉพาะการจองที่เช็คอินแล้ว", b.CheckOut, 0, none);
+        if (nights < 1 || nights > MaxExtendNights) return new(false, $"ต่อได้ครั้งละ 1–{MaxExtendNights} คืน", b.CheckOut, 0, none);
+        var from = b.CheckOut; var to = from.AddDays(nights);
+        var ids = b.Rooms.Select(r => r.RoomId).ToList();
+        var clash = await db.BookingRooms.AsNoTracking()
+            .Where(br => ids.Contains(br.RoomId) && br.BookingId != bookingId && Active.Contains(br.Booking.Status)
+                         && br.Booking.CheckIn < to && br.Booking.CheckOut > from)
+            .Select(br => new { br.Room.RoomNo, br.Booking.CheckIn }).ToListAsync();
+        if (clash.Count > 0)
+            return new(false, $"ต่อคืนไม่ได้: ห้อง {string.Join(", ", clash.Select(c => c.RoomNo).Distinct())} มีผู้จองต่อตั้งแต่ {clash.Min(c => c.CheckIn):dd/MM/yyyy} " +
+                "(ย้ายไปห้องอื่นที่ว่างก่อน แล้วค่อยต่อคืน)", from, 0, none);
+        var seasons = await RatePlan.SeasonsAsync(db, from, to);
+        var per = b.Rooms.OrderBy(r => r.RoomNo).Select(r => (r.RoomNo,
+            Enumerable.Range(0, nights).Sum(i => RatePlan.NightPrice(r.BasePrice, r.WeekendPrice, from.AddDays(i), seasons)))).ToList();
+        return new(true, "", to, per.Sum(p => p.Item2), per);
+    }
+
+    /// <summary>ต่อคืนจริง: ทำในทรานแซกชัน (กันจองชนกันระหว่างตรวจกับบันทึก)</summary>
+    public static async Task<(bool Ok, string Msg)> ExtendAsync(Csi402dbContext db, int bookingId, int nights, int staffId)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await db.Database.ExecuteSqlRawAsync("SELECT booking_id FROM bookings WHERE booking_id = {0} FOR UPDATE", bookingId);
+        var q = await QuoteAsync(db, bookingId, nights);
+        if (!q.Ok) return (false, q.Message);
+        var b = await db.Bookings.Include(x => x.BookingRooms).FirstAsync(x => x.BookingId == bookingId);
+        var from = b.CheckOut;
+        b.CheckOut = q.NewCheckOut;
+        foreach (var br in b.BookingRooms) br.Nights = (short)(br.Nights + nights);
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO stay_extensions (booking_id, from_date, nights, amount, created_at, created_by) VALUES ({0}, {1}, {2}, {3}, {4}, {5})",
+            bookingId, from.ToDateTime(TimeOnly.MinValue), nights, q.Amount, AppClock.Now, staffId);
+        Notify.Add(db, b.UserId, $"ต่อการเข้าพักแล้ว · การจอง #{bookingId}",
+            $"เช็คเอาท์ใหม่ {q.NewCheckOut:dd/MM/yyyy} (+{nights} คืน) ค่าห้องเพิ่ม {q.Amount:N2} บาท ชำระที่เคาน์เตอร์ก่อนเช็คเอาท์", Notify.BookingLink(bookingId));
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return (true, $"ต่อการจอง #{bookingId} อีก {nights} คืน เช็คเอาท์ใหม่ {q.NewCheckOut:dd/MM/yyyy} · ค่าห้องเพิ่ม {q.Amount:N2} บาท (เข้าบิลระหว่างพัก)");
+    }
+
+    /// <summary>ยกเลิกการต่อคืน (ยังไม่ชำระ และยังไม่ถึงคืนแรกที่ต่อ) — คืนวันเช็คเอาท์เดิม ห้องกลับมาว่างให้คนอื่นจอง</summary>
+    public static async Task<(bool Ok, string Msg)> CancelExtensionAsync(Csi402dbContext db, int bookingId, int extId)
+    {
+        var ext = await db.Database.SqlQueryRaw<ExtRow>(
+            "SELECT ext_id AS ExtId, from_date AS FromDate, nights AS Nights, amount AS Amount, paid_at AS PaidAt FROM stay_extensions WHERE ext_id = {0} AND booking_id = {1}",
+            extId, bookingId).FirstOrDefaultAsync();
+        var b = await db.Bookings.Include(x => x.BookingRooms).FirstOrDefaultAsync(x => x.BookingId == bookingId);
+        if (ext == null || b == null || b.Status != "CHECKED_IN") return (false, "ไม่พบรายการต่อคืน");
+        var fromD = DateOnly.FromDateTime(ext.FromDate);
+        if (ext.PaidAt != null) return (false, "ชำระแล้ว ยกเลิกไม่ได้");
+        if (DateOnly.FromDateTime(AppClock.Today) >= fromD) return (false, "เริ่มพักคืนที่ต่อแล้ว ยกเลิกไม่ได้");
+        if (b.CheckOut != fromD.AddDays(ext.Nights)) return (false, "ยกเลิกได้เฉพาะการต่อคืนครั้งล่าสุด");
+        b.CheckOut = fromD;
+        foreach (var br in b.BookingRooms) br.Nights = (short)Math.Max(1, br.Nights - ext.Nights);
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM stay_extensions WHERE ext_id = {0}", extId);
+        return (true, $"ยกเลิกการต่อคืนแล้ว เช็คเอาท์ {fromD:dd/MM/yyyy} ตามเดิม");
+    }
+
+    public class ExtRow { public int ExtId { get; set; } public DateTime FromDate { get; set; } public short Nights { get; set; } public decimal Amount { get; set; } public DateTime? PaidAt { get; set; } }
+    public class ExtLine { public int ExtId { get; set; } public int BookingId { get; set; } public DateTime FromDate { get; set; } public short Nights { get; set; } public decimal Amount { get; set; }
+        public DateTime CreatedAt { get; set; } public DateTime? PaidAt { get; set; } public string? PayMethod { get; set; } }
+
+    public static Task<List<ExtLine>> ExtLinesAsync(Csi402dbContext db, IEnumerable<int> bookingIds)
+    {
+        var ids = bookingIds.Distinct().ToList();
+        if (ids.Count == 0) return Task.FromResult(new List<ExtLine>());
+        return db.Database.SqlQueryRaw<ExtLine>(
+            $"SELECT ext_id AS ExtId, booking_id AS BookingId, from_date AS FromDate, nights AS Nights, amount AS Amount, created_at AS CreatedAt, paid_at AS PaidAt, pay_method AS PayMethod FROM stay_extensions WHERE booking_id IN ({string.Join(",", ids.Select(i => i.ToString(System.Globalization.CultureInfo.InvariantCulture)))})")
+            .ToListAsync();
+    }
+
+    /// <summary>ห้องที่ย้ายไปได้: ไม่ใช่ห้องของการจองนี้ · พร้อมเข้าพักตอนนี้ (ว่าง) · ไม่มีใครจองทับตั้งแต่วันนี้ถึงวันเช็คเอาท์</summary>
+    public static async Task<List<(int RoomId, string RoomNo, string Type, int MaxGuests)>> MoveTargetsAsync(Csi402dbContext db, int bookingId)
+    {
+        var b = await db.Bookings.AsNoTracking().Where(x => x.BookingId == bookingId).Select(x => new { x.CheckOut, Rooms = x.BookingRooms.Select(r => r.RoomId).ToList() }).FirstOrDefaultAsync();
+        if (b == null) return new();
+        var today = DateOnly.FromDateTime(AppClock.Today);
+        var busy = db.BookingRooms.Where(br => br.BookingId != bookingId && Active.Contains(br.Booking.Status) && br.Booking.CheckIn < b.CheckOut && br.Booking.CheckOut > today).Select(br => br.RoomId);
+        var list = await db.Rooms.AsNoTracking().Where(r => r.Status == "AVAILABLE" && !b.Rooms.Contains(r.RoomId) && !busy.Contains(r.RoomId))
+            .OrderBy(r => r.RoomNo).Select(r => new { r.RoomId, r.RoomNo, r.Type.TypeName, r.Type.MaxGuests }).ToListAsync();
+        return list.Select(r => (r.RoomId, r.RoomNo, r.TypeName, (int)r.MaxGuests)).ToList();
+    }
+
+    public static async Task<(bool Ok, string Msg)> MoveAsync(Csi402dbContext db, int bookingId, int fromRoomId, int toRoomId, string? reason)
+    {
+        reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (reason?.Length > 150) return (false, "เหตุผลไม่เกิน 150 ตัวอักษร");
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await db.Database.ExecuteSqlRawAsync("SELECT room_id FROM rooms WHERE room_id IN ({0}, {1}) FOR UPDATE", fromRoomId, toRoomId);
+        var b = await db.Bookings.Include(x => x.BookingRooms).ThenInclude(r => r.Room).FirstOrDefaultAsync(x => x.BookingId == bookingId);
+        if (b == null || b.Status != "CHECKED_IN") return (false, "ย้ายห้องได้เฉพาะการจองที่เช็คอินแล้ว");
+        var br = b.BookingRooms.FirstOrDefault(r => r.RoomId == fromRoomId);
+        if (br == null) return (false, "ห้องเดิมไม่ใช่ห้องของการจองนี้");
+        if (!(await MoveTargetsAsync(db, bookingId)).Any(t => t.RoomId == toRoomId))
+            return (false, "ห้องปลายทางไม่ว่างตลอดช่วงที่เหลือ หรือยังไม่พร้อมเข้าพัก");
+        var oldRoom = br.Room;
+        var newRoom = await db.Rooms.FirstAsync(r => r.RoomId == toRoomId);
+        br.RoomId = toRoomId;                  // ราคาต่อคืนคงเดิม (PricePerNight ไม่เปลี่ยน)
+        newRoom.Status = "OCCUPIED";
+        oldRoom.Status = "CLEANING";
+        db.HousekeepingTasks.Add(new HousekeepingTask { RoomId = fromRoomId, BookingId = bookingId, Status = "PENDING", Kind = "CHECKOUT", CreatedAt = AppClock.Now,
+            Note = $"ย้ายผู้เข้าพักไปห้อง {newRoom.RoomNo}" });
+        await db.SaveChangesAsync();
+        // งานที่ยังไม่เสร็จของห้องเดิม (ส่งของ / ขอของใช้ / ขอทำความสะอาด / บริการระหว่างพัก) ย้ายตามไปห้องใหม่
+        await db.DeliveryTasks.Where(t => t.RoomId == fromRoomId && t.Status != "DONE" && t.Bs.BookingId == bookingId)
+            .ExecuteUpdateAsync(x => x.SetProperty(t => t.RoomId, toRoomId));
+        await db.ItemRequests.Where(r => r.BookingId == bookingId && r.RoomId == fromRoomId && (r.Status == "PENDING" || r.Status == "DELIVERING"))
+            .ExecuteUpdateAsync(x => x.SetProperty(r => r.RoomId, toRoomId));
+        await db.HousekeepingTasks.Where(t => t.BookingId == bookingId && t.RoomId == fromRoomId && t.Kind == "REQUEST" && t.Status != "DONE")
+            .ExecuteUpdateAsync(x => x.SetProperty(t => t.RoomId, toRoomId));
+        await db.BookingServices.Where(s => s.BookingId == bookingId && s.RoomId == fromRoomId && s.PaidAt == null && s.InStay)
+            .ExecuteUpdateAsync(x => x.SetProperty(s => s.RoomId, toRoomId));
+        Notify.Add(db, b.UserId, $"ย้ายห้องแล้ว · การจอง #{bookingId}",
+            $"ย้ายจากห้อง {oldRoom.RoomNo} ไปห้อง {newRoom.RoomNo} ราคาเดิม" + (reason != null ? $" ({reason})" : ""), Notify.BookingLink(bookingId));
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return (true, $"ย้ายการจอง #{bookingId} จากห้อง {oldRoom.RoomNo} ไปห้อง {newRoom.RoomNo} แล้ว (ราคาเดิม) ห้อง {oldRoom.RoomNo} ส่งทำความสะอาดแล้ว");
     }
 }

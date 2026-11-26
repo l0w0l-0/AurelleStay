@@ -84,11 +84,13 @@
             if (ts.focus_node) ts.focus_node.setAttribute('aria-label', n);
         }
 
-        each('select[data-ts]', function (el) {
-            if (el.tomselect) return;
+        // ทุกช่องเลือกแบบเลือกได้ค่าเดียวใช้ดรอปดาวน์ธีมเดียวกันทั้งระบบ (ยกเว้น multiple / size / data-native)
+        each('select[data-ts], select:not([multiple]):not([size]):not([data-native])', function (el) {
+            if (el.tomselect || el.closest('[data-native]')) return;
             var many = el.options.length > 8;
             var ts = new TomSelect(el, Object.assign({}, common, {
                 create: false, allowEmptyOption: true, hideSelected: false, controlInput: many ? undefined : null,
+                dropdownParent: 'body', maxItems: 1,
                 placeholder: many ? 'พิมพ์เพื่อค้นหา…' : undefined,
                 render: { no_results: function () { return '<div class="no-results">ไม่พบรายการ</div>'; } }
             }));
@@ -423,7 +425,7 @@
         if (!chip) return;
         var card = chip.closest('article'); var sel = card && card.querySelector('select[name="slot"]');
         if (!sel) return;
-        sel.value = chip.getAttribute('data-slot');
-        sel.focus();
+        var v = chip.getAttribute('data-slot');
+        if (sel.tomselect) { sel.tomselect.setValue(v); sel.tomselect.focus(); } else { sel.value = v; sel.focus(); }
     });
 })();

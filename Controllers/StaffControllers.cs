@@ -642,7 +642,7 @@ public class FrontDeskController : AppController
     /// <summary>บิลระหว่างพักของการจอง: รายการบริการที่สั่งเพิ่ม + ค่ากิจกรรม · รับชำระ · สั่งบริการให้ลูกค้า</summary>
     [HttpGet]
     [Authorize(Roles = RoleNames.FrontDesk)]
-    public async Task<IActionResult> Bill(int id)
+    public async Task<IActionResult> Bill(int id, int? extend)
     {
         var b = await _db.Bookings.AsNoTracking().Where(x => x.BookingId == id).Select(x => new
         {
@@ -658,7 +658,10 @@ public class FrontDeskController : AppController
             Services = (await _db.ExtraServices.AsNoTracking().Where(s => s.IsActive != false).OrderBy(s => s.ServiceName)
                 .Select(s => new { s.ServiceId, s.ServiceName, s.Price }).ToListAsync()).Select(s => (s.ServiceId, s.ServiceName, s.Price)).ToList(),
             Activities = (await _db.Activities.AsNoTracking().Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync())
-                .Select(a => (a.ActivityId, a.Name, a.Price, HotelActivities.ParseTimes(a.Times), HotelActivities.DaysLabel(a.Days))).ToList()
+                .Select(a => (a.ActivityId, a.Name, a.Price, HotelActivities.ParseTimes(a.Times), HotelActivities.DaysLabel(a.Days))).ToList(),
+            ExtendNights = extend is >= 1 and <= StayChanges.MaxExtendNights ? extend.Value : 1,
+            Quote = b.Status == "CHECKED_IN" && extend != null ? await StayChanges.QuoteAsync(_db, id, extend.Value) : null,
+            MoveTargets = b.Status == "CHECKED_IN" ? await StayChanges.MoveTargetsAsync(_db, id) : new()
         });
     }
 
@@ -714,6 +717,37 @@ public class FrontDeskController : AppController
     {
         var ok = await StayBill.CancelServiceAsync(_db, bsId, id);
         Flash(ok ? "ยกเลิกรายการแล้ว" : "ยกเลิกไม่ได้ (พนักงานรับงานไปแล้ว หรือชำระแล้ว)", !ok);
+        return RedirectToAction(nameof(Bill), new { id });
+    }
+
+    // ---------------------------------------------------------------- Part 65: ต่อคืน / ย้ายห้อง
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> Extend(int id, int nights)
+    {
+        var (ok, msg) = await StayChanges.ExtendAsync(_db, id, nights, CurrentUserId ?? 0);
+        await AuditTrail.WriteAsync(HttpContext, "FrontDesk.Extend", id, ok, msg);
+        Flash(msg, !ok);
+        return RedirectToAction(nameof(Bill), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> CancelExtension(int id, int extId)
+    {
+        var (ok, msg) = await StayChanges.CancelExtensionAsync(_db, id, extId);
+        await AuditTrail.WriteAsync(HttpContext, "FrontDesk.CancelExtension", id, ok, msg);
+        Flash(msg, !ok);
+        return RedirectToAction(nameof(Bill), new { id });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    [Authorize(Roles = RoleNames.FrontDesk)]
+    public async Task<IActionResult> MoveRoom(int id, int fromRoomId, int toRoomId, string? reason)
+    {
+        var (ok, msg) = await StayChanges.MoveAsync(_db, id, fromRoomId, toRoomId, reason);
+        await AuditTrail.WriteAsync(HttpContext, "FrontDesk.MoveRoom", id, ok, msg);
+        Flash(msg, !ok);
         return RedirectToAction(nameof(Bill), new { id });
     }
 

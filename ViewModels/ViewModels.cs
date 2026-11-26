@@ -1244,4 +1244,8 @@ public class StayBillViewModel
     public List<(int Id, string Name, decimal Price, List<string> Times, string Days)> Activities { get; set; } = new();
     public bool HasPaid => Lines.Any(l => l.PaidAt != null);
     public decimal Due => Lines.Where(l => l.PaidAt == null).Sum(l => l.Amount);
+    /// <summary>Part 65: ต่อคืน (จำนวนคืนที่กำลังดูราคา + ผลตรวจห้องว่าง/ราคา) และห้องที่ย้ายไปได้</summary>
+    public int ExtendNights { get; set; } = 1;
+    public pameka_7033_l005.Helpers.StayChanges.ExtendQuote? Quote { get; set; }
+    public List<(int RoomId, string RoomNo, string Type, int MaxGuests)> MoveTargets { get; set; } = new();
 }
