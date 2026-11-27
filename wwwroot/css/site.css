@@ -135,6 +135,9 @@
 .auth-alert { margin-bottom: 18px; padding: 11px 16px; border: 1px solid transparent; border-left-width: 3px; border-radius: var(--r-sm); font-weight: 500; font-size: .94rem; }
 .auth-alert.success { background: var(--ok-soft); border-color: #bcd8c4; border-left-color: var(--ok); color: #1f5236; }
 .auth-alert.error { background: var(--clay-soft); border-color: #e4bdb0; border-left-color: var(--clay); color: #7d2f1d; }
+.auth-alert { position: relative; padding-right: 44px; }
+.auth-alert__x { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; opacity: .65; }
+.auth-alert__x:hover, .auth-alert__x:focus-visible { opacity: 1; background: rgba(0, 0, 0, .06); }
 
 @media (max-width: 800px) {
     .auth-container { grid-template-columns: 1fr; }

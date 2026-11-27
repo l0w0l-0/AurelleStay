@@ -28,5 +28,14 @@
 
     @await RenderSectionAsync("Scripts", required: false)
 
+    <script>
+        // กล่องแจ้งในหน้าเข้าสู่ระบบ/ลืมรหัสผ่าน: เพิ่มปุ่ม × ให้กดปิดได้ (เหมือนกล่องแจ้งหน้าอื่นในระบบ)
+        document.querySelectorAll('.auth-alert').forEach(function (el) {
+            var b = document.createElement('button');
+            b.type = 'button'; b.className = 'auth-alert__x'; b.setAttribute('aria-label', 'ปิดข้อความนี้'); b.textContent = '×';
+            b.addEventListener('click', function () { el.remove(); });
+            el.appendChild(b);
+        });
+    </script>
 </body>
 </html>
