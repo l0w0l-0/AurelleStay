@@ -66,6 +66,9 @@
             {
                 <form method="get" asp-controller="@bookCtl" asp-action="@bookAct" class="rd-book">
                     <input type="hidden" name="roomIds" value="@r.RoomId" />
+                    @* ★ [จุดเชื่อมต่อส่วนหน้า-ส่วนหลัง 1/4] — ฝั่ง View (HTML)
+                       data-dp-booked ใช้ Url.Action สร้าง URL ไปยัง RoomsController.BookedNights(id) เช่น /Rooms/BookedNights/3
+                       แล้วฝากไว้ในแท็ก input ให้ JavaScript (datepicker.js) หยิบไปเรียก — ไม่เขียน URL ตายตัว เปลี่ยน route ก็ไม่พัง *@
                     <label class="cx-field">เช็คอิน<input type="date" data-dp-in data-dp-booked="@Url.Action("BookedNights", "Rooms", new { id = r.RoomId })" name="checkIn" id="rdIn" min="@Model.Today.ToString("yyyy-MM-dd")" value="@Model.CheckIn.ToString("yyyy-MM-dd")" required /></label>
                     <label class="cx-field">เช็คเอาท์<input type="date" data-dp-out name="checkOut" id="rdOut" min="@Model.CheckIn.AddDays(1).ToString("yyyy-MM-dd")" value="@Model.CheckOut.ToString("yyyy-MM-dd")" required /></label>
                     <label class="cx-field">ผู้เข้าพัก<input type="number" name="guests" min="1" max="@r.MaxGuests" value="@Math.Min(Model.Guests, r.MaxGuests)" required /></label>

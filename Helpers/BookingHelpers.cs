@@ -348,6 +348,9 @@ public static class BookingQueries
 
     /// <summary>คืนที่ห้องนี้ไม่ว่าง (มีการจองที่ยังมีผล) ตั้งแต่วันนี้ถึงล่วงหน้า 400 วัน — ใช้ทำเครื่องหมายในปฏิทินเลือกวัน
     /// ข้อมูลเป็นแค่วันที่ ไม่มีข้อมูลผู้จอง (หน้าปฏิทินห้องว่างแสดงข้อมูลระดับเดียวกันต่อสาธารณะอยู่แล้ว)</summary>
+    // ★ [จุดเชื่อมต่อส่วนหน้า-ส่วนหลัง 4/4] — ฝั่งฐานข้อมูล: EF Core แปลงเป็น SQL ไปถาม MySQL
+    //   ตาราง booking_rooms JOIN bookings · เอาเฉพาะการจองที่ยังมีผล (PENDING/CONFIRMED/CHECKED_IN) ตั้งแต่วันนี้ถึง 400 วันข้างหน้า
+    //   แล้วแตกช่วง CheckIn–CheckOut เป็นรายคืน (ไม่นับคืนเช็คเอาท์) คืนเป็นข้อความ yyyy-MM-dd ให้ Json ส่งต่อ
     public static async Task<List<string>> BookedNightsAsync(Csi402dbContext db, int roomId)
     {
         var today = DateOnly.FromDateTime(pameka_7033_l005.Helpers.AppClock.Today);

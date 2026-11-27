@@ -166,6 +166,11 @@ public class RoomsController : Controller
     private readonly Csi402dbContext _db;
     public RoomsController(Csi402dbContext db) => _db = db;
 
+    // ★ [จุดเชื่อมต่อส่วนหน้า-ส่วนหลัง 3/4] — ฝั่ง Controller (ส่วนหลัง) รับคำขอ GET /Rooms/BookedNights/{id}
+    //   1) ตรวจว่ามีห้องนี้จริง ไม่มีก็ตอบ 404   2) ตั้ง no-store กันเบราว์เซอร์จำผลเก่า (ห้องเพิ่งถูกจองต้องเห็นทันที)
+    //   3) เรียก BookingQueries.BookedNightsAsync ดึงข้อมูลจาก MySQL   4) return Json(...) ส่งกลับให้ JavaScript
+    //   ทำไมเลือกจุดนี้: ส่วนหน้า (ปฏิทิน) คุยกับส่วนหลังแบบ JSON ครบวงจร View → JS → Controller → DB → JSON → View
+    //   และส่งกลับแค่ "วันที่" ไม่มีชื่อ/ข้อมูลผู้จอง จึงเปิดให้ทุกคนเรียกได้ ([AllowAnonymous]) โดยไม่รั่วข้อมูลส่วนตัว
     /// <summary>คืนที่ห้องไม่ว่าง (JSON รายการวันที่ yyyy-MM-dd) สำหรับปฏิทินเลือกวันในหน้ารายละเอียดห้อง</summary>
     [HttpGet]
     public async Task<IActionResult> BookedNights(int id)

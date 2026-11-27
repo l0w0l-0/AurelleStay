@@ -186,6 +186,10 @@
             return null;
         }
 
+        // ★ [จุดเชื่อมต่อส่วนหน้า-ส่วนหลัง 2/4] — ฝั่ง JavaScript (ส่วนหน้า)
+        // อ่าน URL จาก data-dp-booked แล้วใช้ fetch (AJAX) ยิง HTTP GET ไปที่ส่วนหลัง ขอผลเป็น JSON (Accept: application/json)
+        // credentials: 'same-origin' = ส่งคุกกี้ไปด้วย · ได้ ["2026-12-01", ...] กลับมา → เก็บใน booked แล้ววาดปฏิทินใหม่ (fp.redraw)
+        // ทำไมใช้ AJAX: ลูกค้าเห็นคืนที่เต็มทันทีโดยไม่ต้องรีโหลดหน้า และถ้าวันที่ตั้งไว้ชนคืนที่เต็มจะเลื่อนไปคืนว่างให้เอง
         var url = inp.getAttribute('data-dp-booked');
         if (url && window.fetch) {
             fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
