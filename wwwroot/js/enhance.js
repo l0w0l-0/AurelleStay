@@ -26,9 +26,17 @@
             ]
         });
         var escT = function (t) { return String(t).replace(/[<>&"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]; }); };
+        // ข้อความเดิมที่ผู้ใช้กดปิดไปแล้ว ไม่เด้งซ้ำภายใน 2 นาที (กันแถบเดิมเด้งกลับมาจากการเช็คงานใหม่ทุก 5 วินาที)
+        var closed = {};
         var show = function (ok, text) {
-            notyf.open({ type: ok ? 'success' : 'error',
+            var key = (ok ? '1' : '0') + text;
+            if (closed[key] && Date.now() - closed[key] < 120000) return;
+            var t = notyf.open({ type: ok ? 'success' : 'error',
                 message: '<b class="as-toast__t">' + (ok ? 'เรียบร้อย' : 'ทำรายการไม่สำเร็จ') + '</b><span class="as-toast__m">' + escT(text) + '</span>' });
+            if (!t || !t.on) return;
+            // กดที่ตัวแถบตรงไหนก็ได้ = ปิด (ไม่ต้องเล็งปุ่ม × เล็ก ๆ) · กดปิดแล้วจำไว้ ไม่เด้งข้อความเดิมซ้ำ
+            t.on('click', function () { closed[key] = Date.now(); notyf.dismiss(t); });
+            t.on('dismiss', function () { closed[key] = Date.now(); });
         };
         // ให้ส่วนอื่นเรียกใช้แถบแจ้งผลได้ (เช่น กดเก็บคูปอง)
         window.asToast = function (ok, text) { show(ok, text); };
